@@ -100,9 +100,9 @@ footer,
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  gap: 1rem 1.5rem;
-  align-items: flex-end;
-  padding: 1.5rem clamp(1rem, 3vw, 2.25rem) 1.1rem;
+  gap: 0.65rem 1.25rem;
+  align-items: center;
+  padding: 0.85rem clamp(0.85rem, 2.5vw, 1.75rem);
   border-bottom: 1px solid var(--line);
   background: linear-gradient(180deg, rgba(26, 33, 24, 0.92), rgba(16, 20, 15, 0.65));
   backdrop-filter: blur(8px);
@@ -119,7 +119,7 @@ footer,
 
 .brand h1 {
   font-family: var(--font-display);
-  font-size: clamp(1.75rem, 4vw, 2.6rem);
+  font-size: clamp(1.35rem, 3.2vw, 2rem);
   margin: 0;
   letter-spacing: 0.06em;
   font-weight: 400;
@@ -209,7 +209,7 @@ main {
 
 .panel-head h2 {
   font-family: var(--font-display);
-  margin: 0 0 0.3rem;
+  margin: 0 0 0.75rem;
   font-size: 1rem;
   letter-spacing: 0.08em;
   color: var(--olive);
@@ -270,9 +270,15 @@ label {
   font-family: var(--font-body);
 }
 
+label .label-text {
+  display: inline;
+  white-space: nowrap;
+}
+
 label .optional {
   color: var(--gray);
   text-transform: lowercase;
+  margin-left: 0.35rem;
 }
 
 input[type="text"],
