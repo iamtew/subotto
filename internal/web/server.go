@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"subotto/internal/db"
+	"subotto/internal/discord"
 	"subotto/internal/scheduler"
 	"subotto/internal/youtube"
 )
@@ -24,6 +25,13 @@ import (
 // *discord.Bot already matches this.
 type StatusProvider interface {
 	Connected() bool
+}
+
+// DiscordCatalog lists servers/channels the bot can see (Admin dropdowns).
+// *discord.Bot matches this.
+type DiscordCatalog interface {
+	ListGuilds() ([]discord.GuildInfo, error)
+	ListTextChannels(guildID string) ([]discord.ChannelInfo, error)
 }
 
 // SchedulerStatus reports background resync state for /api/status.
@@ -38,6 +46,7 @@ type Server struct {
 	yt          *youtube.Client
 	status      StatusProvider
 	scheduler   SchedulerStatus
+	discord     DiscordCatalog
 	discordTok  string
 	password    string
 	webroot     string
@@ -53,6 +62,7 @@ type Options struct {
 	YouTube        *youtube.Client
 	Status         StatusProvider
 	Scheduler      SchedulerStatus
+	Discord        DiscordCatalog
 	DiscordToken   string
 	AdminPassword  string
 	AdminHost      string
@@ -95,6 +105,7 @@ func New(opts Options) (*Server, error) {
 		yt:          opts.YouTube,
 		status:      opts.Status,
 		scheduler:   opts.Scheduler,
+		discord:     opts.Discord,
 		discordTok:  opts.DiscordToken,
 		password:    password,
 		webroot:     abs,

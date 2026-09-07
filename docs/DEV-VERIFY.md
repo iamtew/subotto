@@ -162,11 +162,12 @@ You need a Google account that **owns** (or can edit) the playlists Subotto will
    YOUTUBE_REDIRECT_URL=http://localhost:50770/oauth/callback
    ```
 
-### 4.3 Playlist ID
+### 4.3 Playlist
 
-1. Open YouTube → your playlist → share / URL.  
-2. The ID looks like `PLxxxxxxxx…` (the `list=` query value).  
-   Keep this for the mapping step.
+Admin UI can **create** a private playlist from a name when you save a mapping.  
+You no longer need to invent an empty playlist by hand on YouTube.
+
+(Optional) If you already have a playlist ID (`list=` in the URL, looks like `PLxxxxxxxx…`), CLI `just add-mapping` still accepts it.
 
 ---
 
@@ -229,10 +230,10 @@ You should see status pills (Discord / YouTube / mapping counts), a mappings for
 
 ### Option A — Admin UI (recommended for this verify pass)
 
-1. Fill **Label** (optional), **Discord channel ID**, **YouTube playlist ID**
-2. Leave **Enabled** checked
-3. **Save mapping**
-4. Confirm the row appears in the table
+1. Pick **Server** (guilds the bot is in) and **Discord channel** from the dropdowns  
+2. Enter a **New playlist name** — Subotto creates a **private** YouTube playlist for you  
+3. Optional **Label** (defaults to playlist name) · leave **Enabled** checked · **SAVE + CREATE**  
+4. Confirm the row appears with a generated playlist ID (`PL…`)
 
 ### Option B — CLI (another terminal; bot can keep running)
 
@@ -241,7 +242,9 @@ just add-mapping DISCORD_CHANNEL_ID YOUTUBE_PLAYLIST_ID "my-label"
 just list-mappings
 ```
 
-Only **enabled** mappings are watched. Disable = pause; delete = remove the mapping (dedup history for videos stays in the DB on purpose).
+CLI still wants an **existing** playlist ID. Prefer the Admin UI when you need Subotto to create the playlist.
+
+Only **enabled** mappings are watched. Disable = pause; delete = **close the epoch** (history kept). A new mapping on the same channel will not resync messages older than the previous epoch, and videos already saved for that channel stay logged so they are not re-added.
 
 ---
 

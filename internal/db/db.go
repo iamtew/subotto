@@ -62,8 +62,8 @@ func (d *DB) Close() error {
 	return d.sql.Close()
 }
 
-// migrate creates tables if they do not exist yet.
-// Safe to run every startup — CREATE TABLE IF NOT EXISTS is a no-op when present.
+// migrate creates tables if they do not exist yet, then applies additive upgrades.
+// Safe to run every startup.
 func (d *DB) migrate() error {
 	const schema = `
 CREATE TABLE IF NOT EXISTS channel_mappings (
@@ -73,19 +73,18 @@ CREATE TABLE IF NOT EXISTS channel_mappings (
 	youtube_playlist_id TEXT NOT NULL,
 	name TEXT NOT NULL DEFAULT '',
 	enabled INTEGER NOT NULL DEFAULT 1,
-	created_at TEXT NOT NULL DEFAULT (datetime('now'))
+	created_at TEXT NOT NULL DEFAULT (datetime('now')),
+	active_from TEXT NOT NULL DEFAULT (datetime('now')),
+	active_until TEXT
 );
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_channel_mappings_channel
-	ON channel_mappings (discord_channel_id);
 
 CREATE TABLE IF NOT EXISTS processed_videos (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	video_id TEXT NOT NULL,
 	playlist_id TEXT NOT NULL,
+	discord_channel_id TEXT NOT NULL DEFAULT '',
 	discord_message_id TEXT NOT NULL DEFAULT '',
-	added_at TEXT NOT NULL DEFAULT (datetime('now')),
-	UNIQUE (video_id, playlist_id)
+	added_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS activity_log (
@@ -104,22 +103,146 @@ CREATE TABLE IF NOT EXISTS oauth_tokens (
 	value TEXT NOT NULL,
 	updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS app_settings (
+	key TEXT PRIMARY KEY,
+	value TEXT NOT NULL,
+	updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `
-	_, err := d.sql.Exec(schema)
-	return err
+	if _, err := d.sql.Exec(schema); err != nil {
+		return err
+	}
+	return d.migrateUpgrades()
+}
+
+// migrateUpgrades brings older Subotto DBs forward (Meat Bag may already have data/).
+func (d *DB) migrateUpgrades() error {
+	cols, err := d.tableColumns("channel_mappings")
+	if err != nil {
+		return err
+	}
+	if !cols["active_from"] {
+		// SQLite ALTER TABLE cannot use non-constant defaults like datetime('now').
+		// Add with a constant, then copy created_at into active_from.
+		if _, err := d.sql.Exec(`ALTER TABLE channel_mappings ADD COLUMN active_from TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("add active_from: %w", err)
+		}
+		if _, err := d.sql.Exec(`UPDATE channel_mappings SET active_from = created_at WHERE active_from = '' OR active_from IS NULL`); err != nil {
+			return fmt.Errorf("backfill active_from: %w", err)
+		}
+	}
+	if !cols["active_until"] {
+		if _, err := d.sql.Exec(`ALTER TABLE channel_mappings ADD COLUMN active_until TEXT`); err != nil {
+			return fmt.Errorf("add active_until: %w", err)
+		}
+	}
+
+	// Old DBs had UNIQUE(discord_channel_id). Epochs need many rows per channel,
+	// with at most one *active* (active_until IS NULL).
+	if _, err := d.sql.Exec(`DROP INDEX IF EXISTS idx_channel_mappings_channel`); err != nil {
+		return fmt.Errorf("drop old channel unique index: %w", err)
+	}
+	if _, err := d.sql.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_channel_mappings_active_channel
+		ON channel_mappings (discord_channel_id) WHERE active_until IS NULL
+	`); err != nil {
+		return fmt.Errorf("create active-channel unique index: %w", err)
+	}
+
+	return d.migrateProcessedVideosChannelScope()
+}
+
+func (d *DB) migrateProcessedVideosChannelScope() error {
+	cols, err := d.tableColumns("processed_videos")
+	if err != nil {
+		return err
+	}
+	if cols["discord_channel_id"] {
+		// Ensure channel-scoped unique index exists (fresh DBs created without UNIQUE in CREATE).
+		_, err := d.sql.Exec(`
+			CREATE UNIQUE INDEX IF NOT EXISTS idx_processed_videos_channel
+			ON processed_videos (video_id, discord_channel_id)
+		`)
+		return err
+	}
+
+	// Rebuild: old UNIQUE(video_id, playlist_id) → channel-scoped dedup.
+	tx, err := d.sql.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.Exec(`ALTER TABLE processed_videos RENAME TO processed_videos_legacy`); err != nil {
+		return fmt.Errorf("rename processed_videos: %w", err)
+	}
+	if _, err := tx.Exec(`
+		CREATE TABLE processed_videos (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			video_id TEXT NOT NULL,
+			playlist_id TEXT NOT NULL,
+			discord_channel_id TEXT NOT NULL DEFAULT '',
+			discord_message_id TEXT NOT NULL DEFAULT '',
+			added_at TEXT NOT NULL DEFAULT (datetime('now'))
+		)
+	`); err != nil {
+		return fmt.Errorf("create processed_videos: %w", err)
+	}
+	if _, err := tx.Exec(`
+		INSERT INTO processed_videos (video_id, playlist_id, discord_channel_id, discord_message_id, added_at)
+		SELECT video_id, playlist_id, '', discord_message_id, added_at FROM processed_videos_legacy
+	`); err != nil {
+		return fmt.Errorf("copy processed_videos: %w", err)
+	}
+	if _, err := tx.Exec(`DROP TABLE processed_videos_legacy`); err != nil {
+		return fmt.Errorf("drop processed_videos_legacy: %w", err)
+	}
+	if _, err := tx.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_processed_videos_channel
+		ON processed_videos (video_id, discord_channel_id)
+	`); err != nil {
+		return fmt.Errorf("index processed_videos: %w", err)
+	}
+	return tx.Commit()
+}
+
+func (d *DB) tableColumns(table string) (map[string]bool, error) {
+	rows, err := d.sql.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return nil, err
+		}
+		out[name] = true
+	}
+	return out, rows.Err()
 }
 
 // ---------- Types Meat Bag will see in later phases ----------
 
-// ChannelMapping is one Discord channel → YouTube playlist link.
+// ChannelMapping is one Discord channel → YouTube playlist *listening post* epoch.
+// Meat Bag: you flip epochs in the Admin UI whenever you want (fortnight,
+// three weeks, whatever). Only one listen can be live per channel at a time —
+// voluntary and exclusive — only Meat Bag flips the collection window.
 type ChannelMapping struct {
-	ID                 int64
-	DiscordChannelID   string
-	GuildID            string
-	YouTubePlaylistID  string
-	Name               string
-	Enabled            bool
-	CreatedAt          time.Time
+	ID                int64
+	DiscordChannelID  string
+	GuildID           string
+	YouTubePlaylistID string
+	Name              string
+	Enabled           bool
+	CreatedAt         time.Time
+	ActiveFrom        time.Time
+	ActiveUntil       *time.Time // nil = currently active epoch
 }
 
 // ActivityEntry is one line in the activity / audit log.
@@ -160,10 +283,12 @@ func (d *DB) LogActivity(ctx context.Context, eventType string, details any, suc
 	return nil
 }
 
-// CountMappings returns how many channel ↔ playlist rows exist.
+// CountMappings returns how many *active* channel ↔ playlist rows exist.
 func (d *DB) CountMappings(ctx context.Context) (int, error) {
 	var n int
-	err := d.sql.QueryRowContext(ctx, `SELECT COUNT(*) FROM channel_mappings`).Scan(&n)
+	err := d.sql.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM channel_mappings WHERE active_until IS NULL`,
+	).Scan(&n)
 	return n, err
 }
 
@@ -174,10 +299,13 @@ func (d *DB) CountActivity(ctx context.Context) (int, error) {
 	return n, err
 }
 
-// CountEnabledMappings returns how many mappings are currently enabled.
+// CountEnabledMappings returns how many *active* mappings are currently enabled.
 func (d *DB) CountEnabledMappings(ctx context.Context) (int, error) {
 	var n int
-	err := d.sql.QueryRowContext(ctx, `SELECT COUNT(*) FROM channel_mappings WHERE enabled = 1`).Scan(&n)
+	err := d.sql.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM channel_mappings
+		WHERE active_until IS NULL AND enabled = 1
+	`).Scan(&n)
 	return n, err
 }
 
@@ -225,7 +353,32 @@ func (d *DB) ListActivity(ctx context.Context, limit int) ([]ActivityEntry, erro
 	return out, nil
 }
 
-// WasVideoProcessed returns true if this video was already added to this playlist.
+// WasVideoProcessedOnChannel returns true if this video was already saved for
+// this Discord channel (any playlist epoch). That way a biweekly playlist swap
+// does not re-add the same links on resync.
+func (d *DB) WasVideoProcessedOnChannel(ctx context.Context, videoID, channelID string) (bool, error) {
+	var n int
+	err := d.sql.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM processed_videos
+		WHERE video_id = ? AND discord_channel_id = ?
+	`, videoID, channelID).Scan(&n)
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
+// MarkVideoProcessed records a successful add for channel-scoped dedup.
+func (d *DB) MarkVideoProcessed(ctx context.Context, videoID, playlistID, channelID, discordMessageID string) error {
+	_, err := d.sql.ExecContext(ctx, `
+		INSERT OR IGNORE INTO processed_videos (video_id, playlist_id, discord_channel_id, discord_message_id)
+		VALUES (?, ?, ?, ?)
+	`, videoID, playlistID, channelID, discordMessageID)
+	return err
+}
+
+// WasVideoProcessed is kept for older call sites/tests — prefers channel scope
+// when channelID is non-empty; otherwise falls back to playlist-only.
 func (d *DB) WasVideoProcessed(ctx context.Context, videoID, playlistID string) (bool, error) {
 	var n int
 	err := d.sql.QueryRowContext(ctx,
@@ -236,16 +389,6 @@ func (d *DB) WasVideoProcessed(ctx context.Context, videoID, playlistID string) 
 		return false, err
 	}
 	return n > 0, nil
-}
-
-// MarkVideoProcessed records a successful add (used for dedup later).
-func (d *DB) MarkVideoProcessed(ctx context.Context, videoID, playlistID, discordMessageID string) error {
-	_, err := d.sql.ExecContext(ctx,
-		`INSERT OR IGNORE INTO processed_videos (video_id, playlist_id, discord_message_id)
-		 VALUES (?, ?, ?)`,
-		videoID, playlistID, discordMessageID,
-	)
-	return err
 }
 
 // SaveOAuthToken stores a token blob under a key (e.g. "youtube").

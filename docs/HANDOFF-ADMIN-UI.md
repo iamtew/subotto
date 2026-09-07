@@ -1,74 +1,71 @@
-# Handoff — Phase 6 continued: Admin UI polish
+# Handoff — Phase 6 listening posts + Admin ops desk
 
-**For:** Clanker / next session  
-**From:** Phase 6 scheduler + port 50770 commit (`1061bae`)  
-**Date:** 2026-09-07  
+**For:** next Clanker / Cursor agent  
+**Date:** 2026-09-08  
 **Branch:** `master`
 
-Meat Bag wants to **stay on Phase 6 for a while** and **improve the Admin UI a lot** before Phase 7 (VPS/systemd). Backend scheduler is in place; UI is the focus.
+Meat Bag is staying on **Phase 6**. Admin UI is a dark SIGINT-flavored ops desk. Product language is **listening posts**, not “mappings” or “airs”.
 
 Suggested opener:  
-> Clanker, read docs/HANDOFF-ADMIN-UI.md and improve the Admin UI.
+> Clanker, read docs/HANDOFF-ADMIN-UI.md and docs/JUMPBACK.md — continue Phase 6 polish.
 
 ---
 
-## 1. Constraints (do not break)
+## 1. What just shipped (uncommitted → about to land)
 
-- **Plain HTML / CSS / vanilla JS** in [`webroot/`](../webroot/) — no React, no build step, no Docker.
-- Admin is served by the same binary ([`internal/web/`](../internal/web/)) with **Basic Auth** (`admin` / `ADMIN_PASSWORD`).
-- Existing JSON API stays the source of truth:
-  - `GET /api/status`
-  - `GET|POST /api/mappings`, `PATCH|DELETE /api/mappings/{channel}`
-  - `GET /api/activity`
-  - `POST /api/resync`
-- Keep beginner-friendly comments; Clanker ↔ Meat Bag voice in docs.
-- Default port **50770**; do not regress OAuth/Admin sharing that port.
-- Commit only when Meat Bag asks.
+- Default Admin/OAuth port **50770**
+- Scheduler (`RESYNC_INTERVAL_HOURS`) + rate-limit polish
+- Dark theme: Better VCR + Inter, Meat Bag palette
+- **Listening posts:** create YouTube playlist by name, guild/channel dropdowns
+- **Epochs:** one live listen per channel; soft-close on cease; resync won’t dig past previous epoch; channel-scoped video dedup
+- **Rename playlist** on an active listen (YouTube title update)
+- **Global** online/offline Discord announce templates (`/api/settings/listen-messages`)
+- Tone: voluntary / sovereignty / ops desk — **do not** write the word communism (or anti-communism slogans) in code or docs
 
 ---
 
-## 2. Current UI map
+## 2. Constraints
 
-| File | Role |
+- Plain HTML/CSS/JS in `webroot/` — no React, no Docker
+- Basic Auth Admin; port 50770; pure Go SQLite
+- Commit only when Meat Bag asks; title + bullet body
+- API aliases: `/api/listens` preferred; `/api/airs` and `/api/mappings` still work
+
+---
+
+## 3. Key paths
+
+| Path | Role |
 |------|------|
-| [`webroot/index.html`](../webroot/index.html) | Header + status pills, mappings form/table, resync form, activity table |
-| [`webroot/css/admin.css`](../webroot/css/admin.css) | Theme tokens (forest/ink on warm paper), panels, tables |
-| [`webroot/js/admin.js`](../webroot/js/admin.js) | `api()`, load status/mappings/activity, form handlers |
-
-Backend already exposes scheduler fields on `/api/status` (`scheduler_enabled`, `resync_interval_hours`, `scheduler_last_run_at`, `scheduler_last_error`). Pills show a basic on/off; richer UI can use these.
-
----
-
-## 3. What “a lot better” likely means (ask Meat Bag)
-
-Do **not** invent a total brand rewrite without direction. Clarify preferences, then iterate. Likely themes:
-
-1. **Clarity** — less ID pasting; channel picker from mappings for resync; empty states that teach.
-2. **Feedback** — clearer success/error toasts; resync progress; activity details readable (pretty JSON or key fields).
-3. **Layout** — less stacked “dashboard panels”; stronger Subotto brand in the first viewport; mobile-friendly.
-4. **Ops** — surface scheduler interval / last run / last error without digging logs.
-5. **Safety** — confirm before delete; disable dangerous actions while a resync runs.
-
-Stay inside plain CSS visual rules from Meat Bag’s design preferences when redesigning (expressive type, real atmosphere, no purple-glow AI defaults, cards only when they help interaction).
+| `webroot/` | Ops desk UI |
+| `internal/web/api.go` | Listens, announce, Discord catalog |
+| `internal/db/mappings.go` | Epochs + lookback |
+| `internal/db/settings.go` | Global listen start/stop copy |
+| `internal/discord/announce.go` | Channel announce helper |
+| `internal/youtube/client.go` | CreatePlaylist + UpdatePlaylistTitle |
+| `internal/scheduler/` | Background resync |
 
 ---
 
-## 4. Safe iteration order
+## 4. Sensible next polish (ask Meat Bag)
 
-1. Confirm look + priority with Meat Bag (1–2 questions).
-2. Improve structure/UX in `webroot/` first (biggest win, lowest risk).
-3. Only extend `/api/*` if the UI truly needs new fields (keep auth).
-4. `just test` / `just build`; Meat Bag browser-checks on `http://localhost:50770`.
-
----
-
-## 5. Out of scope until Meat Bag says otherwise
-
-- Phase 7 systemd / VPS guide  
-- Public `/healthz`  
-- Rewriting the Go API in a new framework  
-- Docker  
+- Live Discord channel names in the listens table (not only snowflakes)
+- Confirm before START LISTEN when a listen already exists on that channel
+- Preview announce templates before save
+- Phase 7 only when Meat Bag says so
 
 ---
 
-**Clanker’s note:** Scheduler brain is done enough to pause. Polish the cockpit Meat Bag stares at every day.
+## 5. Verify
+
+```text
+just test
+just build
+just run
+```
+
+Admin: `http://localhost:50770` · user `admin` · `ADMIN_PASSWORD`
+
+---
+
+**Clanker’s note:** Collection windows are Meat Bag–flipped. Keep the cockpit sharp and the wire voluntary.

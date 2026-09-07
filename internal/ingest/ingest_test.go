@@ -79,12 +79,43 @@ func TestProcessContentAddFail(t *testing.T) {
 	}
 
 	// Failed adds must NOT be marked processed — a retry should try again.
-	already, err := store.WasVideoProcessed(ctx, "dQw4w9WgXcQ", "pl1")
+	already, err := store.WasVideoProcessedOnChannel(ctx, "dQw4w9WgXcQ", "c1")
 	if err != nil {
 		t.Fatalf("dedup: %v", err)
 	}
 	if already {
 		t.Fatal("failed add should not mark video as processed")
+	}
+}
+
+func TestProcessContentDedupAcrossPlaylistEpoch(t *testing.T) {
+	ctx := context.Background()
+	store := openTestDB(t)
+	m1, err := store.UpsertMapping(ctx, "c1", "g1", "pl1", "week1", true)
+	if err != nil {
+		t.Fatalf("upsert1: %v", err)
+	}
+	yt := &fakeAdder{}
+	content := "https://youtu.be/dQw4w9WgXcQ"
+	r1 := ProcessContent(ctx, store, yt, m1, "c1", "msg-1", content)
+	if r1.Added != 1 {
+		t.Fatalf("first epoch add: %+v", r1)
+	}
+
+	// New fortnight playlist on same channel.
+	m2, err := store.UpsertMapping(ctx, "c1", "g1", "pl2", "week2", true)
+	if err != nil {
+		t.Fatalf("upsert2: %v", err)
+	}
+	if m2.YouTubePlaylistID != "pl2" {
+		t.Fatalf("expected new playlist, got %+v", m2)
+	}
+	r2 := ProcessContent(ctx, store, yt, m2, "c1", "msg-2", content)
+	if r2.Skipped != 1 || r2.Added != 0 {
+		t.Fatalf("same channel must skip across epochs, got %+v", r2)
+	}
+	if len(yt.calls) != 1 {
+		t.Fatalf("YouTube must not be called again, calls=%v", yt.calls)
 	}
 }
 

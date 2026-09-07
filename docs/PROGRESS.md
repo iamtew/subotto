@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-07  
 **Branch:** `master`  
-**Status:** Phase 6 **backend** done (scheduler, rate-limit polish, port 50770). **Continuing Phase 6** with Admin UI polish — see [HANDOFF-ADMIN-UI.md](HANDOFF-ADMIN-UI.md).  
+**Status:** Phase 6 **in progress** — listening posts, dark Admin, epochs, announce copy. See [HANDOFF-ADMIN-UI.md](HANDOFF-ADMIN-UI.md).  
 **Later:** Phase 7 Linux VPS / systemd deploy guide  
 
 ---
@@ -11,14 +11,9 @@
 
 | Phase | Title | Result |
 |--------|--------|--------|
-| 0 | Project bootstrap | Go module, folders, justfile (DEV/PROD), `.env.example`, webroot |
-| 1 | Config + database | Env/`.env` loading, SQLite schema, `log/slog` |
-| 2 | YouTube OAuth + client | Browser OAuth, token in SQLite, `AddVideoToPlaylist` |
-| 3 | Discord bot core | Link parser, mapped-channel listener, dedup, reactions |
-| 4 | Mapping CRUD + resync | List/enable/disable/delete CLI, shared ingest, history resync |
-| 5 | Admin Web UI | stdlib HTTP, Basic Auth, `/api/*`, plain HTML/CSS/JS dashboard |
-| 6a | Scheduling & polish | `RESYNC_INTERVAL_HOURS` scheduler, retries, status fields, port 50770 |
-| 6b | Admin UI polish | **In progress** — [HANDOFF-ADMIN-UI.md](HANDOFF-ADMIN-UI.md) |
+| 0–5 | Core bot + Admin | Verified live DEV |
+| 6a | Scheduler + port 50770 | Shipped |
+| 6b | Listening posts + ops desk UI | Dark theme, playlist create/rename, epochs, global start/stop announce, guild/channel dropdowns |
 
 ## Key paths
 

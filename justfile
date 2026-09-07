@@ -20,30 +20,40 @@ run:
 auth-youtube:
     go run ./cmd/subotto -youtube-auth
 
-# Map a Discord channel to a YouTube playlist (until Admin UI exists).
+# Open a listening post (CLI; prefer Admin UI START LISTEN to create playlists).
 # Usage: just add-mapping DISCORD_CHANNEL_ID YOUTUBE_PLAYLIST_ID
-# Optional 3rd arg = label name.
 add-mapping channel playlist name="":
     go run ./cmd/subotto -add-mapping-channel {{channel}} -add-mapping-playlist {{playlist}} -add-mapping-name "{{name}}"
 
-# List all channel ↔ playlist mappings (including disabled).
+start-listen channel playlist name="":
+    just add-mapping {{channel}} {{playlist}} "{{name}}"
+
+# List live listening posts.
 list-mappings:
     go run ./cmd/subotto -list-mappings
 
-# Enable a previously disabled mapping.
-# Usage: just enable-mapping DISCORD_CHANNEL_ID
+list-listens:
+    just list-mappings
+
+# Resume / pause a listen.
 enable-mapping channel:
     go run ./cmd/subotto -enable-mapping {{channel}}
 
-# Disable a mapping (bot ignores that channel until re-enabled).
-# Usage: just disable-mapping DISCORD_CHANNEL_ID
+enable-listen channel:
+    just enable-mapping {{channel}}
+
 disable-mapping channel:
     go run ./cmd/subotto -disable-mapping {{channel}}
 
-# Delete a mapping permanently (processed_videos stay for dedup).
-# Usage: just delete-mapping DISCORD_CHANNEL_ID
+pause-listen channel:
+    just disable-mapping {{channel}}
+
+# Cease listen (closes epoch; processed_videos stay for dedup).
 delete-mapping channel:
     go run ./cmd/subotto -delete-mapping {{channel}}
+
+cease-listen channel:
+    just delete-mapping {{channel}}
 
 # Rescan recent Discord messages for YouTube links (REST only, no reactions).
 # Usage: just resync DISCORD_CHANNEL_ID

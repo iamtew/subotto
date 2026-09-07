@@ -129,6 +129,108 @@ func (c *Client) AddVideoToPlaylist(ctx context.Context, playlistID, videoID str
 	return lastErr
 }
 
+// CreatePlaylist makes a new YouTube playlist owned by the authorized account.
+// Meat Bag: use this from the Admin UI when you cannot create an empty playlist
+// by hand — Subotto creates it, then stores the returned playlist ID.
+// Privacy is "private" by default (you can change it later on YouTube).
+// This is voluntary association with your own Google account.
+func (c *Client) CreatePlaylist(ctx context.Context, title, description string) (playlistID string, err error) {
+	if c == nil || c.service == nil {
+		return "", errors.New("youtube client is nil")
+	}
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return "", errors.New("playlist title is required")
+	}
+	if description == "" {
+		description = "Created by Subotto"
+	}
+
+	pl := &ytapi.Playlist{
+		Snippet: &ytapi.PlaylistSnippet{
+			Title:       title,
+			Description: description,
+		},
+		Status: &ytapi.PlaylistStatus{
+			PrivacyStatus: "private",
+		},
+	}
+
+	const maxAttempts = 3
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		resp, err := c.service.Playlists.Insert([]string{"snippet", "status"}, pl).Context(ctx).Do()
+		if err == nil {
+			if resp == nil || resp.Id == "" {
+				return "", errors.New("youtube created playlist but returned no id")
+			}
+			slog.Info("created youtube playlist", "title", title, "playlist", resp.Id)
+			return resp.Id, nil
+		}
+		lastErr = wrapAPIError(err, "", "")
+		if !isRetryableYouTube(err) || attempt == maxAttempts {
+			return "", lastErr
+		}
+		wait := time.Duration(attempt) * time.Second
+		slog.Warn("youtube create playlist temporary error — retrying",
+			"attempt", attempt,
+			"wait", wait.String(),
+			"err", lastErr,
+		)
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(wait):
+		}
+	}
+	return "", lastErr
+}
+
+// UpdatePlaylistTitle renames an existing playlist the authorized account owns.
+// Meat Bag: your listen epoch can keep the same playlist ID while you fix the title.
+func (c *Client) UpdatePlaylistTitle(ctx context.Context, playlistID, title string) error {
+	if c == nil || c.service == nil {
+		return errors.New("youtube client is nil")
+	}
+	playlistID = strings.TrimSpace(playlistID)
+	title = strings.TrimSpace(title)
+	if playlistID == "" || title == "" {
+		return errors.New("playlistID and title are required")
+	}
+
+	list, err := c.service.Playlists.List([]string{"snippet"}).Id(playlistID).Context(ctx).Do()
+	if err != nil {
+		return wrapAPIError(err, playlistID, "")
+	}
+	if list == nil || len(list.Items) == 0 {
+		return fmt.Errorf("youtube playlist %q not found or not owned by this account", playlistID)
+	}
+
+	pl := list.Items[0]
+	pl.Snippet.Title = title
+
+	const maxAttempts = 3
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		_, err := c.service.Playlists.Update([]string{"snippet"}, pl).Context(ctx).Do()
+		if err == nil {
+			slog.Info("renamed youtube playlist", "playlist", playlistID, "title", title)
+			return nil
+		}
+		lastErr = wrapAPIError(err, playlistID, "")
+		if !isRetryableYouTube(err) || attempt == maxAttempts {
+			return lastErr
+		}
+		wait := time.Duration(attempt) * time.Second
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(wait):
+		}
+	}
+	return lastErr
+}
+
 // Ping checks that the token works by listing the authorized channel.
 // Useful after OAuth so Meat Bag knows authorization succeeded.
 func (c *Client) Ping(ctx context.Context) (channelTitle string, err error) {

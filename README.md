@@ -53,7 +53,7 @@ Session notes: [docs/PROGRESS.md](docs/PROGRESS.md) · jump-back: [docs/JUMPBACK
 - [ ] Google Cloud project with YouTube Data API v3 enabled
 - [ ] OAuth 2.0 Client ID + Secret
 - [ ] A Discord server where you can invite the bot
-- [ ] YouTube playlists that the Google account you authorize owns
+- [ ] YouTube playlists that the Google account you authorize owns (or let Admin UI create them)
 
 Details and click-by-click steps: [docs/DEV-VERIFY.md](docs/DEV-VERIFY.md).
 

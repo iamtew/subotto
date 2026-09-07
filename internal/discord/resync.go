@@ -66,6 +66,11 @@ func ResyncChannel(
 		return nil, fmt.Errorf("mapping for channel %s is disabled — run just enable-mapping %s first", channelID, channelID)
 	}
 
+	notBefore, err := store.ResyncNotBefore(ctx, channelID)
+	if err != nil {
+		return nil, fmt.Errorf("mapping lookback boundary: %w", err)
+	}
+
 	token = strings.TrimSpace(token)
 	if token == "" {
 		return nil, fmt.Errorf("DISCORD_BOT_TOKEN is empty")
@@ -82,12 +87,14 @@ func ResyncChannel(
 		"playlist_id": mapping.YouTubePlaylistID,
 		"limit":       limit,
 		"mapping":     mapping.Name,
+		"not_before":  formatNotBefore(notBefore),
 	}, true)
 
 	summary := &ResyncSummary{}
 	beforeID := "" // empty = start from the newest messages
+	hitEpochFloor := false
 
-	for summary.MessagesScanned < limit {
+	for summary.MessagesScanned < limit && !hitEpochFloor {
 		page := discordPageSize
 		remaining := limit - summary.MessagesScanned
 		if remaining < page {
@@ -122,12 +129,26 @@ func ResyncChannel(
 		}
 
 		for _, m := range msgs {
+			// Newest-first: once we cross the previous epoch boundary, stop.
+			if !notBefore.IsZero() && m.Timestamp.Before(notBefore) {
+				hitEpochFloor = true
+				slog.Info("resync reached previous mapping boundary",
+					"channel", channelID,
+					"not_before", notBefore.UTC().Format(time.RFC3339),
+					"message_time", m.Timestamp.UTC().Format(time.RFC3339),
+				)
+				break
+			}
 			summary.MessagesScanned++
 			if m.Author != nil && m.Author.Bot {
 				continue
 			}
 			r := ingest.ProcessContent(ctx, store, yt, mapping, channelID, m.ID, m.Content)
 			summary.Result.Merge(r)
+		}
+
+		if hitEpochFloor {
+			break
 		}
 
 		// discordgo returns newest-first; the last item is the oldest in this page.
@@ -167,4 +188,11 @@ func isDiscordRateLimit(err error) bool {
 		return rest.Response.StatusCode == http.StatusTooManyRequests
 	}
 	return strings.Contains(strings.ToLower(err.Error()), "rate limit")
+}
+
+func formatNotBefore(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format(time.RFC3339)
 }

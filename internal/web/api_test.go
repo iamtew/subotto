@@ -48,6 +48,17 @@ func testServer(t *testing.T) (*Server, *db.DB) {
 	return s, store
 }
 
+func TestDiscordGuildsRequiresCatalog(t *testing.T) {
+	s, _ := testServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/discord/guilds", nil)
+	req.SetBasicAuth("admin", "test-pass")
+	rec := httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("want 503 without Discord catalog, got %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestStatusRequiresAuth(t *testing.T) {
 	s, _ := testServer(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/status", nil)

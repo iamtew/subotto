@@ -85,7 +85,7 @@ func TestMappingCRUD(t *testing.T) {
 		t.Fatalf("get after delete: %v", err)
 	}
 	if gone != nil {
-		t.Fatal("mapping should be gone after delete")
+		t.Fatal("active mapping should be gone after soft-delete")
 	}
 
 	if err := store.DeleteMapping(ctx, "chan-missing"); err == nil {
@@ -93,5 +93,52 @@ func TestMappingCRUD(t *testing.T) {
 	}
 	if _, err := store.SetMappingEnabled(ctx, "chan-missing", true); err == nil {
 		t.Fatal("enable missing channel should error")
+	}
+}
+
+func TestMappingEpochReplaceAndLookback(t *testing.T) {
+	ctx := context.Background()
+	store := openTestDB(t)
+
+	m1, err := store.UpsertMapping(ctx, "chan-x", "g", "pl-old", "fortnight-1", true)
+	if err != nil {
+		t.Fatalf("upsert1: %v", err)
+	}
+
+	// First epoch: no previous boundary.
+	nb, err := store.ResyncNotBefore(ctx, "chan-x")
+	if err != nil {
+		t.Fatalf("notBefore1: %v", err)
+	}
+	if !nb.IsZero() {
+		t.Fatalf("first mapping should have no lookback floor, got %v", nb)
+	}
+
+	m2, err := store.UpsertMapping(ctx, "chan-x", "g", "pl-new", "fortnight-2", true)
+	if err != nil {
+		t.Fatalf("upsert2: %v", err)
+	}
+	if m2.ID == m1.ID {
+		t.Fatal("new playlist should open a new epoch row")
+	}
+	if m2.YouTubePlaylistID != "pl-new" {
+		t.Fatalf("unexpected playlist: %+v", m2)
+	}
+
+	// Old epoch closed; only one active.
+	active, err := store.ListMappings(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(active) != 1 || active[0].YouTubePlaylistID != "pl-new" {
+		t.Fatalf("want one active new mapping, got %+v", active)
+	}
+
+	nb2, err := store.ResyncNotBefore(ctx, "chan-x")
+	if err != nil {
+		t.Fatalf("notBefore2: %v", err)
+	}
+	if nb2.IsZero() {
+		t.Fatal("second epoch must have a lookback floor from previous active_until")
 	}
 }

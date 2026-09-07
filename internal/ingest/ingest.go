@@ -55,14 +55,14 @@ func ProcessContent(
 	}
 
 	for _, videoID := range ids {
-		already, err := store.WasVideoProcessed(ctx, videoID, mapping.YouTubePlaylistID)
+		already, err := store.WasVideoProcessedOnChannel(ctx, videoID, channelID)
 		if err != nil {
 			slog.Error("dedup check failed", "video", videoID, "err", err)
 			res.Failed++
 			continue
 		}
 		if already {
-			slog.Info("skip duplicate video", "video", videoID, "playlist", mapping.YouTubePlaylistID)
+			slog.Info("skip duplicate video", "video", videoID, "channel", channelID, "playlist", mapping.YouTubePlaylistID)
 			res.Skipped++
 			_ = store.LogActivity(ctx, "video_skipped", map[string]any{
 				"reason":     "duplicate",
@@ -91,7 +91,7 @@ func ProcessContent(
 			continue
 		}
 
-		if err := store.MarkVideoProcessed(ctx, videoID, mapping.YouTubePlaylistID, messageID); err != nil {
+		if err := store.MarkVideoProcessed(ctx, videoID, mapping.YouTubePlaylistID, channelID, messageID); err != nil {
 			slog.Error("mark processed failed", "video", videoID, "err", err)
 		}
 		_ = store.LogActivity(ctx, "video_added", map[string]any{
@@ -104,6 +104,7 @@ func ProcessContent(
 		slog.Info("added video to playlist",
 			"video", videoID,
 			"playlist", mapping.YouTubePlaylistID,
+			"channel", channelID,
 			"mapping", mapping.Name,
 		)
 		res.Added++

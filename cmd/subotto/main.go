@@ -361,6 +361,7 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 		YouTube:        yt,
 		Status:         bot,
 		Scheduler:      sched,
+		Discord:        bot,
 		DiscordToken:   cfg.DiscordBotToken,
 		AdminPassword:  cfg.AdminPassword,
 		AdminHost:      cfg.AdminHost,
