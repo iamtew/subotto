@@ -2,8 +2,8 @@
 
 **Date:** 2026-09-07  
 **Branch:** `master`  
-**Status:** Phases **0–6 complete** (Phase 6 scheduler + polish in code; Meat Bag DEV smoke still welcome).  
-**Next:** Phase 7 Linux VPS / systemd deploy guide  
+**Status:** Phase 6 **backend** done (scheduler, rate-limit polish, port 50770). **Continuing Phase 6** with Admin UI polish — see [HANDOFF-ADMIN-UI.md](HANDOFF-ADMIN-UI.md).  
+**Later:** Phase 7 Linux VPS / systemd deploy guide  
 
 ---
 
@@ -17,7 +17,8 @@
 | 3 | Discord bot core | Link parser, mapped-channel listener, dedup, reactions |
 | 4 | Mapping CRUD + resync | List/enable/disable/delete CLI, shared ingest, history resync |
 | 5 | Admin Web UI | stdlib HTTP, Basic Auth, `/api/*`, plain HTML/CSS/JS dashboard |
-| 6 | Scheduling & polish | `RESYNC_INTERVAL_HOURS` scheduler, rate-limit retries, status fields |
+| 6a | Scheduling & polish | `RESYNC_INTERVAL_HOURS` scheduler, retries, status fields, port 50770 |
+| 6b | Admin UI polish | **In progress** — [HANDOFF-ADMIN-UI.md](HANDOFF-ADMIN-UI.md) |
 
 ## Key paths
 
@@ -55,4 +56,5 @@ Default Admin/OAuth port is now **50770** (update Google redirect + `.env` if yo
 
 ## Not done yet (PLAN.md)
 
+- **Phase 6b** — Admin UI polish (stay here a while) → [HANDOFF-ADMIN-UI.md](HANDOFF-ADMIN-UI.md)  
 - **Phase 7** — Linux VPS / systemd deploy guide  

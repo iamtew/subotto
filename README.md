@@ -11,8 +11,8 @@ See **AGENTS.md** for how Clanker and Meat Bag are supposed to talk to each othe
 
 ## Quick Status
 
-**Phases 0–6 done** (0–5 Meat Bag verified live; Phase 6 scheduler + polish shipped).  
-**Next:** Phase 7 (native Linux VPS / systemd) — see PLAN.md.
+**Phases 0–6a done** (scheduler + port 50770). **Phase 6 continuing:** Admin UI polish — [docs/HANDOFF-ADMIN-UI.md](docs/HANDOFF-ADMIN-UI.md).  
+**Later:** Phase 7 (native Linux VPS / systemd).
 
 DEV recipe: [docs/DEV-VERIFY.md](docs/DEV-VERIFY.md).
 
