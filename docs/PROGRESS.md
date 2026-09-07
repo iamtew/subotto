@@ -39,13 +39,13 @@ docs/DEV-VERIFY.md           Meat Bag DEV startup + acceptance checklist
 
 ## Live DEV verification (Meat Bag — in progress)
 
-Follow [DEV-VERIFY.md](DEV-VERIFY.md). Acceptance = one ✅ on a fresh link + video on the playlist + activity visible in Admin UI.
+Follow [DEV-VERIFY.md](DEV-VERIFY.md). Acceptance = one 💾 on a fresh link + video on the playlist + activity visible in Admin UI.
 
 - [ ] Discord bot token + **Message Content Intent** + bot invited  
 - [ ] Google Cloud: YouTube Data API v3 + OAuth client + redirect  
 - [ ] Real `ADMIN_PASSWORD` in `.env`  
 - [ ] `just auth-youtube` once  
-- [ ] `just run` → Admin UI → mapping → paste YouTube link → ✅  
+- [ ] `just run` → Admin UI → mapping → paste YouTube link → 💾  
 
 ## Paused (PLAN.md)
 

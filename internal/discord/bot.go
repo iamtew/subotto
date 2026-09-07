@@ -114,14 +114,21 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 	case res.Failed > 0 && res.Added == 0:
 		b.react(s, m, "❌")
 	case res.Added > 0:
-		b.react(s, m, "✅")
+		b.react(s, m, "💾") // saved to playlist (floppy = classic "saved")
 	case res.Skipped > 0:
 		b.react(s, m, "♻️") // already had these videos
 	}
 }
 
 func (b *Bot) react(s *discordgo.Session, m *discordgo.MessageCreate, emoji string) {
+	// Meat Bag: if videos land on the playlist but you see no emoji, Discord
+	// usually denied "Add Reactions". We log at Warn so it shows at default info level.
 	if err := s.MessageReactionAdd(m.ChannelID, m.ID, emoji); err != nil {
-		slog.Debug("could not add reaction", "emoji", emoji, "err", err)
+		slog.Warn("could not add reaction",
+			"emoji", emoji,
+			"channel", m.ChannelID,
+			"message", m.ID,
+			"err", err,
+		)
 	}
 }

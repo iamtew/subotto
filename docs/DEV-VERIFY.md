@@ -18,7 +18,7 @@ Someone posts a YouTube link in a mapped Discord channel
   → pulls out the video ID
   → adds it to that channel’s YouTube playlist
   → remembers it (so it does not add twice)
-  → reacts ✅ (added), ♻️ (already there), or ❌ (failed)
+  → reacts 💾 (added), ♻️ (already there), or ❌ (failed)
 ```
 
 You also get:
@@ -109,7 +109,7 @@ Without this, Discord will not send Subotto the text of messages, so YouTube lin
 3. Bot permissions (minimum that works):
    - **View Channels**
    - **Read Message History** (needed for resync)
-   - **Add Reactions** (for ✅ ♻️ ❌)
+   - **Add Reactions** (for 💾 ♻️ ❌)
    - **Send Messages** is nice-to-have; Subotto mainly reacts
 4. Copy the generated URL, open it, pick your test server, authorize.
 
@@ -250,14 +250,14 @@ Only **enabled** mappings are watched. Disable = pause; delete = remove the mapp
    - `https://youtu.be/…`
    - Shorts / music links also work when they contain a video ID
 3. Within a few seconds Subotto should react:
-   - ✅ — added to the playlist
+   - 💾 — added to the playlist (floppy = saved)
    - ♻️ — already processed for that playlist (try a second paste of the same video)
    - ❌ — something failed (check the `just run` terminal + Admin activity log)
 
 4. Open the playlist on YouTube — the video should be there.
 5. Refresh the Admin UI activity table — you should see `video_added` (or skip/fail events).
 
-**Pass criteria for “current work is good”:** one ✅ on a fresh video, playlist updated, activity logged. That is the Phase 0–5 acceptance test.
+**Pass criteria for “current work is good”:** one 💾 on a fresh video, playlist updated, activity logged. That is the Phase 0–5 acceptance test.
 
 ---
 
@@ -333,7 +333,7 @@ Check these off for yourself:
 - [ ] `just run` shows Discord + Admin UI ready  
 - [ ] Admin login works (`admin` / your password)  
 - [ ] Mapping saved (UI or CLI)  
-- [ ] Fresh YouTube link → ✅ and video appears on the playlist  
+- [ ] Fresh YouTube link → 💾 and video appears on the playlist  
 - [ ] Same link again → ♻️  
 - [ ] Activity shows up in the Admin UI  
 

@@ -8,7 +8,7 @@ Pause note: **Phases 0–5 are complete.** We are **not starting Phase 6/7 yet**
 
 ### Where we left off
 Code for Phases **0–5** is on `master` (bot, mappings CLI, Admin UI, resync).  
-**Your job now:** follow [DEV-VERIFY.md](DEV-VERIFY.md) end-to-end until you get one green ✅ in Discord and the video on the playlist.
+**Your job now:** follow [DEV-VERIFY.md](DEV-VERIFY.md) end-to-end until you get one 💾 in Discord and the video on the playlist.
 
 Do **not** ask Clanker for Phase 6 until that verify pass feels good (or you explicitly redirect).
 
@@ -86,4 +86,4 @@ just run
 
 ---
 
-**Clanker’s note:** Code spine is ready. The win for this break is Meat Bag’s tokens + one ✅ — not more phases.
+**Clanker’s note:** Code spine is ready. The win for this break is Meat Bag’s tokens + one 💾 — not more phases.

@@ -13,7 +13,7 @@ See **AGENTS.md** for how Clanker and Meat Bag are supposed to talk to each othe
 
 **Phases 0–5 done** in code. **Phase 6/7 paused** while Meat Bag verifies DEV with real Discord + YouTube.
 
-**Start here:** [docs/DEV-VERIFY.md](docs/DEV-VERIFY.md) — full Windows DEV setup, how it works, and the ✅ acceptance checklist.
+**Start here:** [docs/DEV-VERIFY.md](docs/DEV-VERIFY.md) — full Windows DEV setup, how it works, and the acceptance checklist.
 
 Short path once secrets exist:
 
@@ -23,7 +23,7 @@ just run
 ```
 
 Open `http://localhost:8080` — username `admin`, password = `ADMIN_PASSWORD`.  
-Paste a YouTube link in a mapped channel → expect ✅ (or ♻️ / ❌).
+Paste a YouTube link in a mapped channel → expect 💾 (or ♻️ / ❌).
 
 Session notes: [docs/PROGRESS.md](docs/PROGRESS.md) · jump-back: [docs/JUMPBACK.md](docs/JUMPBACK.md)
 
@@ -63,7 +63,7 @@ Details and click-by-click steps: [docs/DEV-VERIFY.md](docs/DEV-VERIFY.md).
 3. `just auth-youtube` once (browser login; refresh token saved in SQLite).
 4. `just run` (or `just build` then run the binary).
 5. Open the Admin UI (`http://localhost:8080`, user `admin` / `ADMIN_PASSWORD`), add a mapping.
-6. Drop a YouTube link in that channel and confirm ✅ + playlist update.
+6. Drop a YouTube link in that channel and confirm 💾 + playlist update.
 
 Full walkthrough: [docs/DEV-VERIFY.md](docs/DEV-VERIFY.md).
 

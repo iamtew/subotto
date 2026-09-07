@@ -31,7 +31,7 @@ type ResyncSummary struct {
 // gateway) and feeds each one through ingest.ProcessContent.
 //
 // Meat Bag: this does NOT put emoji reactions on old messages. That would be
-// spammy. Live posts still get ✅ / ♻️ / ❌.
+// spammy. Live posts still get 💾 / ♻️ / ❌.
 func ResyncChannel(
 	ctx context.Context,
 	token string,
