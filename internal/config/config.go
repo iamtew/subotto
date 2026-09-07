@@ -98,12 +98,19 @@ func (c *Config) validate() error {
 }
 
 // MissingSecrets lists Discord/YouTube credentials that are still empty.
-// Phase 1 can start without them; Phase 2/3 will need them filled in.
 func (c *Config) MissingSecrets() []string {
 	var missing []string
 	if strings.TrimSpace(c.DiscordBotToken) == "" || c.DiscordBotToken == "your-discord-bot-token-here" {
 		missing = append(missing, "DISCORD_BOT_TOKEN")
 	}
+	missing = append(missing, c.MissingYouTubeSecrets()...)
+	return missing
+}
+
+// MissingYouTubeSecrets lists Google OAuth client settings still empty/placeholder.
+// Needed before `just auth-youtube` (Phase 2).
+func (c *Config) MissingYouTubeSecrets() []string {
+	var missing []string
 	if strings.TrimSpace(c.YouTubeClientID) == "" || c.YouTubeClientID == "your-google-oauth-client-id" {
 		missing = append(missing, "YOUTUBE_CLIENT_ID")
 	}

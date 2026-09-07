@@ -16,6 +16,10 @@ default:
 run:
     go run ./cmd/subotto
 
+# One-time YouTube OAuth (opens browser; needs YOUTUBE_CLIENT_ID/SECRET in .env)
+auth-youtube:
+    go run ./cmd/subotto -youtube-auth
+
 # Build native Windows binary (DEV)
 build:
     go build -o bin/subotto.exe ./cmd/subotto

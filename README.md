@@ -11,9 +11,13 @@ See **AGENTS.md** for how Clanker and Meat Bag are supposed to talk to each othe
 
 ## Quick Status
 
-**Phase 1 done:** config (env / `.env`), SQLite schema, and `log/slog` are wired.  
-Try `just run` — Subotto opens `./data/subotto.db` and logs a startup activity row.  
-Next up: **Phase 2** (YouTube OAuth + add-to-playlist). See PLAN.md.
+**Phase 2 done:** YouTube OAuth + `AddVideoToPlaylist` are implemented.  
+- Fill `YOUTUBE_CLIENT_ID` / `YOUTUBE_CLIENT_SECRET` in `.env`
+- Add redirect URI `http://localhost:8080/oauth/callback` in Google Cloud Console
+- Enable **YouTube Data API v3**, then run `just auth-youtube` once
+- Normal boot: `just run` (loads token from SQLite when present)
+
+Next up: **Phase 3** (Discord bot core). See PLAN.md.
 
 **No Docker.** We use **Just** + native Go binaries.
 
@@ -42,13 +46,14 @@ Next up: **Phase 2** (YouTube OAuth + add-to-playlist). See PLAN.md.
 
 ---
 
-## High-Level Setup Flow (once code exists)
+## High-Level Setup Flow
 
 1. Copy `.env.example` → `.env` and fill in tokens.
-2. Run the OAuth authorization flow once (Clanker will provide the exact command).
-3. `just run` (or `just build` then run the binary).
-4. Open the Admin UI in your browser, add channel → playlist mappings.
-5. Drop a YouTube link in a mapped channel and watch the magic.
+2. Google Cloud: enable YouTube Data API v3, create OAuth client, add redirect `http://localhost:8080/oauth/callback`.
+3. `just auth-youtube` once (browser login; refresh token saved in SQLite).
+4. `just run` (or `just build` then run the binary).
+5. Open the Admin UI in your browser, add channel → playlist mappings (Phase 5).
+6. Drop a YouTube link in a mapped channel and watch the magic (Phase 3+).
 
 ---
 
