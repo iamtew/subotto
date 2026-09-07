@@ -5,7 +5,7 @@
 //   - `just auth-youtube` — one-time Google OAuth
 //   - `just add-mapping CHANNEL PLAYLIST` — map a Discord channel to a playlist
 //   - `just list-mappings` / enable / disable / delete / resync — Phase 4 CRUD
-//   - Admin UI at http://localhost:8080 (user admin / ADMIN_PASSWORD)
+//   - Admin UI at http://localhost:50770 (user admin / ADMIN_PASSWORD)
 package main
 
 import (
@@ -24,6 +24,7 @@ import (
 	"subotto/internal/config"
 	"subotto/internal/db"
 	"subotto/internal/discord"
+	"subotto/internal/scheduler"
 	"subotto/internal/web"
 	"subotto/internal/youtube"
 )
@@ -328,7 +329,7 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 		slog.Info("channel mappings loaded", "count", mappings)
 	}
 
-	if err := store.LogActivity(ctx, "startup", map[string]any{"message": "Phase 5 boot", "phase": 5}, true); err != nil {
+	if err := store.LogActivity(ctx, "startup", map[string]any{"message": "Phase 6 boot", "phase": 6}, true); err != nil {
 		slog.Error("failed to write startup activity", "err", err)
 		os.Exit(1)
 	}
@@ -348,10 +349,18 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 		}
 	}()
 
+	sched := scheduler.New(scheduler.Options{
+		Store:               store,
+		YouTube:             yt,
+		DiscordToken:        cfg.DiscordBotToken,
+		ResyncIntervalHours: cfg.ResyncIntervalHours,
+	})
+
 	admin, err := web.New(web.Options{
 		Store:          store,
 		YouTube:        yt,
 		Status:         bot,
+		Scheduler:      sched,
 		DiscordToken:   cfg.DiscordBotToken,
 		AdminPassword:  cfg.AdminPassword,
 		AdminHost:      cfg.AdminHost,
@@ -369,8 +378,16 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 		adminErr <- admin.Start()
 	}()
 
+	// Scheduler shares this cancel with shutdown so ticks stop promptly.
+	schedCtx, schedCancel := context.WithCancel(context.Background())
+	defer schedCancel()
+	go sched.Run(schedCtx)
+
 	slog.Info("listening for YouTube links in mapped channels — Ctrl+C to stop")
 	slog.Info("Admin UI ready", "url", fmt.Sprintf("http://%s", admin.Addr()), "user", "admin")
+	if sched.Enabled() {
+		slog.Info("background resync enabled", "interval_hours", cfg.ResyncIntervalHours)
+	}
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
@@ -383,6 +400,8 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 			slog.Error("admin UI server stopped", "err", err)
 		}
 	}
+
+	schedCancel()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

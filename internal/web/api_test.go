@@ -75,6 +75,12 @@ func TestStatusAndMappingsCRUD(t *testing.T) {
 	if status["discord_connected"] != true {
 		t.Fatalf("expected discord_connected true: %v", status)
 	}
+	if status["phase"] != float64(6) {
+		t.Fatalf("expected phase 6, got %v", status["phase"])
+	}
+	if status["scheduler_enabled"] != false {
+		t.Fatalf("expected scheduler_enabled false without Scheduler wired: %v", status)
+	}
 
 	body := `{"discord_channel_id":"111","youtube_playlist_id":"PL1","name":"alpha","enabled":true}`
 	req = httptest.NewRequest(http.MethodPost, "/api/mappings", strings.NewReader(body))

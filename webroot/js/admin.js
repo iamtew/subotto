@@ -52,6 +52,15 @@ async function loadStatus() {
     if (s.youtube_channel) {
       host.appendChild(pill(s.youtube_channel, true));
     }
+    if (s.scheduler_enabled) {
+      const hours = s.resync_interval_hours || "?";
+      host.appendChild(pill(`scheduler every ${hours}h`, true));
+      if (s.scheduler_last_error) {
+        host.appendChild(pill("scheduler error", false));
+      }
+    } else {
+      host.appendChild(pill("scheduler off", true));
+    }
   } catch (err) {
     host.replaceChildren(pill("status failed: " + err.message, false));
   }

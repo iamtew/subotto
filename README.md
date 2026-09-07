@@ -11,8 +11,8 @@ See **AGENTS.md** for how Clanker and Meat Bag are supposed to talk to each othe
 
 ## Quick Status
 
-**Phases 0–5 done and Meat Bag verified good** (live Discord → YouTube DEV).  
-**Next:** Phase 6 (scheduler & polish) — handoff: [docs/HANDOFF-PHASE6.md](docs/HANDOFF-PHASE6.md).
+**Phases 0–6 done** (0–5 Meat Bag verified live; Phase 6 scheduler + polish shipped).  
+**Next:** Phase 7 (native Linux VPS / systemd) — see PLAN.md.
 
 DEV recipe: [docs/DEV-VERIFY.md](docs/DEV-VERIFY.md).
 
@@ -23,8 +23,10 @@ just auth-youtube
 just run
 ```
 
-Open `http://localhost:8080` — username `admin`, password = `ADMIN_PASSWORD`.  
+Open `http://localhost:50770` — username `admin`, password = `ADMIN_PASSWORD`.  
 Paste a YouTube link in a mapped channel → expect 💾 (or ♻️ / ❌).
+
+Optional: set `RESYNC_INTERVAL_HOURS` (e.g. `6`) for background history re-scans of enabled mappings. `0` keeps scheduler off.
 
 Session notes: [docs/PROGRESS.md](docs/PROGRESS.md) · jump-back: [docs/JUMPBACK.md](docs/JUMPBACK.md)
 
@@ -60,10 +62,10 @@ Details and click-by-click steps: [docs/DEV-VERIFY.md](docs/DEV-VERIFY.md).
 ## High-Level Setup Flow
 
 1. Copy `.env.example` → `.env` and fill in tokens (set a real `ADMIN_PASSWORD`).
-2. Google Cloud: enable YouTube Data API v3, create OAuth client, add redirect `http://localhost:8080/oauth/callback`.
+2. Google Cloud: enable YouTube Data API v3, create OAuth client, add redirect `http://localhost:50770/oauth/callback`.
 3. `just auth-youtube` once (browser login; refresh token saved in SQLite).
 4. `just run` (or `just build` then run the binary).
-5. Open the Admin UI (`http://localhost:8080`, user `admin` / `ADMIN_PASSWORD`), add a mapping.
+5. Open the Admin UI (`http://localhost:50770`, user `admin` / `ADMIN_PASSWORD`), add a mapping.
 6. Drop a YouTube link in that channel and confirm 💾 + playlist update.
 
 Full walkthrough: [docs/DEV-VERIFY.md](docs/DEV-VERIFY.md).
@@ -76,7 +78,7 @@ Full walkthrough: [docs/DEV-VERIFY.md](docs/DEV-VERIFY.md).
 |------------------|-----------------------------------|----------------------------------------|
 | Build            | `just build` → `bin/subotto.exe`  | `just build-linux` → `bin/subotto-linux` |
 | Run              | `just run`                        | Run the Linux binary (or systemd)      |
-| Admin UI         | http://localhost:8080             | Same binary, optionally behind reverse proxy |
+| Admin UI         | http://localhost:50770             | Same binary, optionally behind reverse proxy |
 | Database         | SQLite in `./data`                | Same, keep the `data/` folder          |
 | Web UI files     | `webroot/`                        | Copy `webroot/` next to the binary     |
 | Secrets          | `.env` file                       | `.env` or environment variables        |

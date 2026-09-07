@@ -88,7 +88,7 @@ Shared pipeline: internal/ingest (live + CLI/UI resync + future scheduled resync
 - Clanker ↔ Meat Bag voice; beginner-friendly comments.  
 - Do not commit `.env` or `data/*.db`.  
 - Commit only when Meat Bag asks; title + bullet body; prefer `-F` file on Windows PowerShell.  
-- OAuth one-shot and Admin both default to port **8080** — auth exits; bot holds the port. Don’t break that.  
+- OAuth one-shot and Admin both default to port **50770** — auth exits; bot holds the port. Don’t break that.  
 - `DeleteMapping` leaves `processed_videos` (intentional).  
 - Scheduled resync should **reuse** `discord.ResyncChannel` / ingest — no second pipeline.  
 - Scheduled jobs must respect **enabled** mappings only; mind YouTube **quota** (playlist insert ~50 units). Prefer conservative defaults and clear logs.
@@ -152,16 +152,16 @@ Use `git log` for the full list.
 
 ## 8. Definition of done (Phase 6)
 
-- [ ] `RESYNC_INTERVAL_HOURS` actually drives background resync when > 0  
-- [ ] Interval 0 keeps today’s behavior (no scheduled scans)  
-- [ ] Shutdown stops scheduler without hanging  
-- [ ] Rate-limit / quota errors are clearer or retried sensibly  
-- [ ] Status (or health) reflects scheduler state enough for Meat Bag  
-- [ ] Docs updated; `just test` / `just build` green  
+- [x] `RESYNC_INTERVAL_HOURS` actually drives background resync when > 0  
+- [x] Interval 0 keeps today’s behavior (no scheduled scans)  
+- [x] Shutdown stops scheduler without hanging  
+- [x] Rate-limit / quota errors are clearer or retried sensibly  
+- [x] Status (or health) reflects scheduler state enough for Meat Bag  
+- [x] Docs updated; `just test` / `just build` green  
 - [ ] Meat Bag can re-check with [DEV-VERIFY.md](DEV-VERIFY.md) smoke (live link still 💾)
 
 Then hand off toward **Phase 7** (deploy guide) similarly — or wait for Meat Bag.
 
 ---
 
-**Clanker’s note to Clanker:** Meat Bag already bled on intents, OAuth test users, and reactions. Don’t make them re-verify the universe — ship Phase 6 carefully and explain the interval in plain English.
+**Clanker’s note:** Phase 6 shipped. Default port is **50770**. Scheduler stays off until Meat Bag sets `RESYNC_INTERVAL_HOURS`.

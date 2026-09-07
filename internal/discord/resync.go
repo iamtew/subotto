@@ -2,9 +2,12 @@ package discord
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strings"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 
@@ -92,6 +95,17 @@ func ResyncChannel(
 		}
 
 		msgs, err := session.ChannelMessages(channelID, page, beforeID, "", "")
+		if err != nil && isDiscordRateLimit(err) {
+			slog.Warn("discord rate limited during resync — waiting then retrying once",
+				"channel", channelID,
+			)
+			select {
+			case <-ctx.Done():
+				return summary, ctx.Err()
+			case <-time.After(2 * time.Second):
+			}
+			msgs, err = session.ChannelMessages(channelID, page, beforeID, "", "")
+		}
 		if err != nil {
 			_ = store.LogActivity(ctx, "resync_finished", map[string]any{
 				"channel_id": channelID,
@@ -141,4 +155,16 @@ func ResyncChannel(
 		"failed", summary.Result.Failed,
 	)
 	return summary, nil
+}
+
+// isDiscordRateLimit detects HTTP 429 (or a "rate limit" message) from discordgo.
+func isDiscordRateLimit(err error) bool {
+	if err == nil {
+		return false
+	}
+	var rest *discordgo.RESTError
+	if errors.As(err, &rest) && rest.Response != nil {
+		return rest.Response.StatusCode == http.StatusTooManyRequests
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "rate limit")
 }

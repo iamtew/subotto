@@ -9,6 +9,7 @@ import (
 
 	"subotto/internal/db"
 	"subotto/internal/discord"
+	"subotto/internal/scheduler"
 	"subotto/internal/youtube"
 )
 
@@ -108,17 +109,27 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		discordOK = s.status.Connected()
 	}
 
+	// Default scheduler fields when not wired (tests).
+	sched := scheduler.Info{Enabled: false, IntervalHours: 0}
+	if s.scheduler != nil {
+		sched = s.scheduler.Info()
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ok":               true,
-		"phase":            5,
-		"started_at":       s.startedAt.Format(time.RFC3339),
-		"discord_connected": discordOK,
+		"ok":                 true,
+		"phase":              6,
+		"started_at":         s.startedAt.Format(time.RFC3339),
+		"discord_connected":  discordOK,
 		"youtube_authorized": hasTok,
-		"youtube_channel":  s.youtubeName,
-		"mappings_total":   mappings,
-		"mappings_enabled": enabled,
-		"activity_total":   activity,
-		"listen_addr":      s.addr,
+		"youtube_channel":    s.youtubeName,
+		"mappings_total":     mappings,
+		"mappings_enabled":   enabled,
+		"activity_total":     activity,
+		"listen_addr":        s.addr,
+		"resync_interval_hours": sched.IntervalHours,
+		"scheduler_enabled":     sched.Enabled,
+		"scheduler_last_run_at": sched.LastRunAt,
+		"scheduler_last_error":  sched.LastError,
 	})
 }
 

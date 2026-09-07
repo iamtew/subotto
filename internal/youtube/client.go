@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/oauth2"
 	"google.golang.org/api/googleapi"
@@ -77,6 +79,9 @@ func (s *savingTokenSource) Token() (*oauth2.Token, error) {
 }
 
 // AddVideoToPlaylist inserts a video into a playlist (playlistItems.insert).
+// Meat Bag: on temporary rate limits (429) or Google hiccups (5xx) we retry a
+// couple of times with a short pause. Daily quota exceeded is NOT retried —
+// waiting a few seconds will not refill the quota bucket.
 func (c *Client) AddVideoToPlaylist(ctx context.Context, playlistID, videoID string) error {
 	if c == nil || c.service == nil {
 		return errors.New("youtube client is nil")
@@ -97,11 +102,31 @@ func (c *Client) AddVideoToPlaylist(ctx context.Context, playlistID, videoID str
 		},
 	}
 
-	_, err := c.service.PlaylistItems.Insert([]string{"snippet"}, item).Context(ctx).Do()
-	if err != nil {
-		return wrapAPIError(err, playlistID, videoID)
+	const maxAttempts = 3
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		_, err := c.service.PlaylistItems.Insert([]string{"snippet"}, item).Context(ctx).Do()
+		if err == nil {
+			return nil
+		}
+		lastErr = wrapAPIError(err, playlistID, videoID)
+		if !isRetryableYouTube(err) || attempt == maxAttempts {
+			return lastErr
+		}
+		// 1s, then 2s — enough for a brief rate-limit window.
+		wait := time.Duration(attempt) * time.Second
+		slog.Warn("youtube temporary error — retrying",
+			"attempt", attempt,
+			"wait", wait.String(),
+			"err", lastErr,
+		)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(wait):
+		}
 	}
-	return nil
+	return lastErr
 }
 
 // Ping checks that the token works by listing the authorized channel.
@@ -151,6 +176,19 @@ func wrapAPIError(err error, playlistID, videoID string) error {
 		}
 	}
 	return fmt.Errorf("youtube request failed: %w", err)
+}
+
+// isRetryableYouTube is true for transient Google errors worth a short wait.
+// Quota / auth / not-found are permanent for this request — do not loop.
+func isRetryableYouTube(err error) bool {
+	var gerr *googleapi.Error
+	if !errors.As(err, &gerr) {
+		return false
+	}
+	if gerr.Code == 429 {
+		return true
+	}
+	return gerr.Code >= 500 && gerr.Code <= 599
 }
 
 func firstReason(gerr *googleapi.Error) string {

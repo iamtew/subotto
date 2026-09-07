@@ -222,11 +222,11 @@ DISCORD_GUILD_ID=...          # optional
 # YouTube / Google
 YOUTUBE_CLIENT_ID=...
 YOUTUBE_CLIENT_SECRET=...
-YOUTUBE_REDIRECT_URL=http://localhost:8080/oauth/callback
+YOUTUBE_REDIRECT_URL=http://localhost:50770/oauth/callback
 
 # Admin UI
 ADMIN_PASSWORD=change-me-please
-ADMIN_PORT=8080
+ADMIN_PORT=50770
 ADMIN_HOST=0.0.0.0            # or 127.0.0.1 if you put a reverse proxy in front
 
 # Database

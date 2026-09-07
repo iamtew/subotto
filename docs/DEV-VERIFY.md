@@ -39,11 +39,11 @@ Phases **6–7** come after this guide. **Meat Bag verified DEV good (2026-09-07
 | Database       | Mappings, dedup, activity, YouTube token | `./data/subotto.db`                     |
 | Discord bot    | Listens for new messages                 | Same process as `just run`              |
 | YouTube client | Adds videos using *your* Google login    | OAuth refresh token in the DB           |
-| Admin UI       | Browser dashboard                        | `http://localhost:8080` from `webroot/` |
+| Admin UI       | Browser dashboard                        | `http://localhost:50770` from `webroot/` |
 
 **Important:** Adding to a playlist needs **OAuth**, not just a Google API key. That is why you run `just auth-youtube` once.
 
-**Port 8080:** used by `just auth-youtube` for a short callback, then by the Admin UI while the bot runs. Do one at a time; do not run auth and the bot on 8080 together.
+**Port 50770:** used by `just auth-youtube` for a short callback, then by the Admin UI while the bot runs. Do one at a time; do not run auth and the bot on 50770 together.
 
 ---
 
@@ -79,8 +79,10 @@ Open `.env` in an editor. You will fill tokens in the steps below. At minimum ch
 ADMIN_PASSWORD=pick-something-you-will-remember
 ```
 
-Leave `ADMIN_PORT=8080` and `ADMIN_HOST=0.0.0.0` unless you know you need otherwise.  
+Leave `ADMIN_PORT=50770` and `ADMIN_HOST=0.0.0.0` unless you know you need otherwise.  
 `DATABASE_PATH=./data/subotto.db` is fine for DEV.
+
+`RESYNC_INTERVAL_HOURS=0` (default) means **no** background history scans — live Discord posts still work. Set a positive number (hours) only if you want Subotto to periodically re-scan enabled channels the same way Admin “Resync” does. Keep it conservative; YouTube playlist inserts cost quota.
 
 `.env` is gitignored. Do not paste secrets into Discord, commits, or chat logs.
 
@@ -149,7 +151,7 @@ You need a Google account that **owns** (or can edit) the playlists Subotto will
 4. **Authorized redirect URIs** — add exactly:
 
    ```text
-   http://localhost:8080/oauth/callback
+   http://localhost:50770/oauth/callback
    ```
 
 5. Copy **Client ID** and **Client secret** into `.env`:
@@ -157,7 +159,7 @@ You need a Google account that **owns** (or can edit) the playlists Subotto will
    ```env
    YOUTUBE_CLIENT_ID=....apps.googleusercontent.com
    YOUTUBE_CLIENT_SECRET=...
-   YOUTUBE_REDIRECT_URL=http://localhost:8080/oauth/callback
+   YOUTUBE_REDIRECT_URL=http://localhost:50770/oauth/callback
    ```
 
 ### 4.3 Playlist ID
@@ -170,7 +172,7 @@ You need a Google account that **owns** (or can edit) the playlists Subotto will
 
 ## 5. One-time YouTube login
 
-From the **repo root**, with nothing else using port 8080:
+From the **repo root**, with nothing else using port 50770:
 
 ```text
 just auth-youtube
@@ -178,11 +180,11 @@ just auth-youtube
 
 What happens:
 
-1. Subotto starts a tiny temporary HTTP listener on 8080.
+1. Subotto starts a tiny temporary HTTP listener on 50770.
 2. Your browser opens Google’s consent screen.
 3. Sign in with the Google account that owns the playlist.
 4. Approve access to manage YouTube (playlist writes).
-5. Google redirects to `http://localhost:8080/oauth/callback`.
+5. Google redirects to `http://localhost:50770/oauth/callback`.
 6. Subotto saves a **refresh token** into SQLite and prints your channel name.
 7. The auth process exits.
 
@@ -214,7 +216,7 @@ Leave this terminal open. Ctrl+C stops Discord **and** the Admin UI.
 
 ## 7. Open the Admin UI
 
-1. Browser → [http://localhost:8080](http://localhost:8080)
+1. Browser → [http://localhost:50770](http://localhost:50770)
 2. When asked for credentials:
    - **Username:** `admin` (always)
    - **Password:** whatever you set as `ADMIN_PASSWORD` in `.env`
@@ -300,7 +302,7 @@ just test
 | Browser 401 on Admin | Wrong password or not `admin` | Username must be `admin` |
 | Admin page ugly / 404 assets | Wrong working directory | `just run` from repo root |
 | `webroot folder missing` | Same | Run from repo root; keep `webroot/` next to where you start |
-| Auth or Admin “address already in use” | Port 8080 busy | Stop the other Subotto / process; do not run auth + bot together |
+| Auth or Admin “address already in use” | Port 50770 busy | Stop the other Subotto / process; do not run auth + bot together |
 | YouTube auth / permission errors | Wrong Google account or revoked token | `just auth-youtube` again with the playlist owner |
 | ❌ on every link | Playlist not owned / API not enabled / quota | Check Cloud Console + playlist ownership; wait if quota exhausted |
 | “no YouTube token yet” | Skipped auth | `just auth-youtube` then `just run` |

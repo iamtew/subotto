@@ -1,6 +1,6 @@
 // Package web serves Subotto's Admin UI and JSON API.
 //
-// Meat Bag: when Subotto is running, open http://localhost:8080 (or whatever
+// Meat Bag: when Subotto is running, open http://localhost:50770 (or whatever
 // ADMIN_HOST / ADMIN_PORT you set). The browser will ask for a username and
 // password — use username "admin" and the ADMIN_PASSWORD from your .env.
 package web
@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"subotto/internal/db"
+	"subotto/internal/scheduler"
 	"subotto/internal/youtube"
 )
 
@@ -25,11 +26,18 @@ type StatusProvider interface {
 	Connected() bool
 }
 
+// SchedulerStatus reports background resync state for /api/status.
+// *scheduler.Scheduler matches this; nil means "not wired / disabled view".
+type SchedulerStatus interface {
+	Info() scheduler.Info
+}
+
 // Server is the integrated Admin HTTP server (static files + /api/...).
 type Server struct {
 	store       *db.DB
 	yt          *youtube.Client
 	status      StatusProvider
+	scheduler   SchedulerStatus
 	discordTok  string
 	password    string
 	webroot     string
@@ -44,6 +52,7 @@ type Options struct {
 	Store          *db.DB
 	YouTube        *youtube.Client
 	Status         StatusProvider
+	Scheduler      SchedulerStatus
 	DiscordToken   string
 	AdminPassword  string
 	AdminHost      string
@@ -78,13 +87,14 @@ func New(opts Options) (*Server, error) {
 	}
 	port := opts.AdminPort
 	if port == 0 {
-		port = 8080
+		port = 50770
 	}
 
 	s := &Server{
 		store:       opts.Store,
 		yt:          opts.YouTube,
 		status:      opts.Status,
+		scheduler:   opts.Scheduler,
 		discordTok:  opts.DiscordToken,
 		password:    password,
 		webroot:     abs,

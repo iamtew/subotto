@@ -173,7 +173,7 @@ func AuthorizeInteractive(ctx context.Context, store *db.DB, clientID, clientSec
 	return tok, nil
 }
 
-// listenAddrFromRedirect turns http://localhost:8080/oauth/callback into ":8080".
+// listenAddrFromRedirect turns http://localhost:50770/oauth/callback into ":50770".
 func listenAddrFromRedirect(redirectURL string) (string, error) {
 	u, err := url.Parse(redirectURL)
 	if err != nil {

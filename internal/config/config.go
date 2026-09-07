@@ -52,14 +52,14 @@ func Load() (*Config, error) {
 		DiscordGuildID:      os.Getenv("DISCORD_GUILD_ID"),
 		YouTubeClientID:     os.Getenv("YOUTUBE_CLIENT_ID"),
 		YouTubeClientSecret: os.Getenv("YOUTUBE_CLIENT_SECRET"),
-		YouTubeRedirectURL:  envOr("YOUTUBE_REDIRECT_URL", "http://localhost:8080/oauth/callback"),
+		YouTubeRedirectURL:  envOr("YOUTUBE_REDIRECT_URL", "http://localhost:50770/oauth/callback"),
 		AdminPassword:       envOr("ADMIN_PASSWORD", "change-me-please"),
 		AdminHost:           envOr("ADMIN_HOST", "0.0.0.0"),
 		DatabasePath:        envOr("DATABASE_PATH", "./data/subotto.db"),
 		LogLevel:            strings.ToLower(envOr("LOG_LEVEL", "info")),
 	}
 
-	port, err := strconv.Atoi(envOr("ADMIN_PORT", "8080"))
+	port, err := strconv.Atoi(envOr("ADMIN_PORT", "50770"))
 	if err != nil {
 		return nil, fmt.Errorf("ADMIN_PORT must be a number: %w", err)
 	}

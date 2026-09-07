@@ -2,9 +2,8 @@
 
 **Date:** 2026-09-07  
 **Branch:** `master`  
-**Status:** Phases **0–5 complete** and **Meat Bag verified good** (live Discord + YouTube DEV).  
-**Next:** Phase 6 — [HANDOFF-PHASE6.md](HANDOFF-PHASE6.md)  
-**Later:** Phase 7 Linux VPS / systemd deploy guide
+**Status:** Phases **0–6 complete** (Phase 6 scheduler + polish in code; Meat Bag DEV smoke still welcome).  
+**Next:** Phase 7 Linux VPS / systemd deploy guide  
 
 ---
 
@@ -18,11 +17,13 @@
 | 3 | Discord bot core | Link parser, mapped-channel listener, dedup, reactions |
 | 4 | Mapping CRUD + resync | List/enable/disable/delete CLI, shared ingest, history resync |
 | 5 | Admin Web UI | stdlib HTTP, Basic Auth, `/api/*`, plain HTML/CSS/JS dashboard |
+| 6 | Scheduling & polish | `RESYNC_INTERVAL_HOURS` scheduler, rate-limit retries, status fields |
 
 ## Key paths
 
 ```
-cmd/subotto/main.go          Entry: run (bot + admin) / auth / mapping CLI / resync
+cmd/subotto/main.go          Entry: run (bot + admin + scheduler) / auth / mapping CLI / resync
+internal/scheduler/          Optional interval re-scans of enabled mappings
 internal/web/                HTTP server, Basic Auth, JSON API
 webroot/                     Admin UI (index.html, css/, js/)
 internal/db/                 SQLite + mappings + activity list helpers
@@ -30,17 +31,16 @@ internal/ingest/             Shared live + resync pipeline
 internal/discord/            Bot + REST resync (success react = 💾)
 justfile                     run, build, auth-youtube, mapping CRUD, resync
 docs/DEV-VERIFY.md           DEV startup guide
-docs/HANDOFF-PHASE6.md       Next-agent brief for Phase 6
 ```
 
 ## Verified — code
 
-- `just test` — parser, youtube errors, db mappings, ingest, web API  
+- `just test` — parser, youtube errors, db mappings, ingest, web API, scheduler  
 - `just build` — Windows binary builds  
 
 ## Verified — live DEV (Meat Bag sign-off, 2026-09-07)
 
-Acceptance from [DEV-VERIFY.md](DEV-VERIFY.md):
+Acceptance from [DEV-VERIFY.md](DEV-VERIFY.md) for Phases 0–5:
 
 - [x] Discord bot token + **Message Content Intent** + bot invited  
 - [x] Google Cloud: YouTube Data API v3 + OAuth client + redirect + test user  
@@ -49,13 +49,10 @@ Acceptance from [DEV-VERIFY.md](DEV-VERIFY.md):
 - [x] `just run` → Admin UI → mapping → paste YouTube link → **💾** + playlist update  
 - [x] Reactions work (Add Reactions permission); failures visible at Warn if they recur  
 
-Known DEV gotchas learned this arc (documented in DEV-VERIFY):
+Phase 6 live check (optional): set a small `RESYNC_INTERVAL_HOURS` in DEV and confirm scheduled activity rows; leave at `0` for normal use.
 
-- Gateway **4014** → Message Content Intent not enabled/saved  
-- OAuth “testing” mode → add yourself as a **test user**  
-- Playlist OK but no emoji → Add Reactions permission; restart after fixes  
+Default Admin/OAuth port is now **50770** (update Google redirect + `.env` if you still use 8080).
 
 ## Not done yet (PLAN.md)
 
-- **Phase 6** — scheduler (`RESYNC_INTERVAL_HOURS`), rate-limit handling, polish → [HANDOFF-PHASE6.md](HANDOFF-PHASE6.md)  
 - **Phase 7** — Linux VPS / systemd deploy guide  
