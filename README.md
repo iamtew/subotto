@@ -22,6 +22,8 @@ just run
 Reactions: ✅ added, ♻️ already on playlist, ❌ failed.  
 Next up: **Phase 4** (full mapping CRUD + resync). See PLAN.md.
 
+Session notes: [docs/PROGRESS.md](docs/PROGRESS.md) · jump-back: [docs/JUMPBACK.md](docs/JUMPBACK.md)
+
 **No Docker.** We use **Just** + native Go binaries.
 
 ---
