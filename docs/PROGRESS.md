@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-07  
 **Branch:** `master`  
-**Status:** Phase 6 **in progress** — listening posts, dark Admin, epochs, announce copy. See [HANDOFF-ADMIN-UI.md](HANDOFF-ADMIN-UI.md).  
+**Status:** Phase 6 **in progress** — listeners, dark Admin, epochs, announce copy. See [HANDOFF-ADMIN-UI.md](HANDOFF-ADMIN-UI.md).  
 **Later:** Phase 7 Linux VPS / systemd deploy guide  
 
 ---
@@ -13,7 +13,7 @@
 |--------|--------|--------|
 | 0–5 | Core bot + Admin | Verified live DEV |
 | 6a | Scheduler + port 50770 | Shipped |
-| 6b | Listening posts + ops desk UI | Dark theme, playlist create/rename, epochs, global start/stop announce, guild/channel dropdowns |
+| 6b | Listeners + ops desk UI | Dark theme, playlist create/rename, epochs, global start/stop announce, guild/channel dropdowns |
 
 ## Key paths
 

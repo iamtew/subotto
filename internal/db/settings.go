@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-// Global listening-post announce templates (one set for every guild/channel —
+// Global listener announce templates (one set for every guild/channel —
 // a private ops desk under Meat Bag control). Placeholders: {{name}}, {{playlist_id}}, {{channel_id}}.
 const (
 	SettingListenStartMessage = "listen_start_message"
@@ -16,13 +16,13 @@ const (
 	SettingAirStopMessage  = "air_stop_message"
 )
 
-// DefaultListenStartMessage is posted when a listening post goes ONLINE.
-const DefaultListenStartMessage = `🎧 **{{name}}** — listening post ONLINE.
+// DefaultListenStartMessage is posted when a listener goes ONLINE.
+const DefaultListenStartMessage = `🎧 **{{name}}** — listener ONLINE.
 SIGINT collection active. Drop YouTube links; Subotto files them to the playlist.
 _(Eyes on. Ears open. Your channel, your watch.)_`
 
-// DefaultListenStopMessage is posted when a listening post goes OFFLINE.
-const DefaultListenStopMessage = `⏹ **{{name}}** — listening post OFFLINE.
+// DefaultListenStopMessage is posted when a listener goes OFFLINE.
+const DefaultListenStopMessage = `⏹ **{{name}}** — listener OFFLINE.
 Collection window closed. This channel is no longer under watch.
 _(The wire went quiet — until you open it again.)_`
 

@@ -54,8 +54,8 @@ func TestProcessContentAddAndDuplicate(t *testing.T) {
 	}
 
 	r2 := ProcessContent(ctx, store, yt, mapping, "c1", "msg-2", content)
-	if r2.Added != 0 || r2.Skipped != 1 || r2.Failed != 0 {
-		t.Fatalf("second pass: want skipped=1, got %+v", r2)
+	if r2.Added != 0 || r2.Skipped != 1 || r2.SkippedSame != 1 || r2.SkippedOld != 0 || r2.Failed != 0 {
+		t.Fatalf("second pass: want skipped_same=1, got %+v", r2)
 	}
 	if len(yt.calls) != 1 {
 		t.Fatalf("duplicate must not call YouTube again, calls=%v", yt.calls)
@@ -111,8 +111,8 @@ func TestProcessContentDedupAcrossPlaylistEpoch(t *testing.T) {
 		t.Fatalf("expected new playlist, got %+v", m2)
 	}
 	r2 := ProcessContent(ctx, store, yt, m2, "c1", "msg-2", content)
-	if r2.Skipped != 1 || r2.Added != 0 {
-		t.Fatalf("same channel must skip across epochs, got %+v", r2)
+	if r2.Skipped != 1 || r2.SkippedOld != 1 || r2.SkippedSame != 0 || r2.Added != 0 {
+		t.Fatalf("same channel must skip as OLD across epochs, got %+v", r2)
 	}
 	if len(yt.calls) != 1 {
 		t.Fatalf("YouTube must not be called again, calls=%v", yt.calls)

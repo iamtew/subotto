@@ -1,10 +1,10 @@
-# Handoff — Phase 6 listening posts + Admin ops desk
+# Handoff — Phase 6 listeners + Admin ops desk
 
 **For:** next Clanker / Cursor agent  
 **Date:** 2026-09-08  
 **Branch:** `master`
 
-Meat Bag is staying on **Phase 6**. Admin UI is a dark SIGINT-flavored ops desk. Product language is **listening posts**, not “mappings” or “airs”.
+Meat Bag is staying on **Phase 6**. Admin UI is a dark SIGINT-flavored ops desk. Product language is **listeners**, not “mappings” or “airs”.
 
 Suggested opener:  
 > Clanker, read docs/HANDOFF-ADMIN-UI.md and docs/JUMPBACK.md — continue Phase 6 polish.
@@ -16,9 +16,9 @@ Suggested opener:
 - Default Admin/OAuth port **50770**
 - Scheduler (`RESYNC_INTERVAL_HOURS`) + rate-limit polish
 - Dark theme: Better VCR + Inter, Meat Bag palette
-- **Listening posts:** create YouTube playlist by name, guild/channel dropdowns
-- **Epochs:** one live listen per channel; soft-close on cease; resync won’t dig past previous epoch; channel-scoped video dedup
-- **Rename playlist** on an active listen (YouTube title update)
+- **Listeners:** create YouTube playlist by name, guild/channel dropdowns
+- **Epochs:** one live listener per channel; soft-close on cease; resync won’t dig past previous epoch; channel-scoped video dedup
+- **Rename playlist** on an active listener (YouTube title update)
 - **Global** online/offline Discord announce templates (`/api/settings/listen-messages`)
 - Tone: voluntary / sovereignty / ops desk — **do not** write the word communism (or anti-communism slogans) in code or docs
 
@@ -50,7 +50,7 @@ Suggested opener:
 ## 4. Sensible next polish (ask Meat Bag)
 
 - Live Discord channel names in the listens table (not only snowflakes)
-- Confirm before START LISTEN when a listen already exists on that channel
+- Confirm before START LISTENER when a listener already exists on that channel
 - Preview announce templates before save
 - Phase 7 only when Meat Bag says so
 

@@ -32,7 +32,7 @@ Meat Bag confirmed live DEV:
 - YouTube OAuth + playlist writes work
 - Mapping via Admin UI (and/or CLI) works
 - Fresh YouTube link → video on playlist → reaction **💾**
-- Duplicate → **♻️**; failures → **❌**
+- Same-listener duplicate → **♻️** + letter reacts **DUPE**; previous-listener → **🛑** + **OLD**; failures → **❌**
 - Reaction failures log at **Warn** (permissions issues are visible)
 - Admin UI Basic Auth: user `admin` / `ADMIN_PASSWORD`
 
@@ -59,7 +59,7 @@ Empty scaffold waiting: `internal/scheduler/` (was `.gitkeep` only; package may 
 ```text
 just run
   → Discord gateway
-       MessageCreate → enabled mapping? → ingest.ProcessContent → react 💾/♻️/❌
+       MessageCreate → enabled mapping? → ingest.ProcessContent → react 💾 / ♻️DUPE / 🛑OLD / ❌
   → HTTP Admin (webroot + /api/*) Basic Auth
        GET  /api/status
        GET/POST /api/mappings

@@ -19,7 +19,7 @@ Someone posts a YouTube link in a mapped Discord channel
   → pulls out the video ID
   → adds it to that channel’s YouTube playlist
   → remembers it (so it does not add twice)
-  → reacts 💾 (added), ♻️ (already there), or ❌ (failed)
+  → reacts 💾 (added), ♻️ + DUPE (same listener), 🛑 + OLD (previous listener), or ❌ (failed)
 ```
 
 You also get:
@@ -112,7 +112,7 @@ Without this, Discord will not send Subotto the text of messages, so YouTube lin
 3. Bot permissions (minimum that works):
    - **View Channels**
    - **Read Message History** (needed for resync)
-   - **Add Reactions** (for 💾 ♻️ ❌)
+   - **Add Reactions** (for 💾 ♻️ 🛑 letter-spells ❌)
    - **Send Messages** is nice-to-have; Subotto mainly reacts
 4. Copy the generated URL, open it, pick your test server, authorize.
 
@@ -257,7 +257,8 @@ Only **enabled** mappings are watched. Disable = pause; delete = **close the epo
    - Shorts / music links also work when they contain a video ID
 3. Within a few seconds Subotto should react:
    - 💾 — added to the playlist (floppy = saved)
-   - ♻️ — already processed for that playlist (try a second paste of the same video)
+   - ♻️ + letter reacts **DUPE** — already processed on this listener (try a second paste of the same video)
+   - 🛑 + letter reacts **OLD** — already filed under a previous listener epoch on this channel
    - ❌ — something failed (check the `just run` terminal + Admin activity log)
 
 4. Open the playlist on YouTube — the video should be there.
@@ -340,7 +341,7 @@ Check these off for yourself:
 - [x] Admin login works (`admin` / your password)  
 - [x] Mapping saved (UI or CLI)  
 - [x] Fresh YouTube link → 💾 and video appears on the playlist  
-- [x] Same link again → ♻️  
+- [x] Same link again → ♻️ + DUPE  
 - [x] Activity shows up in the Admin UI  
 
 **Sign-off:** Meat Bag verified good (2026-09-07). Next work is Phase 6 — see [HANDOFF-PHASE6.md](HANDOFF-PHASE6.md).

@@ -17,10 +17,10 @@ func TestFormatListenMessage(t *testing.T) {
 	if out != "Week 12 / PLabc / 123" {
 		t.Fatalf("got %q", out)
 	}
-	if !strings.Contains(db.DefaultListenStartMessage, "listening post") {
-		t.Fatal("default start copy should sound like a listening post")
+	if !strings.Contains(db.DefaultListenStartMessage, "listener") {
+		t.Fatal("default start copy should say listener")
 	}
-	if !strings.Contains(strings.ToLower(db.DefaultListenStartMessage), "listening") {
-		t.Fatal("default start copy should sound like a listening post")
+	if !strings.Contains(strings.ToLower(db.DefaultListenStartMessage), "listener") {
+		t.Fatal("default start copy should say listener")
 	}
 }

@@ -20,7 +20,7 @@ run:
 auth-youtube:
     go run ./cmd/subotto -youtube-auth
 
-# Open a listening post (CLI; prefer Admin UI START LISTEN to create playlists).
+# Open a listener (CLI; prefer Admin UI START LISTENER to create playlists).
 # Usage: just add-mapping DISCORD_CHANNEL_ID YOUTUBE_PLAYLIST_ID
 add-mapping channel playlist name="":
     go run ./cmd/subotto -add-mapping-channel {{channel}} -add-mapping-playlist {{playlist}} -add-mapping-name "{{name}}"
@@ -28,14 +28,14 @@ add-mapping channel playlist name="":
 start-listen channel playlist name="":
     just add-mapping {{channel}} {{playlist}} "{{name}}"
 
-# List live listening posts.
+# List live listeners.
 list-mappings:
     go run ./cmd/subotto -list-mappings
 
 list-listens:
     just list-mappings
 
-# Resume / pause a listen.
+# Resume / pause a listener.
 enable-mapping channel:
     go run ./cmd/subotto -enable-mapping {{channel}}
 
@@ -48,7 +48,7 @@ disable-mapping channel:
 pause-listen channel:
     just disable-mapping {{channel}}
 
-# Cease listen (closes epoch; processed_videos stay for dedup).
+# Cease listener (closes epoch; processed_videos stay for dedup).
 delete-mapping channel:
     go run ./cmd/subotto -delete-mapping {{channel}}
 

@@ -18,7 +18,7 @@ import (
 func (s *Server) registerAPI(mux *http.ServeMux) {
 	// All /api routes go through basic auth.
 	mux.Handle("GET /api/status", s.basicAuth(http.HandlerFunc(s.handleStatus)))
-	// Product term: listening post / listen. Legacy /api/airs and /api/mappings stay as aliases.
+	// Product term: listener / listen. Legacy /api/airs and /api/mappings stay as aliases.
 	mux.Handle("GET /api/listens", s.basicAuth(http.HandlerFunc(s.handleListMappings)))
 	mux.Handle("POST /api/listens", s.basicAuth(http.HandlerFunc(s.handleUpsertMapping)))
 	mux.Handle("PATCH /api/listens/{channel}", s.basicAuth(http.HandlerFunc(s.handlePatchMapping)))
@@ -233,7 +233,7 @@ func (s *Server) handleUpsertMapping(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// One listening post per channel: UpsertMapping closes any previous epoch first.
+	// One listener per channel: UpsertMapping closes any previous epoch first.
 	m, err := s.store.UpsertMapping(r.Context(),
 		channelID, body.GuildID, playlistID, name, enabled)
 	if err != nil {
@@ -312,7 +312,7 @@ func (s *Server) handlePatchMapping(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if existing == nil {
-		writeErr(w, http.StatusNotFound, "no listening post for channel "+channelID)
+		writeErr(w, http.StatusNotFound, "no listener for channel "+channelID)
 		return
 	}
 
@@ -459,7 +459,7 @@ func (s *Server) handlePutListenMessages(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-// announceListen posts the global ONLINE / OFFLINE listening-post template.
+// announceListen posts the global ONLINE / OFFLINE listener template.
 func (s *Server) announceListen(ctx context.Context, listen *db.ChannelMapping, online bool) {
 	if listen == nil || strings.TrimSpace(s.discordTok) == "" {
 		return

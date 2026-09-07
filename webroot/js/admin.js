@@ -1,6 +1,121 @@
 /* Subotto Admin UI — vanilla JS for a sovereign Meat Bag.
    Talks to /api/... with browser Basic Auth (collected on page load).
-   Product language: LISTENING POSTS (start listen / cease listen). */
+   Product language: LISTENERS (start listener / cease listener). */
+
+/* ---------- Digital camo backdrop (noise → quantized pixels, no tile) ----------
+   Meat Bag: woodland digicam like your refs — small pixels, irregular clusters,
+   one big canvas so it does not wallpaper-repeat across the screen. */
+function paintDigicam() {
+  const el = document.querySelector(".bg-camo");
+  if (!el) return;
+
+  const cell = 7; // digicam block size in CSS px (bigger = chunkier camo)
+  const w = Math.max(window.innerWidth, document.documentElement.clientWidth, 1280);
+  const h = Math.max(window.innerHeight, document.documentElement.clientHeight, 800);
+  const gw = Math.ceil(w / cell);
+  const gh = Math.ceil(h / cell);
+
+  // Weighted toward darks; sparse olive / violet so panels stay readable.
+  const palette = [
+    [12, 15, 11], // bg-input
+    [16, 20, 15], // bg0
+    [22, 27, 20], // between bg0/bg1
+    [26, 33, 24], // bg-panel
+    [45, 53, 40], // line
+    [108, 117, 74], // dusty olive
+    [154, 172, 98], // muted olive
+    [102, 102, 102], // gray
+    [134, 0, 223], // royal violet (rare)
+  ];
+
+  function hash2(x, y) {
+    let n = Math.imul(x, 374761393) + Math.imul(y, 668265263);
+    n = Math.imul(n ^ (n >>> 13), 1274126177);
+    return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
+  }
+
+  function valueNoise(x, y) {
+    const x0 = Math.floor(x);
+    const y0 = Math.floor(y);
+    const fx = x - x0;
+    const fy = y - y0;
+    const sx = fx * fx * (3 - 2 * fx);
+    const sy = fy * fy * (3 - 2 * fy);
+    const a = hash2(x0, y0);
+    const b = hash2(x0 + 1, y0);
+    const c = hash2(x0, y0 + 1);
+    const d = hash2(x0 + 1, y0 + 1);
+    return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
+  }
+
+  // Fractal noise → irregular blotches like military digicam.
+  function fbm(x, y) {
+    let v = 0;
+    let amp = 0.55;
+    let freq = 1;
+    for (let i = 0; i < 5; i++) {
+      v += amp * valueNoise(x * freq, y * freq);
+      amp *= 0.5;
+      freq *= 2.05;
+    }
+    return Math.min(1, Math.max(0, v));
+  }
+
+  function pickColor(n, accent) {
+    if (accent > 0.965) return palette[8]; // rare violet fleck
+    if (n < 0.18) return palette[0];
+    if (n < 0.32) return palette[1];
+    if (n < 0.46) return palette[2];
+    if (n < 0.58) return palette[3];
+    if (n < 0.7) return palette[4];
+    if (n < 0.82) return palette[5];
+    if (n < 0.92) return palette[6];
+    return palette[7];
+  }
+
+  const low = document.createElement("canvas");
+  low.width = gw;
+  low.height = gh;
+  const lctx = low.getContext("2d");
+  const img = lctx.createImageData(gw, gh);
+  const data = img.data;
+
+  // Slightly stretch X so clusters lean horizontal (classic digicam vibe).
+  const scaleX = 0.085;
+  const scaleY = 0.11;
+  for (let y = 0; y < gh; y++) {
+    for (let x = 0; x < gw; x++) {
+      const n = fbm(x * scaleX, y * scaleY);
+      const accent = hash2(x * 17 + 3, y * 29 + 7);
+      const rgb = pickColor(n, accent);
+      const i = (y * gw + x) * 4;
+      data[i] = rgb[0];
+      data[i + 1] = rgb[1];
+      data[i + 2] = rgb[2];
+      data[i + 3] = 255;
+    }
+  }
+  lctx.putImageData(img, 0, 0);
+
+  const out = document.createElement("canvas");
+  out.width = gw * cell;
+  out.height = gh * cell;
+  const octx = out.getContext("2d");
+  octx.imageSmoothingEnabled = false;
+  octx.drawImage(low, 0, 0, out.width, out.height);
+
+  el.style.backgroundImage = `url(${out.toDataURL("image/png")})`;
+  el.style.backgroundSize = `${out.width}px ${out.height}px`;
+}
+
+let camoResizeTimer = 0;
+function scheduleDigicam() {
+  clearTimeout(camoResizeTimer);
+  camoResizeTimer = setTimeout(paintDigicam, 180);
+}
+
+paintDigicam();
+window.addEventListener("resize", scheduleDigicam);
 
 async function api(path, options = {}) {
   const res = await fetch(path, {
@@ -70,7 +185,7 @@ let lastResyncChannel = "";
 function fillResyncSelect(listens) {
   const sel = document.getElementById("resync-channel");
   const prev = sel.value || lastResyncChannel;
-  const options = ['<option value="">— select listen —</option>'];
+  const options = ['<option value="">— select listener —</option>'];
   for (const m of listens || []) {
     const off = m.enabled ? "" : " (paused)";
     const label = (m.name ? m.name + " · " : "") + m.discord_channel_id + off;
@@ -168,7 +283,7 @@ async function loadListens() {
     const rows = data.listens || data.airs || data.mappings || [];
     fillResyncSelect(rows);
     if (!rows.length) {
-      tbody.innerHTML = `<tr><td colspan="6" class="empty">no listening posts — start listen above</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="empty">no listeners — start listener above</td></tr>`;
       return;
     }
     tbody.innerHTML = rows
@@ -267,10 +382,10 @@ document.getElementById("listen-form").addEventListener("submit", async (ev) => 
     document.getElementById("channel-select").innerHTML =
       `<option value="">— pick a server first —</option>`;
     await loadGuilds();
-    toast("listening · " + (m.youtube_playlist_id || "ok"));
+    toast("listener · " + (m.youtube_playlist_id || "ok"));
     await refreshAll();
   } catch (err) {
-    toast("start listen failed: " + err.message, true);
+    toast("start listener failed: " + err.message, true);
   } finally {
     btn.disabled = false;
   }
@@ -319,11 +434,11 @@ document.getElementById("listens-table").addEventListener("click", async (ev) =>
         method: "PATCH",
         body: JSON.stringify({ enabled: !enabled }),
       });
-      toast(enabled ? "listen paused" : "listen resumed");
+      toast(enabled ? "listener paused" : "listener resumed");
     } else if (act === "delete") {
-      if (!confirm("Cease listen on channel " + channel + "? (epoch closes; history kept)")) return;
+      if (!confirm("Cease listener on channel " + channel + "? (epoch closes; history kept)")) return;
       await api("/api/listens/" + encodeURIComponent(channel), { method: "DELETE" });
-      toast("listening post offline");
+      toast("listener offline");
     } else if (act === "resync") {
       lastResyncChannel = channel;
       const sel = document.getElementById("resync-channel");
@@ -348,7 +463,7 @@ document.getElementById("resync-form").addEventListener("submit", async (ev) => 
   const fd = new FormData(ev.target);
   const channel = fd.get("channel_id");
   if (!channel) {
-    toast("pick a listen", true);
+    toast("pick a listener", true);
     return;
   }
   lastResyncChannel = String(channel);

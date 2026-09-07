@@ -21,10 +21,16 @@ type PlaylistAdder interface {
 }
 
 // Result counts what happened for one Discord message's content.
+//
+// Skipped = SkippedSame + SkippedOld (kept for resync summaries / String()).
+// SkippedSame = already on this listener's playlist (DUPE react).
+// SkippedOld  = already filed under a previous listener epoch (OLD react).
 type Result struct {
-	Added   int
-	Skipped int
-	Failed  int
+	Added       int
+	Skipped     int
+	SkippedSame int
+	SkippedOld  int
+	Failed      int
 }
 
 // ProcessContent extracts YouTube video IDs from text and adds each one to the
@@ -55,21 +61,38 @@ func ProcessContent(
 	}
 
 	for _, videoID := range ids {
-		already, err := store.WasVideoProcessedOnChannel(ctx, videoID, channelID)
+		prevPlaylist, already, err := store.ProcessedPlaylistOnChannel(ctx, videoID, channelID)
 		if err != nil {
 			slog.Error("dedup check failed", "video", videoID, "err", err)
 			res.Failed++
 			continue
 		}
 		if already {
-			slog.Info("skip duplicate video", "video", videoID, "channel", channelID, "playlist", mapping.YouTubePlaylistID)
+			// Same playlist id → same listener epoch. Anything else (including
+			// empty legacy rows) counts as a previous-listener hit.
+			sameListener := prevPlaylist != "" && prevPlaylist == mapping.YouTubePlaylistID
+			reason := "duplicate"
+			if sameListener {
+				res.SkippedSame++
+			} else {
+				res.SkippedOld++
+				reason = "duplicate_old"
+			}
 			res.Skipped++
+			slog.Info("skip duplicate video",
+				"video", videoID,
+				"channel", channelID,
+				"playlist", mapping.YouTubePlaylistID,
+				"prev_playlist", prevPlaylist,
+				"reason", reason,
+			)
 			_ = store.LogActivity(ctx, "video_skipped", map[string]any{
-				"reason":     "duplicate",
-				"video_id":   videoID,
-				"playlist":   mapping.YouTubePlaylistID,
-				"channel_id": channelID,
-				"message_id": messageID,
+				"reason":        reason,
+				"video_id":      videoID,
+				"playlist":      mapping.YouTubePlaylistID,
+				"prev_playlist": prevPlaylist,
+				"channel_id":    channelID,
+				"message_id":    messageID,
 			}, true)
 			continue
 		}
@@ -116,6 +139,8 @@ func ProcessContent(
 func (r *Result) Merge(other Result) {
 	r.Added += other.Added
 	r.Skipped += other.Skipped
+	r.SkippedSame += other.SkippedSame
+	r.SkippedOld += other.SkippedOld
 	r.Failed += other.Failed
 }
 

@@ -61,8 +61,9 @@ body {
   overflow-x: hidden;
 }
 
-/* Grid + soft glow — atmosphere without drowning contrast */
-.bg-grid,
+/* Digital camo + soft glow — canvas paints a one-shot digicam (no wallpaper tile).
+   Palette: olive / dusty / violet / gray on near-black (Meat Bag locked). */
+.bg-camo,
 .bg-glow {
   position: fixed;
   inset: 0;
@@ -70,19 +71,21 @@ body {
   z-index: 0;
 }
 
-.bg-grid {
-  background-image:
-    linear-gradient(rgba(154, 172, 98, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(154, 172, 98, 0.06) 1px, transparent 1px);
-  background-size: 48px 48px;
-  mask-image: radial-gradient(ellipse 80% 70% at 50% 20%, #000 20%, transparent 75%);
+.bg-camo {
+  opacity: 0.5;
+  background-color: var(--bg0);
+  background-repeat: no-repeat;
+  background-position: top left;
+  background-size: cover;
+  /* Soft fade at the edges only — keep digicam readable in the middle */
+  mask-image: radial-gradient(ellipse 95% 90% at 50% 35%, #000 55%, transparent 100%);
 }
 
 .bg-glow {
   background:
-    radial-gradient(ellipse 50% 40% at 15% 0%, rgba(134, 0, 223, 0.18), transparent 55%),
-    radial-gradient(ellipse 45% 35% at 90% 10%, rgba(229, 242, 13, 0.08), transparent 50%),
-    radial-gradient(ellipse 60% 40% at 50% 100%, rgba(0, 245, 58, 0.05), transparent 55%);
+    radial-gradient(ellipse 45% 35% at 12% 0%, rgba(134, 0, 223, 0.07), transparent 60%),
+    radial-gradient(ellipse 40% 30% at 92% 8%, rgba(229, 242, 13, 0.03), transparent 55%),
+    radial-gradient(ellipse 55% 35% at 50% 100%, rgba(0, 245, 58, 0.025), transparent 60%);
 }
 
 .top,

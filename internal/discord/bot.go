@@ -115,20 +115,32 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		b.react(s, m, "❌")
 	case res.Added > 0:
 		b.react(s, m, "💾") // saved to playlist (floppy = classic "saved")
-	case res.Skipped > 0:
-		b.react(s, m, "♻️") // already had these videos
+	case res.SkippedOld > 0:
+		// Previous listener epoch — stop sign + spell OLD with letter reacts.
+		b.reactAll(s, m, "🛑", "🇴", "🇱", "🇩")
+	case res.SkippedSame > 0 || res.Skipped > 0:
+		// Same listener — recycle + spell DUPE with letter reacts.
+		b.reactAll(s, m, "♻️", "🇩", "🇺", "🇵", "🇪")
 	}
 }
 
 func (b *Bot) react(s *discordgo.Session, m *discordgo.MessageCreate, emoji string) {
-	// Meat Bag: if videos land on the playlist but you see no emoji, Discord
-	// usually denied "Add Reactions". We log at Warn so it shows at default info level.
-	if err := s.MessageReactionAdd(m.ChannelID, m.ID, emoji); err != nil {
-		slog.Warn("could not add reaction",
-			"emoji", emoji,
-			"channel", m.ChannelID,
-			"message", m.ID,
-			"err", err,
-		)
+	b.reactAll(s, m, emoji)
+}
+
+// reactAll adds one or more reactions in order (lead emoji, then letter spells).
+// Meat Bag: if videos land on the playlist but you see no emoji, Discord
+// usually denied "Add Reactions". We log at Warn so it shows at default info level.
+func (b *Bot) reactAll(s *discordgo.Session, m *discordgo.MessageCreate, emojis ...string) {
+	for _, emoji := range emojis {
+		if err := s.MessageReactionAdd(m.ChannelID, m.ID, emoji); err != nil {
+			slog.Warn("could not add reaction",
+				"emoji", emoji,
+				"channel", m.ChannelID,
+				"message", m.ID,
+				"err", err,
+			)
+			return // stop the spell if Discord rejects mid-sequence
+		}
 	}
 }

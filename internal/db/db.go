@@ -229,9 +229,9 @@ func (d *DB) tableColumns(table string) (map[string]bool, error) {
 
 // ---------- Types Meat Bag will see in later phases ----------
 
-// ChannelMapping is one Discord channel → YouTube playlist *listening post* epoch.
+// ChannelMapping is one Discord channel → YouTube playlist *listener* epoch.
 // Meat Bag: you flip epochs in the Admin UI whenever you want (fortnight,
-// three weeks, whatever). Only one listen can be live per channel at a time —
+// three weeks, whatever). Only one listener can be live per channel at a time —
 // voluntary and exclusive — only Meat Bag flips the collection window.
 type ChannelMapping struct {
 	ID                int64
@@ -357,15 +357,26 @@ func (d *DB) ListActivity(ctx context.Context, limit int) ([]ActivityEntry, erro
 // this Discord channel (any playlist epoch). That way a biweekly playlist swap
 // does not re-add the same links on resync.
 func (d *DB) WasVideoProcessedOnChannel(ctx context.Context, videoID, channelID string) (bool, error) {
-	var n int
-	err := d.sql.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM processed_videos
+	_, ok, err := d.ProcessedPlaylistOnChannel(ctx, videoID, channelID)
+	return ok, err
+}
+
+// ProcessedPlaylistOnChannel returns the playlist_id recorded when this video
+// was first marked on the channel. ok=false means never processed here.
+// Meat Bag: comparing that id to the current listener's playlist tells us
+// whether a skip is a same-listener DUPE or a previous-listener OLD.
+func (d *DB) ProcessedPlaylistOnChannel(ctx context.Context, videoID, channelID string) (playlistID string, ok bool, err error) {
+	err = d.sql.QueryRowContext(ctx, `
+		SELECT playlist_id FROM processed_videos
 		WHERE video_id = ? AND discord_channel_id = ?
-	`, videoID, channelID).Scan(&n)
-	if err != nil {
-		return false, err
+	`, videoID, channelID).Scan(&playlistID)
+	if err == sql.ErrNoRows {
+		return "", false, nil
 	}
-	return n > 0, nil
+	if err != nil {
+		return "", false, err
+	}
+	return playlistID, true, nil
 }
 
 // MarkVideoProcessed records a successful add for channel-scoped dedup.
