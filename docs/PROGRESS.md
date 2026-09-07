@@ -2,7 +2,9 @@
 
 **Date:** 2026-09-07  
 **Branch:** `master`  
-**Status:** Phases **0–5 complete**. Next: Phase 6 (scheduler & polish).
+**Status:** Phases **0–5 complete** in code. **Phase work paused** — Meat Bag verifying DEV with live APIs.  
+**How to verify:** [DEV-VERIFY.md](DEV-VERIFY.md)  
+**Later (not now):** Phase 6 scheduler/polish · Phase 7 Linux deploy guide
 
 ---
 
@@ -27,23 +29,27 @@ internal/db/                 SQLite + mappings + activity list helpers
 internal/ingest/             Shared live + resync pipeline
 internal/discord/            Bot + REST resync
 justfile                     run, build, auth-youtube, mapping CRUD, resync
+docs/DEV-VERIFY.md           Meat Bag DEV startup + acceptance checklist
 ```
 
-## Verified locally
+## Verified in CI-ish / local code checks
 
-- `just test` — includes web API auth + mapping CRUD tests
+- `just test` — parser, youtube errors, db mappings, ingest, web API
 - `just build` — Windows binary builds
-- Admin UI served from `webroot/` when `just run` (needs live Discord/YouTube tokens)
 
-## Not done yet (PLAN.md)
+## Live DEV verification (Meat Bag — in progress)
 
-- **Phase 6** — scheduler (`RESYNC_INTERVAL_HOURS`), rate-limit handling, polish
-- **Phase 7** — Linux VPS / systemd deploy guide
+Follow [DEV-VERIFY.md](DEV-VERIFY.md). Acceptance = one ✅ on a fresh link + video on the playlist + activity visible in Admin UI.
 
-## Meat Bag checklist still open
+- [ ] Discord bot token + **Message Content Intent** + bot invited  
+- [ ] Google Cloud: YouTube Data API v3 + OAuth client + redirect  
+- [ ] Real `ADMIN_PASSWORD` in `.env`  
+- [ ] `just auth-youtube` once  
+- [ ] `just run` → Admin UI → mapping → paste YouTube link → ✅  
 
-- [ ] Discord bot token + **Message Content Intent**
-- [ ] Google Cloud: YouTube Data API v3 + OAuth client + redirect
-- [ ] Set a real `ADMIN_PASSWORD` in `.env`
-- [ ] `just auth-youtube` once
-- [ ] `just run` → open Admin UI → add mapping → paste a YouTube link
+## Paused (PLAN.md)
+
+- **Phase 6** — scheduler (`RESYNC_INTERVAL_HOURS`), rate-limit handling, polish  
+- **Phase 7** — Linux VPS / systemd deploy guide  
+
+Resume those only after DEV verification (or if Meat Bag explicitly redirects).

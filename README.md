@@ -11,18 +11,19 @@ See **AGENTS.md** for how Clanker and Meat Bag are supposed to talk to each othe
 
 ## Quick Status
 
-**Phase 5 done:** Discord bot + mapping CLI + **Admin Web UI** (Basic Auth) + history resync.  
-Prereqs: `.env` tokens (including `ADMIN_PASSWORD`), `just auth-youtube`, Message Content Intent on, then:
+**Phases 0–5 done** in code. **Phase 6/7 paused** while Meat Bag verifies DEV with real Discord + YouTube.
+
+**Start here:** [docs/DEV-VERIFY.md](docs/DEV-VERIFY.md) — full Windows DEV setup, how it works, and the ✅ acceptance checklist.
+
+Short path once secrets exist:
 
 ```
+just auth-youtube
 just run
 ```
 
 Open `http://localhost:8080` — username `admin`, password = `ADMIN_PASSWORD`.  
-Or CLI: `just add-mapping …` / `just list-mappings` / `just resync …`.
-
-Reactions on live posts: ✅ added, ♻️ already on playlist, ❌ failed.  
-Next up: **Phase 6** (scheduler & polish). See PLAN.md.
+Paste a YouTube link in a mapped channel → expect ✅ (or ♻️ / ❌).
 
 Session notes: [docs/PROGRESS.md](docs/PROGRESS.md) · jump-back: [docs/JUMPBACK.md](docs/JUMPBACK.md)
 
@@ -51,16 +52,20 @@ Session notes: [docs/PROGRESS.md](docs/PROGRESS.md) · jump-back: [docs/JUMPBACK
 - [ ] A Discord server where you can invite the bot
 - [ ] YouTube playlists that the Google account you authorize owns
 
+Details and click-by-click steps: [docs/DEV-VERIFY.md](docs/DEV-VERIFY.md).
+
 ---
 
 ## High-Level Setup Flow
 
-1. Copy `.env.example` → `.env` and fill in tokens.
+1. Copy `.env.example` → `.env` and fill in tokens (set a real `ADMIN_PASSWORD`).
 2. Google Cloud: enable YouTube Data API v3, create OAuth client, add redirect `http://localhost:8080/oauth/callback`.
 3. `just auth-youtube` once (browser login; refresh token saved in SQLite).
 4. `just run` (or `just build` then run the binary).
-5. Open the Admin UI in your browser (`http://localhost:8080`, user `admin` / `ADMIN_PASSWORD`), add channel → playlist mappings.
-6. Drop a YouTube link in a mapped channel and watch the magic.
+5. Open the Admin UI (`http://localhost:8080`, user `admin` / `ADMIN_PASSWORD`), add a mapping.
+6. Drop a YouTube link in that channel and confirm ✅ + playlist update.
+
+Full walkthrough: [docs/DEV-VERIFY.md](docs/DEV-VERIFY.md).
 
 ---
 
@@ -75,6 +80,8 @@ Session notes: [docs/PROGRESS.md](docs/PROGRESS.md) · jump-back: [docs/JUMPBACK
 | Web UI files     | `webroot/`                        | Copy `webroot/` next to the binary     |
 | Secrets          | `.env` file                       | `.env` or environment variables        |
 
+PROD deploy docs are **Phase 7** (paused until DEV verify is done).
+
 ---
 
 ## Philosophy
@@ -86,4 +93,4 @@ Session notes: [docs/PROGRESS.md](docs/PROGRESS.md) · jump-back: [docs/JUMPBACK
 - Heavy comments written for a beginner.
 - Configuration over code changes.
 
-Clanker is ready. Let’s build Subotto the classic way, Meat Bag.
+Clanker is ready. Verify Subotto the classic way, Meat Bag.
