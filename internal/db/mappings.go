@@ -66,6 +66,90 @@ func (d *DB) UpsertMapping(ctx context.Context, channelID, guildID, playlistID, 
 	return d.GetMappingByChannel(ctx, channelID)
 }
 
+// ListMappings returns every channel ↔ playlist row, newest first.
+// Meat Bag: this includes disabled mappings so you can see what is paused.
+func (d *DB) ListMappings(ctx context.Context) ([]ChannelMapping, error) {
+	rows, err := d.sql.QueryContext(ctx, `
+		SELECT id, discord_channel_id, guild_id, youtube_playlist_id, name, enabled, created_at
+		FROM channel_mappings
+		ORDER BY id DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list channel mappings: %w", err)
+	}
+	defer rows.Close()
+
+	var out []ChannelMapping
+	for rows.Next() {
+		m, err := scanMapping(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if out == nil {
+		out = []ChannelMapping{}
+	}
+	return out, nil
+}
+
+// SetMappingEnabled flips the enabled flag for a channel mapping.
+// Returns an error if that channel has no mapping yet.
+func (d *DB) SetMappingEnabled(ctx context.Context, channelID string, enabled bool) (*ChannelMapping, error) {
+	channelID = strings.TrimSpace(channelID)
+	if channelID == "" {
+		return nil, fmt.Errorf("discord channel id is required")
+	}
+
+	enabledInt := 0
+	if enabled {
+		enabledInt = 1
+	}
+
+	res, err := d.sql.ExecContext(ctx, `
+		UPDATE channel_mappings SET enabled = ? WHERE discord_channel_id = ?
+	`, enabledInt, channelID)
+	if err != nil {
+		return nil, fmt.Errorf("set mapping enabled: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return nil, err
+	}
+	if n == 0 {
+		return nil, fmt.Errorf("no mapping found for channel %s", channelID)
+	}
+	return d.GetMappingByChannel(ctx, channelID)
+}
+
+// DeleteMapping removes a channel ↔ playlist row.
+// Meat Bag: processed_videos are left alone on purpose — if you remapping
+// the same playlist later, Subotto will not re-add old videos.
+func (d *DB) DeleteMapping(ctx context.Context, channelID string) error {
+	channelID = strings.TrimSpace(channelID)
+	if channelID == "" {
+		return fmt.Errorf("discord channel id is required")
+	}
+
+	res, err := d.sql.ExecContext(ctx, `
+		DELETE FROM channel_mappings WHERE discord_channel_id = ?
+	`, channelID)
+	if err != nil {
+		return fmt.Errorf("delete channel mapping: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("no mapping found for channel %s", channelID)
+	}
+	return nil
+}
+
 type scannable interface {
 	Scan(dest ...any) error
 }

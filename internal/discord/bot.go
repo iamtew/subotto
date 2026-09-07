@@ -13,7 +13,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"subotto/internal/db"
-	"subotto/internal/parser"
+	"subotto/internal/ingest"
 	"subotto/internal/youtube"
 )
 
@@ -90,82 +90,17 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 		return // channel not mapped — stay quiet
 	}
 
-	ids := parser.ExtractVideoIDs(m.Content)
-	if len(ids) == 0 {
-		return
-	}
-
-	if b.yt == nil {
-		slog.Warn("youtube client missing; cannot add videos", "channel", m.ChannelID)
-		b.react(s, m, "⚠️")
-		return
-	}
-
-	added := 0
-	skipped := 0
-	failed := 0
-
-	for _, videoID := range ids {
-		already, err := b.store.WasVideoProcessed(ctx, videoID, mapping.YouTubePlaylistID)
-		if err != nil {
-			slog.Error("dedup check failed", "video", videoID, "err", err)
-			failed++
-			continue
-		}
-		if already {
-			slog.Info("skip duplicate video", "video", videoID, "playlist", mapping.YouTubePlaylistID)
-			skipped++
-			_ = b.store.LogActivity(ctx, "video_skipped", map[string]any{
-				"reason":     "duplicate",
-				"video_id":   videoID,
-				"playlist":   mapping.YouTubePlaylistID,
-				"channel_id": m.ChannelID,
-				"message_id": m.ID,
-			}, true)
-			continue
-		}
-
-		if err := b.yt.AddVideoToPlaylist(ctx, mapping.YouTubePlaylistID, videoID); err != nil {
-			slog.Error("add video to playlist failed",
-				"video", videoID,
-				"playlist", mapping.YouTubePlaylistID,
-				"err", err,
-			)
-			failed++
-			_ = b.store.LogActivity(ctx, "video_add_failed", map[string]any{
-				"video_id":   videoID,
-				"playlist":   mapping.YouTubePlaylistID,
-				"channel_id": m.ChannelID,
-				"message_id": m.ID,
-				"error":      err.Error(),
-			}, false)
-			continue
-		}
-
-		if err := b.store.MarkVideoProcessed(ctx, videoID, mapping.YouTubePlaylistID, m.ID); err != nil {
-			slog.Error("mark processed failed", "video", videoID, "err", err)
-		}
-		_ = b.store.LogActivity(ctx, "video_added", map[string]any{
-			"video_id":   videoID,
-			"playlist":   mapping.YouTubePlaylistID,
-			"channel_id": m.ChannelID,
-			"message_id": m.ID,
-			"mapping":    mapping.Name,
-		}, true)
-		slog.Info("added video to playlist",
-			"video", videoID,
-			"playlist", mapping.YouTubePlaylistID,
-			"mapping", mapping.Name,
-		)
-		added++
+	res := ingest.ProcessContent(ctx, b.store, b.yt, mapping, m.ChannelID, m.ID, m.Content)
+	if res.Added == 0 && res.Skipped == 0 && res.Failed == 0 {
+		return // no YouTube links in this message
 	}
 
 	switch {
-	case failed > 0 && added == 0:
+	case res.Failed > 0 && res.Added == 0:
 		b.react(s, m, "❌")
-	case added > 0:
+	case res.Added > 0:
 		b.react(s, m, "✅")
-	case skipped > 0:
+	case res.Skipped > 0:
 		b.react(s, m, "♻️") // already had these videos
 	}
 }

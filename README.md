@@ -11,16 +11,18 @@ See **AGENTS.md** for how Clanker and Meat Bag are supposed to talk to each othe
 
 ## Quick Status
 
-**Phase 3 done:** Discord bot listens for YouTube links in mapped channels and adds them to playlists.  
+**Phase 4 done:** Discord bot + full mapping CLI (list / enable / disable / delete) + history resync.  
 Prereqs: `.env` tokens, `just auth-youtube`, Message Content Intent on, then:
 
 ```
 just add-mapping DISCORD_CHANNEL_ID YOUTUBE_PLAYLIST_ID
+just list-mappings
 just run
 ```
 
-Reactions: ✅ added, ♻️ already on playlist, ❌ failed.  
-Next up: **Phase 4** (full mapping CRUD + resync). See PLAN.md.
+Reactions on live posts: ✅ added, ♻️ already on playlist, ❌ failed.  
+Optional backfill: `just resync DISCORD_CHANNEL_ID` (default 100 messages, max 500; no emoji on old messages).  
+Next up: **Phase 5** (Admin Web UI + JSON API). See PLAN.md.
 
 Session notes: [docs/PROGRESS.md](docs/PROGRESS.md) · jump-back: [docs/JUMPBACK.md](docs/JUMPBACK.md)
 

@@ -4,17 +4,20 @@
 //   - `just run` — Discord bot + YouTube (needs tokens + auth-youtube)
 //   - `just auth-youtube` — one-time Google OAuth
 //   - `just add-mapping CHANNEL PLAYLIST` — map a Discord channel to a playlist
+//   - `just list-mappings` / enable / disable / delete / resync — Phase 4 CRUD
 package main
 
 import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
+	"text/tabwriter"
 
 	"subotto/internal/config"
 	"subotto/internal/db"
@@ -28,6 +31,13 @@ func main() {
 	addPlaylist := flag.String("add-mapping-playlist", "", "YouTube playlist ID to map")
 	addName := flag.String("add-mapping-name", "", "Optional label for the mapping")
 	addGuild := flag.String("add-mapping-guild", "", "Optional Discord guild/server ID")
+
+	listMappings := flag.Bool("list-mappings", false, "List all channel ↔ playlist mappings and exit")
+	enableMapping := flag.String("enable-mapping", "", "Enable mapping for this Discord channel ID")
+	disableMapping := flag.String("disable-mapping", "", "Disable mapping for this Discord channel ID")
+	deleteMapping := flag.String("delete-mapping", "", "Delete mapping for this Discord channel ID")
+	resyncChannel := flag.String("resync-channel", "", "Rescan recent messages in this Discord channel")
+	resyncLimit := flag.Int("resync-limit", 100, "How many recent messages to scan (max 500)")
 	flag.Parse()
 
 	cfg, err := config.Load()
@@ -55,6 +65,46 @@ func main() {
 	if *youtubeAuth {
 		if err := runYouTubeAuth(ctx, cfg, store); err != nil {
 			slog.Error("YouTube authorization failed", "err", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if *listMappings {
+		if err := runListMappings(ctx, store); err != nil {
+			slog.Error("list mappings failed", "err", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if *enableMapping != "" {
+		if err := runSetMappingEnabled(ctx, store, *enableMapping, true); err != nil {
+			slog.Error("enable mapping failed", "err", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if *disableMapping != "" {
+		if err := runSetMappingEnabled(ctx, store, *disableMapping, false); err != nil {
+			slog.Error("disable mapping failed", "err", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if *deleteMapping != "" {
+		if err := runDeleteMapping(ctx, store, *deleteMapping); err != nil {
+			slog.Error("delete mapping failed", "err", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if *resyncChannel != "" {
+		if err := runResync(ctx, cfg, store, *resyncChannel, *resyncLimit); err != nil {
+			slog.Error("resync failed", "err", err)
 			os.Exit(1)
 		}
 		return
@@ -125,6 +175,105 @@ func runAddMapping(ctx context.Context, cfg *config.Config, store *db.DB, channe
 	return nil
 }
 
+// runListMappings prints a human-readable table (not slog key=value).
+func runListMappings(ctx context.Context, store *db.DB) error {
+	list, err := store.ListMappings(ctx)
+	if err != nil {
+		return err
+	}
+	if len(list) == 0 {
+		fmt.Println("No channel mappings yet.")
+		fmt.Println("Add one with: just add-mapping DISCORD_CHANNEL_ID YOUTUBE_PLAYLIST_ID")
+		return nil
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+	fmt.Fprintln(w, "ID\tENABLED\tNAME\tCHANNEL\tPLAYLIST\tGUILD")
+	for _, m := range list {
+		enabled := "yes"
+		if !m.Enabled {
+			enabled = "no"
+		}
+		fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\t%s\n",
+			m.ID, enabled, m.Name, m.DiscordChannelID, m.YouTubePlaylistID, m.GuildID)
+	}
+	return w.Flush()
+}
+
+func runSetMappingEnabled(ctx context.Context, store *db.DB, channelID string, enabled bool) error {
+	m, err := store.SetMappingEnabled(ctx, channelID, enabled)
+	if err != nil {
+		return err
+	}
+	event := "mapping_enabled"
+	if !enabled {
+		event = "mapping_disabled"
+	}
+	_ = store.LogActivity(ctx, event, map[string]any{
+		"channel_id":  m.DiscordChannelID,
+		"playlist_id": m.YouTubePlaylistID,
+		"name":        m.Name,
+	}, true)
+	state := "enabled"
+	if !enabled {
+		state = "disabled"
+	}
+	slog.Info("channel mapping "+state,
+		"channel", m.DiscordChannelID,
+		"playlist", m.YouTubePlaylistID,
+		"name", m.Name,
+	)
+	return nil
+}
+
+func runDeleteMapping(ctx context.Context, store *db.DB, channelID string) error {
+	// Grab details before delete so the activity log is useful.
+	m, err := store.GetMappingByChannel(ctx, channelID)
+	if err != nil {
+		return err
+	}
+	if err := store.DeleteMapping(ctx, channelID); err != nil {
+		return err
+	}
+	details := map[string]any{"channel_id": channelID}
+	if m != nil {
+		details["playlist_id"] = m.YouTubePlaylistID
+		details["name"] = m.Name
+	}
+	_ = store.LogActivity(ctx, "mapping_deleted", details, true)
+	slog.Info("channel mapping deleted", "channel", channelID)
+	return nil
+}
+
+func runResync(ctx context.Context, cfg *config.Config, store *db.DB, channelID string, limit int) error {
+	if cfg.DiscordBotToken == "" || cfg.DiscordBotToken == "your-discord-bot-token-here" {
+		return errors.New("DISCORD_BOT_TOKEN is required for resync — set it in .env")
+	}
+	if len(cfg.MissingYouTubeSecrets()) > 0 {
+		return errors.New("YouTube OAuth client id/secret required: " + strings.Join(cfg.MissingYouTubeSecrets(), ", "))
+	}
+	hasTok, err := youtube.HasStoredToken(ctx, store)
+	if err != nil {
+		return err
+	}
+	if !hasTok {
+		return errors.New("no YouTube token yet — run `just auth-youtube` first")
+	}
+
+	yt, err := youtube.NewClient(ctx, store, cfg.YouTubeClientID, cfg.YouTubeClientSecret, cfg.YouTubeRedirectURL)
+	if err != nil {
+		return err
+	}
+
+	slog.Info("starting channel resync", "channel", channelID, "limit", limit)
+	summary, err := discord.ResyncChannel(ctx, cfg.DiscordBotToken, store, yt, channelID, limit)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Resync done: scanned=%d %s\n", summary.MessagesScanned, summary.Result.String())
+	return nil
+}
+
 func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 	slog.Info("Subotto is online. Clanker stands ready, Meat Bag.")
 	slog.Info("config loaded",
@@ -174,7 +323,7 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 		slog.Info("channel mappings loaded", "count", mappings)
 	}
 
-	if err := store.LogActivity(ctx, "startup", map[string]any{"message": "Phase 3 boot", "phase": 3}, true); err != nil {
+	if err := store.LogActivity(ctx, "startup", map[string]any{"message": "Phase 4 boot", "phase": 4}, true); err != nil {
 		slog.Error("failed to write startup activity", "err", err)
 		os.Exit(1)
 	}
