@@ -1,10 +1,11 @@
 // Package main is the entry point for Subotto.
 //
 // Meat Bag:
-//   - `just run` — Discord bot + YouTube (needs tokens + auth-youtube)
+//   - `just run` — Discord bot + Admin UI + YouTube (needs tokens + auth-youtube)
 //   - `just auth-youtube` — one-time Google OAuth
 //   - `just add-mapping CHANNEL PLAYLIST` — map a Discord channel to a playlist
 //   - `just list-mappings` / enable / disable / delete / resync — Phase 4 CRUD
+//   - Admin UI at http://localhost:8080 (user admin / ADMIN_PASSWORD)
 package main
 
 import (
@@ -18,10 +19,12 @@ import (
 	"strings"
 	"syscall"
 	"text/tabwriter"
+	"time"
 
 	"subotto/internal/config"
 	"subotto/internal/db"
 	"subotto/internal/discord"
+	"subotto/internal/web"
 	"subotto/internal/youtube"
 )
 
@@ -284,7 +287,7 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 	)
 
 	if cfg.DiscordBotToken == "" || cfg.DiscordBotToken == "your-discord-bot-token-here" {
-		slog.Error("DISCORD_BOT_TOKEN is required for Phase 3 — set it in .env")
+		slog.Error("DISCORD_BOT_TOKEN is required — set it in .env")
 		os.Exit(1)
 	}
 	if len(cfg.MissingYouTubeSecrets()) > 0 {
@@ -306,9 +309,11 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 		slog.Error("failed to create youtube client", "err", err)
 		os.Exit(1)
 	}
+	ytChannel := ""
 	if title, err := yt.Ping(ctx); err != nil {
 		slog.Warn("YouTube ping failed", "err", err)
 	} else {
+		ytChannel = title
 		slog.Info("YouTube client ready", "channel", title)
 	}
 
@@ -318,12 +323,12 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 		os.Exit(1)
 	}
 	if mappings == 0 {
-		slog.Warn("no channel mappings yet — add one with: just add-mapping CHANNEL_ID PLAYLIST_ID")
+		slog.Warn("no channel mappings yet — use Admin UI or: just add-mapping CHANNEL_ID PLAYLIST_ID")
 	} else {
 		slog.Info("channel mappings loaded", "count", mappings)
 	}
 
-	if err := store.LogActivity(ctx, "startup", map[string]any{"message": "Phase 4 boot", "phase": 4}, true); err != nil {
+	if err := store.LogActivity(ctx, "startup", map[string]any{"message": "Phase 5 boot", "phase": 5}, true); err != nil {
 		slog.Error("failed to write startup activity", "err", err)
 		os.Exit(1)
 	}
@@ -343,12 +348,47 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 		}
 	}()
 
+	admin, err := web.New(web.Options{
+		Store:          store,
+		YouTube:        yt,
+		Status:         bot,
+		DiscordToken:   cfg.DiscordBotToken,
+		AdminPassword:  cfg.AdminPassword,
+		AdminHost:      cfg.AdminHost,
+		AdminPort:      cfg.AdminPort,
+		Webroot:        "webroot",
+		YouTubeChannel: ytChannel,
+	})
+	if err != nil {
+		slog.Error("failed to create admin UI server", "err", err)
+		os.Exit(1)
+	}
+
+	adminErr := make(chan error, 1)
+	go func() {
+		adminErr <- admin.Start()
+	}()
+
 	slog.Info("listening for YouTube links in mapped channels — Ctrl+C to stop")
+	slog.Info("Admin UI ready", "url", fmt.Sprintf("http://%s", admin.Addr()), "user", "admin")
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-	<-stop
-	slog.Info("shutting down Subotto — bye Meat Bag")
+
+	select {
+	case <-stop:
+		slog.Info("shutting down Subotto — bye Meat Bag")
+	case err := <-adminErr:
+		if err != nil {
+			slog.Error("admin UI server stopped", "err", err)
+		}
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := admin.Shutdown(shutdownCtx); err != nil {
+		slog.Error("admin UI shutdown", "err", err)
+	}
 }
 
 func newLogger(level string) *slog.Logger {

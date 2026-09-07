@@ -1,0 +1,248 @@
+/* Subotto Admin — plain CSS, no build step.
+   Meat Bag: colors lean forest/ink on warm paper, not purple glow. */
+
+:root {
+  --bg0: #e7efe8;
+  --bg1: #f4efe6;
+  --ink: #1c2420;
+  --muted: #5a655e;
+  --line: #c5cec6;
+  --panel: rgba(255, 252, 247, 0.88);
+  --accent: #2f6b4f;
+  --accent-ink: #f4fff8;
+  --danger: #8b2e2e;
+  --warn: #8a6a1f;
+  --ok: #2f6b4f;
+  --bad: #8b2e2e;
+  --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --font-body: "Segoe UI", "Candara", "Gill Sans", sans-serif;
+  --font-mono: "Cascadia Code", "Consolas", "Courier New", monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  font-family: var(--font-body);
+  background:
+    radial-gradient(ellipse 80% 50% at 10% -10%, #d5e8d8 0%, transparent 55%),
+    radial-gradient(ellipse 60% 40% at 100% 0%, #e8dcc8 0%, transparent 50%),
+    linear-gradient(165deg, var(--bg0), var(--bg1));
+}
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-end;
+  padding: 1.75rem clamp(1rem, 3vw, 2.5rem) 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.brand h1 {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  margin: 0;
+  letter-spacing: -0.03em;
+  font-weight: 600;
+}
+
+.tag {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+}
+
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.pill {
+  font-size: 0.8rem;
+  padding: 0.3rem 0.65rem;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.pill.ok {
+  border-color: #8fb89a;
+  color: var(--ok);
+}
+
+.pill.bad {
+  border-color: #d0a0a0;
+  color: var(--bad);
+}
+
+.pill.muted {
+  color: var(--muted);
+}
+
+main {
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: 1.25rem clamp(1rem, 3vw, 2.5rem) 3rem;
+  display: grid;
+  gap: 1.5rem;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 1.25rem 1.25rem 1.5rem;
+}
+
+.panel-head h2 {
+  font-family: var(--font-display);
+  margin: 0 0 0.25rem;
+  font-size: 1.45rem;
+}
+
+.panel-head p {
+  margin: 0 0 1rem;
+  color: var(--muted);
+  max-width: 40rem;
+}
+
+.mapping-form,
+.resync-form {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  align-items: end;
+  margin-bottom: 1.25rem;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+label .optional {
+  font-weight: 400;
+  opacity: 0.8;
+}
+
+input[type="text"],
+input[type="number"] {
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+}
+
+label.check {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  padding-bottom: 0.55rem;
+}
+
+button {
+  font: inherit;
+  font-weight: 600;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+  cursor: pointer;
+}
+
+button:hover {
+  filter: brightness(1.05);
+}
+
+button.secondary {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+button.danger {
+  background: transparent;
+  color: var(--danger);
+  border-color: #d0a0a0;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.55rem 0.45rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+th {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+td.mono,
+.mono {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+
+td.empty {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.result {
+  margin: 0.5rem 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+.result.err {
+  color: var(--danger);
+}
+
+footer {
+  padding: 0 1.25rem 2rem;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+footer code {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+@media (max-width: 640px) {
+  .actions {
+    flex-direction: column;
+  }
+}

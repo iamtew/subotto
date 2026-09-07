@@ -7,61 +7,48 @@ Sleep well, Meat Bag. This file is how you (and Clanker) pick up without re-deri
 ## 1. For Meat Bag (you) — learn + resume
 
 ### Where we left off
-Subotto can watch a Discord channel and push YouTube links into a playlist. Phases **0–4** are in code on `master`. **You have not necessarily finished live API setup yet** — that is still the first real-world test.
-
-Phase 4 added mapping management without the Admin UI: list / enable / disable / delete, plus a one-shot history resync.
+Subotto can watch Discord, push YouTube links into playlists, manage mappings via CLI **or Admin UI**, and resync history. Phases **0–5** are in code on `master`. **Live API setup may still be open** — daytime win is tokens + one green ✅.
 
 ### Minimum mental model
-1. **Config** (`.env`) → tokens and paths  
+1. **Config** (`.env`) → tokens, `ADMIN_PASSWORD`, host/port  
 2. **SQLite** (`./data/subotto.db`) → mappings, dedup, activity, OAuth token  
 3. **YouTube OAuth once** → refresh token saved in DB  
 4. **Discord bot** → only **enabled** mapped channels matter  
-5. **Parser + ingest** → pulls video IDs out of messy message text (live and resync share this)
+5. **Admin UI** → same process as the bot; Basic Auth (`admin` / `ADMIN_PASSWORD`)  
+6. **Parser + ingest** → shared by live messages and resync  
 
 ### Commands to remember
 ```text
-just run                          # start the bot (needs Discord + YouTube ready)
+just run                          # Discord bot + Admin UI (needs Discord + YouTube ready)
 just auth-youtube                 # one-time Google login
-just add-mapping CHANNEL PLAYLIST # create/update a mapping (enabled)
-just list-mappings                # see all mappings
-just enable-mapping CHANNEL       # turn a mapping back on
-just disable-mapping CHANNEL      # pause without deleting
-just delete-mapping CHANNEL       # remove mapping (dedup history stays)
-just resync CHANNEL [limit]       # scan recent history (default 100, max 500)
-just test / just build            # sanity
+just add-mapping CHANNEL PLAYLIST # CLI create/update (or use the Admin UI)
+just list-mappings / enable / disable / delete / resync
+just test / just build
 ```
 
-### First session tomorrow (suggested order)
-1. Skim [PROGRESS.md](PROGRESS.md) (what exists).  
-2. Fill `.env` from `.env.example` if empty.  
-3. Discord portal: enable **Message Content Intent**, invite bot.  
-4. Google Cloud: enable API, OAuth client, redirect URI.  
-5. `just auth-youtube` → should print your channel name.  
-6. Developer Mode in Discord → copy channel ID → `just add-mapping ...`  
-7. `just run` → post a YouTube link → expect ✅ (or ♻️ / ❌).  
-8. Optional: `just resync CHANNEL` to backfill recent messages (no emoji spam on old posts).
+Open Admin UI: `http://localhost:8080` (or your `ADMIN_HOST`:`ADMIN_PORT`).  
+Username: `admin` · Password: value of `ADMIN_PASSWORD` in `.env`.
 
-### Go concepts you already touched (plain English)
-| Idea                    | Where you saw it                           |
-| ----------------------- | ------------------------------------------ |
-| Packages / `internal/`  | Code only our module imports               |
-| `log/slog`              | Structured logs (`key=value`)              |
-| `database/sql` + SQLite | One DB file, queries in `internal/db`      |
-| OAuth refresh token     | Login once; Subotto renews access later    |
-| Discord intents         | Bot must be allowed to *read message text* |
-| Shared ingest           | Live messages and resync use the same rules|
-| Graceful shutdown       | Ctrl+C → signal → clean close              |
+### First session tomorrow (suggested order)
+1. Skim [PROGRESS.md](PROGRESS.md).  
+2. Fill `.env` (including a real `ADMIN_PASSWORD`).  
+3. Discord portal: **Message Content Intent**, invite bot.  
+4. Google Cloud: API + OAuth + redirect URI.  
+5. `just auth-youtube` → prints your channel name.  
+6. `just run` → open Admin UI → add a mapping → paste a YouTube link → expect ✅.  
+7. Optional: Resync button / `just resync CHANNEL`.
 
 ### If something goes boom
-- No links processed → channel not mapped, mapping **disabled**, or Message Content Intent off  
-- YouTube errors → re-run `just auth-youtube`, check playlist ownership / API enabled  
-- Quota → Google daily limit; wait or raise quota (resync burns quota fast)  
-- Secrets → never commit `.env`; it is gitignored  
+- Browser 401 → wrong password; username must be `admin`  
+- Admin UI missing files → run from repo root so `webroot/` is found  
+- No links processed → channel not mapped / disabled / Message Content Intent off  
+- YouTube errors → re-run `just auth-youtube`, check playlist ownership  
+- Port busy → OAuth one-shot and Admin both default to 8080 (auth is exit-after; bot holds the port)
 
 ### Docs map
 | File | Use when |
 |------|----------|
-| [AGENTS.md](../AGENTS.md) | How Clanker ↔ Meat Bag work; **git message style** |
+| [AGENTS.md](../AGENTS.md) | Clanker ↔ Meat Bag; git message style |
 | [PLAN.md](../PLAN.md) | Full roadmap Phases 0–7 |
 | [PROGRESS.md](PROGRESS.md) | What this arc delivered |
 | This file | Resume + learning anchors |
@@ -71,43 +58,40 @@ just test / just build            # sanity
 ## 2. For Clanker (next agent session)
 
 ### Hard facts
-- **Project:** Subotto — Discord → YouTube playlist bot in Go, **no Docker**, **Just** build system.  
+- **Project:** Subotto — Discord → YouTube playlist bot in Go, **no Docker**, **Just**.  
 - **Voice:** Clanker talking to Meat Bag; beginner-friendly comments.  
-- **Git style (required):** clean title + bullet body; short but complete; only when asked. Avoid the substring `commit` in message bodies if the environment mangles it with Co-authored-by injection. Prefer `-F` file for messages on Windows PowerShell.  
-- **Done:** Phases 0–4 on `master` (see PROGRESS.md + `git log`).  
-- **Next PLAN phase:** **Phase 5** — Admin Web UI on `webroot/` + `/api/...` (mappings, activity, status, resync button). Phase 6 = scheduler using `RESYNC_INTERVAL_HOURS`.
+- **Git style:** clean title + bullet body; only when asked. Prefer `-F` file on Windows PowerShell. Avoid substring `commit` in bodies if Co-authored-by injection mangles it.  
+- **Done:** Phases 0–5 on `master`.  
+- **Next PLAN phase:** **Phase 6** — scheduler (`RESYNC_INTERVAL_HOURS`), rate-limit polish, health endpoint polish, graceful shutdown already partly done. Then Phase 7 deploy guide.
 
 ### Architecture snapshot
 ```
-Discord MessageCreate
-  → channel has enabled mapping? (db)
-  → ingest.ProcessContent (parser + dedup + youtube + activity)
-  → react ✅ / ♻️ / ❌
-
-just resync CHANNEL
-  → REST ChannelMessages (paginated, cap 500)
-  → same ingest.ProcessContent
-  → NO reactions on history
+just run
+  → Discord gateway (MessageCreate → ingest → react)
+  → HTTP Admin (webroot + /api/*) with Basic Auth
+       GET  /api/status
+       GET/POST /api/mappings
+       PATCH/DELETE /api/mappings/{channel}
+       GET  /api/activity
+       POST /api/resync
 ```
 
 ### Important implementation notes
-- Pure Go SQLite: `modernc.org/sqlite` (no CGO) — keep it that way for Windows→Linux cross-compile.  
-- YouTube write = OAuth (`YoutubeForceSslScope`); token key in DB: `youtube`.  
-- OAuth callback listens on port from `YOUTUBE_REDIRECT_URL` (default 8080) — same port reserved later for Admin UI; auth is one-shot.  
-- Mapping UX: CLI `just add/list/enable/disable/delete-mapping` + `just resync`; Admin UI not built yet.  
-- Phase 3+ `just run` **exits** if Discord token or YouTube token missing.  
-- Empty package still scaffolding: `internal/web`, `internal/scheduler`.  
-- `DeleteMapping` leaves `processed_videos` alone (intentional dedup preserve).
+- Pure Go SQLite: `modernc.org/sqlite` (no CGO).  
+- YouTube OAuth token key in DB: `youtube`.  
+- Admin listens on `ADMIN_HOST`:`ADMIN_PORT` (default `0.0.0.0:8080`); webroot path `./webroot`.  
+- Resync from UI/CLI shares `discord.ResyncChannel` + `ingest.ProcessContent`.  
+- `DeleteMapping` leaves `processed_videos` alone.  
+- Empty scaffold left: `internal/scheduler` (Phase 6).
 
 ### Do not
 - Do not introduce Docker.  
 - Do not commit `.env` or `data/*.db`.  
-- Do not skip Meat Bag explanations / comments on new code.  
-- Do not start Phase 6 scheduler before Phase 5 UI unless Meat Bag redirects.
+- Do not skip Meat Bag comments on new code.
 
-### Suggested first message from Meat Bag after sleep
-> Clanker, read docs/JUMPBACK.md and docs/PROGRESS.md. Continue Phase 5.
+### Suggested first message from Meat Bag
+> Clanker, read docs/JUMPBACK.md and docs/PROGRESS.md. Continue Phase 6.
 
 ---
 
-**Clanker’s note:** Phases 0–4 are the spine + mapping tools. Phase 5 makes them clickable in the browser. Daytime win = Meat Bag’s tokens + one green ✅ in Discord.
+**Clanker’s note:** Phase 5 made mappings clickable. Phase 6 makes the bot keep itself tidy on a schedule. Daytime win remains Meat Bag tokens + one ✅.

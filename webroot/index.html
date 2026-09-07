@@ -4,38 +4,114 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Subotto Admin</title>
-  <style>
-    /* Phase 0 placeholder styles — real Admin UI arrives in Phase 5. */
-    body {
-      font-family: Georgia, "Times New Roman", serif;
-      max-width: 40rem;
-      margin: 3rem auto;
-      padding: 0 1.25rem;
-      line-height: 1.5;
-      color: #1a1a1a;
-      background: linear-gradient(160deg, #e8f0e9 0%, #f7f3ea 55%, #eef2f6 100%);
-      min-height: 100vh;
-    }
-    h1 {
-      font-size: 2.25rem;
-      letter-spacing: -0.02em;
-      margin-bottom: 0.35rem;
-    }
-    p {
-      color: #333;
-    }
-    .note {
-      margin-top: 1.5rem;
-      padding-top: 1rem;
-      border-top: 1px solid #c5c9c0;
-      font-size: 0.95rem;
-      color: #555;
-    }
-  </style>
+  <link rel="stylesheet" href="/css/admin.css">
 </head>
 <body>
-  <h1>Subotto</h1>
-  <p>Admin UI placeholder. Clanker has not built the real dashboard yet (Phase 5).</p>
-  <p class="note">Meat Bag: if you can open this file, the <code>webroot/</code> folder is in place. The Go HTTP server that serves it comes later.</p>
+  <header class="top">
+    <div class="brand">
+      <h1>Subotto</h1>
+      <p class="tag">Discord channels → YouTube playlists</p>
+    </div>
+    <div id="status-pills" class="pills" aria-live="polite">
+      <span class="pill muted">loading…</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel" id="mappings-section">
+      <div class="panel-head">
+        <h2>Mappings</h2>
+        <p>One Discord channel → one YouTube playlist. Disable to pause without deleting.</p>
+      </div>
+
+      <form id="mapping-form" class="mapping-form">
+        <label>
+          Label
+          <input name="name" type="text" placeholder="e.g. music-drop" autocomplete="off">
+        </label>
+        <label>
+          Discord channel ID
+          <input name="discord_channel_id" type="text" required placeholder="snowflake ID" autocomplete="off">
+        </label>
+        <label>
+          YouTube playlist ID
+          <input name="youtube_playlist_id" type="text" required placeholder="PL…" autocomplete="off">
+        </label>
+        <label>
+          Guild ID <span class="optional">(optional)</span>
+          <input name="guild_id" type="text" placeholder="server ID" autocomplete="off">
+        </label>
+        <label class="check">
+          <input name="enabled" type="checkbox" checked>
+          Enabled
+        </label>
+        <button type="submit">Save mapping</button>
+      </form>
+
+      <div class="table-wrap">
+        <table id="mappings-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Channel</th>
+              <th>Playlist</th>
+              <th>Enabled</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="5" class="empty">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel" id="resync-section">
+      <div class="panel-head">
+        <h2>Resync history</h2>
+        <p>Scan recent messages in a mapped channel (no emoji on old posts). Cap 500.</p>
+      </div>
+      <form id="resync-form" class="resync-form">
+        <label>
+          Channel ID
+          <input name="channel_id" type="text" required placeholder="Discord channel ID" autocomplete="off">
+        </label>
+        <label>
+          Limit
+          <input name="limit" type="number" min="1" max="500" value="100">
+        </label>
+        <button type="submit">Run resync</button>
+      </form>
+      <p id="resync-result" class="result" hidden></p>
+    </section>
+
+    <section class="panel" id="activity-section">
+      <div class="panel-head">
+        <h2>Recent activity</h2>
+        <p>Newest events from Subotto’s audit log.</p>
+      </div>
+      <div class="table-wrap">
+        <table id="activity-table">
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Event</th>
+              <th>OK</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="4" class="empty">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Meat Bag tip: username is <code>admin</code>, password is <code>ADMIN_PASSWORD</code> from <code>.env</code>.</p>
+  </footer>
+
+  <script src="/js/admin.js"></script>
 </body>
 </html>

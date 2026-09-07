@@ -174,6 +174,57 @@ func (d *DB) CountActivity(ctx context.Context) (int, error) {
 	return n, err
 }
 
+// CountEnabledMappings returns how many mappings are currently enabled.
+func (d *DB) CountEnabledMappings(ctx context.Context) (int, error) {
+	var n int
+	err := d.sql.QueryRowContext(ctx, `SELECT COUNT(*) FROM channel_mappings WHERE enabled = 1`).Scan(&n)
+	return n, err
+}
+
+// ListActivity returns the newest activity_log rows (newest first).
+// Meat Bag: the Admin UI uses this for the activity table.
+func (d *DB) ListActivity(ctx context.Context, limit int) ([]ActivityEntry, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 500 {
+		limit = 500
+	}
+
+	rows, err := d.sql.QueryContext(ctx, `
+		SELECT id, timestamp, event_type, details, success
+		FROM activity_log
+		ORDER BY id DESC
+		LIMIT ?
+	`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list activity: %w", err)
+	}
+	defer rows.Close()
+
+	var out []ActivityEntry
+	for rows.Next() {
+		var (
+			e       ActivityEntry
+			ts      string
+			success int
+		)
+		if err := rows.Scan(&e.ID, &ts, &e.EventType, &e.Details, &success); err != nil {
+			return nil, err
+		}
+		e.Timestamp = parseSQLiteTime(ts)
+		e.Success = success == 1
+		out = append(out, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if out == nil {
+		out = []ActivityEntry{}
+	}
+	return out, nil
+}
+
 // WasVideoProcessed returns true if this video was already added to this playlist.
 func (d *DB) WasVideoProcessed(ctx context.Context, videoID, playlistID string) (bool, error) {
 	var n int

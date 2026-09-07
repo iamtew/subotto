@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-07  
 **Branch:** `master`  
-**Status:** Phases **0–4 complete**. Next: Phase 5 (Admin Web UI).
+**Status:** Phases **0–5 complete**. Next: Phase 6 (scheduler & polish).
 
 ---
 
@@ -15,47 +15,35 @@
 | 2 | YouTube OAuth + client | Browser OAuth, token in SQLite, `AddVideoToPlaylist`, quota/auth errors |
 | 3 | Discord bot core | Link parser, mapped-channel listener, dedup, reactions, `just add-mapping` |
 | 4 | Mapping CRUD + resync | List/enable/disable/delete CLI, shared ingest, history resync |
-
-## Commits (this arc)
-
-1. `Bootstrap Phase 0 Subotto scaffold.` (+ AGENTS.md git message convention)
-2. `Wire Phase 1 config, SQLite, and slog.`
-3. `Add Phase 2 YouTube OAuth and playlist client.`
-4. `Add Phase 3 Discord bot and YouTube link handling.`
-5. *(pending)* Phase 4 mapping CRUD + history resync
+| 5 | Admin Web UI | stdlib HTTP, Basic Auth, `/api/*`, plain HTML/CSS/JS dashboard |
 
 ## Key paths
 
 ```
-cmd/subotto/main.go          Entry: run / auth / mapping CRUD / resync
-internal/config/             Env loading
-internal/db/                 SQLite + full mapping CRUD helpers
-internal/youtube/            OAuth + playlist insert
-internal/parser/             YouTube URL → video ID
+cmd/subotto/main.go          Entry: run (bot + admin) / auth / mapping CLI / resync
+internal/web/                HTTP server, Basic Auth, JSON API
+webroot/                     Admin UI (index.html, css/, js/)
+internal/db/                 SQLite + mappings + activity list helpers
 internal/ingest/             Shared live + resync pipeline
-internal/discord/            Bot MessageCreate + REST resync
-webroot/                     Admin UI placeholder (Phase 5)
-justfile                     run, build, auth-youtube, add/list/enable/disable/delete/resync
+internal/discord/            Bot + REST resync
+justfile                     run, build, auth-youtube, mapping CRUD, resync
 ```
 
 ## Verified locally
 
-- `just test` — parser, youtube error, db mapping, ingest tests
+- `just test` — includes web API auth + mapping CRUD tests
 - `just build` — Windows binary builds
-- Mapping CLI (`list-mappings`) needs only a DB — no Discord/YouTube for list/enable/disable/delete
-- Resync / `just run` still require Discord token + completed `just auth-youtube`
+- Admin UI served from `webroot/` when `just run` (needs live Discord/YouTube tokens)
 
 ## Not done yet (PLAN.md)
 
-- **Phase 5** — Admin Web UI + JSON API (`webroot/` + `/api/...`)
-- **Phase 6** — scheduler, rate limits, polish
+- **Phase 6** — scheduler (`RESYNC_INTERVAL_HOURS`), rate-limit handling, polish
 - **Phase 7** — Linux VPS / systemd deploy guide
 
 ## Meat Bag checklist still open
 
 - [ ] Discord bot token + **Message Content Intent**
-- [ ] Google Cloud: YouTube Data API v3 + OAuth client + redirect `http://localhost:8080/oauth/callback`
+- [ ] Google Cloud: YouTube Data API v3 + OAuth client + redirect
+- [ ] Set a real `ADMIN_PASSWORD` in `.env`
 - [ ] `just auth-youtube` once
-- [ ] `just add-mapping CHANNEL_ID PLAYLIST_ID`
-- [ ] `just run` and paste a YouTube link in the mapped channel
-- [ ] Optional: `just resync CHANNEL_ID` to backfill recent history
+- [ ] `just run` → open Admin UI → add mapping → paste a YouTube link

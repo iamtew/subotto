@@ -11,18 +11,18 @@ See **AGENTS.md** for how Clanker and Meat Bag are supposed to talk to each othe
 
 ## Quick Status
 
-**Phase 4 done:** Discord bot + full mapping CLI (list / enable / disable / delete) + history resync.  
-Prereqs: `.env` tokens, `just auth-youtube`, Message Content Intent on, then:
+**Phase 5 done:** Discord bot + mapping CLI + **Admin Web UI** (Basic Auth) + history resync.  
+Prereqs: `.env` tokens (including `ADMIN_PASSWORD`), `just auth-youtube`, Message Content Intent on, then:
 
 ```
-just add-mapping DISCORD_CHANNEL_ID YOUTUBE_PLAYLIST_ID
-just list-mappings
 just run
 ```
 
+Open `http://localhost:8080` — username `admin`, password = `ADMIN_PASSWORD`.  
+Or CLI: `just add-mapping …` / `just list-mappings` / `just resync …`.
+
 Reactions on live posts: ✅ added, ♻️ already on playlist, ❌ failed.  
-Optional backfill: `just resync DISCORD_CHANNEL_ID` (default 100 messages, max 500; no emoji on old messages).  
-Next up: **Phase 5** (Admin Web UI + JSON API). See PLAN.md.
+Next up: **Phase 6** (scheduler & polish). See PLAN.md.
 
 Session notes: [docs/PROGRESS.md](docs/PROGRESS.md) · jump-back: [docs/JUMPBACK.md](docs/JUMPBACK.md)
 
@@ -59,8 +59,8 @@ Session notes: [docs/PROGRESS.md](docs/PROGRESS.md) · jump-back: [docs/JUMPBACK
 2. Google Cloud: enable YouTube Data API v3, create OAuth client, add redirect `http://localhost:8080/oauth/callback`.
 3. `just auth-youtube` once (browser login; refresh token saved in SQLite).
 4. `just run` (or `just build` then run the binary).
-5. Open the Admin UI in your browser, add channel → playlist mappings (Phase 5).
-6. Drop a YouTube link in a mapped channel and watch the magic (Phase 3+).
+5. Open the Admin UI in your browser (`http://localhost:8080`, user `admin` / `ADMIN_PASSWORD`), add channel → playlist mappings.
+6. Drop a YouTube link in a mapped channel and watch the magic.
 
 ---
 

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync/atomic"
 
 	"github.com/bwmarrin/discordgo"
 
@@ -23,6 +24,7 @@ type Bot struct {
 	store   *db.DB
 	yt      *youtube.Client
 	guildID string // optional filter; empty = all guilds the bot is in
+	ready   atomic.Bool
 }
 
 // New creates a Discord session with the intents Subotto needs.
@@ -50,9 +52,22 @@ func New(token string, store *db.DB, yt *youtube.Client, guildID string) (*Bot, 
 	}
 	session.AddHandler(b.onMessageCreate)
 	session.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
+		b.ready.Store(true)
 		slog.Info("discord connected", "user", r.User.Username, "guilds", len(r.Guilds))
 	})
+	session.AddHandler(func(s *discordgo.Session, d *discordgo.Disconnect) {
+		b.ready.Store(false)
+		slog.Warn("discord disconnected")
+	})
 	return b, nil
+}
+
+// Connected reports whether Discord has sent the Ready event (Admin UI status).
+func (b *Bot) Connected() bool {
+	if b == nil {
+		return false
+	}
+	return b.ready.Load()
 }
 
 // Open connects to the Discord gateway.

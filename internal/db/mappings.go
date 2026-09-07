@@ -37,7 +37,7 @@ func (d *DB) GetMappingByChannel(ctx context.Context, channelID string) (*Channe
 }
 
 // UpsertMapping creates or updates a channel → playlist mapping.
-// Meat Bag: until the Admin UI exists, use `just add-mapping` for this.
+// Meat Bag: use the Admin UI, or `just add-mapping`, for this.
 func (d *DB) UpsertMapping(ctx context.Context, channelID, guildID, playlistID, name string, enabled bool) (*ChannelMapping, error) {
 	channelID = strings.TrimSpace(channelID)
 	playlistID = strings.TrimSpace(playlistID)
