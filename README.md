@@ -11,8 +11,9 @@ See **AGENTS.md** for how Clanker and Meat Bag are supposed to talk to each othe
 
 ## Quick Status
 
-**Phase 0 scaffold is ready.** You can `just run` and see Subotto say hello.  
-Next up: **Phase 1** (config loading + SQLite + slog). See PLAN.md.
+**Phase 1 done:** config (env / `.env`), SQLite schema, and `log/slog` are wired.  
+Try `just run` — Subotto opens `./data/subotto.db` and logs a startup activity row.  
+Next up: **Phase 2** (YouTube OAuth + add-to-playlist). See PLAN.md.
 
 **No Docker.** We use **Just** + native Go binaries.
 
