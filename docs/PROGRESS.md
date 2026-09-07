@@ -2,9 +2,9 @@
 
 **Date:** 2026-09-07  
 **Branch:** `master`  
-**Status:** Phases **0–5 complete** in code. **Phase work paused** — Meat Bag verifying DEV with live APIs.  
-**How to verify:** [DEV-VERIFY.md](DEV-VERIFY.md)  
-**Later (not now):** Phase 6 scheduler/polish · Phase 7 Linux deploy guide
+**Status:** Phases **0–5 complete** and **Meat Bag verified good** (live Discord + YouTube DEV).  
+**Next:** Phase 6 — [HANDOFF-PHASE6.md](HANDOFF-PHASE6.md)  
+**Later:** Phase 7 Linux VPS / systemd deploy guide
 
 ---
 
@@ -12,10 +12,10 @@
 
 | Phase | Title | Result |
 |--------|--------|--------|
-| 0 | Project bootstrap | Go module, folders, justfile (DEV/PROD), `.env.example`, webroot placeholder |
-| 1 | Config + database | Env/`.env` loading, SQLite schema, `log/slog`, startup activity row |
-| 2 | YouTube OAuth + client | Browser OAuth, token in SQLite, `AddVideoToPlaylist`, quota/auth errors |
-| 3 | Discord bot core | Link parser, mapped-channel listener, dedup, reactions, `just add-mapping` |
+| 0 | Project bootstrap | Go module, folders, justfile (DEV/PROD), `.env.example`, webroot |
+| 1 | Config + database | Env/`.env` loading, SQLite schema, `log/slog` |
+| 2 | YouTube OAuth + client | Browser OAuth, token in SQLite, `AddVideoToPlaylist` |
+| 3 | Discord bot core | Link parser, mapped-channel listener, dedup, reactions |
 | 4 | Mapping CRUD + resync | List/enable/disable/delete CLI, shared ingest, history resync |
 | 5 | Admin Web UI | stdlib HTTP, Basic Auth, `/api/*`, plain HTML/CSS/JS dashboard |
 
@@ -27,29 +27,35 @@ internal/web/                HTTP server, Basic Auth, JSON API
 webroot/                     Admin UI (index.html, css/, js/)
 internal/db/                 SQLite + mappings + activity list helpers
 internal/ingest/             Shared live + resync pipeline
-internal/discord/            Bot + REST resync
+internal/discord/            Bot + REST resync (success react = 💾)
 justfile                     run, build, auth-youtube, mapping CRUD, resync
-docs/DEV-VERIFY.md           Meat Bag DEV startup + acceptance checklist
+docs/DEV-VERIFY.md           DEV startup guide
+docs/HANDOFF-PHASE6.md       Next-agent brief for Phase 6
 ```
 
-## Verified in CI-ish / local code checks
+## Verified — code
 
-- `just test` — parser, youtube errors, db mappings, ingest, web API
-- `just build` — Windows binary builds
+- `just test` — parser, youtube errors, db mappings, ingest, web API  
+- `just build` — Windows binary builds  
 
-## Live DEV verification (Meat Bag — in progress)
+## Verified — live DEV (Meat Bag sign-off, 2026-09-07)
 
-Follow [DEV-VERIFY.md](DEV-VERIFY.md). Acceptance = one 💾 on a fresh link + video on the playlist + activity visible in Admin UI.
+Acceptance from [DEV-VERIFY.md](DEV-VERIFY.md):
 
-- [ ] Discord bot token + **Message Content Intent** + bot invited  
-- [ ] Google Cloud: YouTube Data API v3 + OAuth client + redirect  
-- [ ] Real `ADMIN_PASSWORD` in `.env`  
-- [ ] `just auth-youtube` once  
-- [ ] `just run` → Admin UI → mapping → paste YouTube link → 💾  
+- [x] Discord bot token + **Message Content Intent** + bot invited  
+- [x] Google Cloud: YouTube Data API v3 + OAuth client + redirect + test user  
+- [x] Real `ADMIN_PASSWORD` in `.env`  
+- [x] `just auth-youtube` once  
+- [x] `just run` → Admin UI → mapping → paste YouTube link → **💾** + playlist update  
+- [x] Reactions work (Add Reactions permission); failures visible at Warn if they recur  
 
-## Paused (PLAN.md)
+Known DEV gotchas learned this arc (documented in DEV-VERIFY):
 
-- **Phase 6** — scheduler (`RESYNC_INTERVAL_HOURS`), rate-limit handling, polish  
+- Gateway **4014** → Message Content Intent not enabled/saved  
+- OAuth “testing” mode → add yourself as a **test user**  
+- Playlist OK but no emoji → Add Reactions permission; restart after fixes  
+
+## Not done yet (PLAN.md)
+
+- **Phase 6** — scheduler (`RESYNC_INTERVAL_HOURS`), rate-limit handling, polish → [HANDOFF-PHASE6.md](HANDOFF-PHASE6.md)  
 - **Phase 7** — Linux VPS / systemd deploy guide  
-
-Resume those only after DEV verification (or if Meat Bag explicitly redirects).

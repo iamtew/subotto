@@ -11,9 +11,10 @@ See **AGENTS.md** for how Clanker and Meat Bag are supposed to talk to each othe
 
 ## Quick Status
 
-**Phases 0–5 done** in code. **Phase 6/7 paused** while Meat Bag verifies DEV with real Discord + YouTube.
+**Phases 0–5 done and Meat Bag verified good** (live Discord → YouTube DEV).  
+**Next:** Phase 6 (scheduler & polish) — handoff: [docs/HANDOFF-PHASE6.md](docs/HANDOFF-PHASE6.md).
 
-**Start here:** [docs/DEV-VERIFY.md](docs/DEV-VERIFY.md) — full Windows DEV setup, how it works, and the acceptance checklist.
+DEV recipe: [docs/DEV-VERIFY.md](docs/DEV-VERIFY.md).
 
 Short path once secrets exist:
 

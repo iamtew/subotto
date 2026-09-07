@@ -1,7 +1,8 @@
 # Get Subotto Running (DEV on Windows)
 
 **Audience:** Meat Bag (you)  
-**Goal:** Verify Phases 0–5 with real Discord + YouTube before we build Phase 6/7.  
+**Goal:** Run Subotto in DEV and confirm Phases 0–5 still work.  
+**Status:** Meat Bag verified good (2026-09-07). Use this anytime you need to re-check.  
 **Machine:** Windows 10, repo root, **no Docker** — Go + Just only.
 
 Clanker wrote this so you can follow it like a recipe. When something goes boom, jump to [Troubleshooting](#troubleshooting).
@@ -26,7 +27,7 @@ You also get:
 - An **Admin UI** in the browser (manage mappings, see activity, resync history)
 - **CLI** helpers via `just …` if you prefer the terminal
 
-Phases **6–7 are on pause** until this DEV check feels good.
+Phases **6–7** come after this guide. **Meat Bag verified DEV good (2026-09-07)** — keep this recipe for re-checks and regressions.
 
 ---
 
@@ -327,17 +328,17 @@ just resync CHANNEL [limit]
 
 Check these off for yourself:
 
-- [ ] `just test` and `just build` OK  
-- [ ] `.env` filled; Discord intent on; bot invited  
-- [ ] `just auth-youtube` printed your YouTube channel name  
-- [ ] `just run` shows Discord + Admin UI ready  
-- [ ] Admin login works (`admin` / your password)  
-- [ ] Mapping saved (UI or CLI)  
-- [ ] Fresh YouTube link → 💾 and video appears on the playlist  
-- [ ] Same link again → ♻️  
-- [ ] Activity shows up in the Admin UI  
+- [x] `just test` and `just build` OK *(code checks; Meat Bag / Clanker)*  
+- [x] `.env` filled; Discord intent on; bot invited  
+- [x] `just auth-youtube` printed your YouTube channel name  
+- [x] `just run` shows Discord + Admin UI ready  
+- [x] Admin login works (`admin` / your password)  
+- [x] Mapping saved (UI or CLI)  
+- [x] Fresh YouTube link → 💾 and video appears on the playlist  
+- [x] Same link again → ♻️  
+- [x] Activity shows up in the Admin UI  
 
-When that list feels honest, tell Clanker. Then we can resume **Phase 6** (scheduler & polish) and later **Phase 7** (Linux VPS deploy). Until then, phases are on pause for your DEV verification.
+**Sign-off:** Meat Bag verified good (2026-09-07). Next work is Phase 6 — see [HANDOFF-PHASE6.md](HANDOFF-PHASE6.md).
 
 ---
 
@@ -345,8 +346,9 @@ When that list feels honest, tell Clanker. Then we can resume **Phase 6** (sched
 
 | File | Role |
 |------|------|
-| [PROGRESS.md](PROGRESS.md) | What Phases 0–5 delivered |
+| [PROGRESS.md](PROGRESS.md) | What Phases 0–5 delivered + verify sign-off |
+| [HANDOFF-PHASE6.md](HANDOFF-PHASE6.md) | Next agent: Phase 6 brief |
 | [JUMPBACK.md](JUMPBACK.md) | Resume notes for the next session |
-| [PLAN.md](../PLAN.md) | Full roadmap (including paused 6–7) |
+| [PLAN.md](../PLAN.md) | Full roadmap |
 | [AGENTS.md](../AGENTS.md) | How Clanker ↔ Meat Bag work |
 | [README.md](../README.md) | Project overview |
