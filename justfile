@@ -20,6 +20,12 @@ run:
 auth-youtube:
     go run ./cmd/subotto -youtube-auth
 
+# Map a Discord channel to a YouTube playlist (until Admin UI exists).
+# Usage: just add-mapping DISCORD_CHANNEL_ID YOUTUBE_PLAYLIST_ID
+# Optional 3rd arg = label name.
+add-mapping channel playlist name="":
+    go run ./cmd/subotto -add-mapping-channel {{channel}} -add-mapping-playlist {{playlist}} -add-mapping-name "{{name}}"
+
 # Build native Windows binary (DEV)
 build:
     go build -o bin/subotto.exe ./cmd/subotto

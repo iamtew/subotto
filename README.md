@@ -11,13 +11,16 @@ See **AGENTS.md** for how Clanker and Meat Bag are supposed to talk to each othe
 
 ## Quick Status
 
-**Phase 2 done:** YouTube OAuth + `AddVideoToPlaylist` are implemented.  
-- Fill `YOUTUBE_CLIENT_ID` / `YOUTUBE_CLIENT_SECRET` in `.env`
-- Add redirect URI `http://localhost:8080/oauth/callback` in Google Cloud Console
-- Enable **YouTube Data API v3**, then run `just auth-youtube` once
-- Normal boot: `just run` (loads token from SQLite when present)
+**Phase 3 done:** Discord bot listens for YouTube links in mapped channels and adds them to playlists.  
+Prereqs: `.env` tokens, `just auth-youtube`, Message Content Intent on, then:
 
-Next up: **Phase 3** (Discord bot core). See PLAN.md.
+```
+just add-mapping DISCORD_CHANNEL_ID YOUTUBE_PLAYLIST_ID
+just run
+```
+
+Reactions: ✅ added, ♻️ already on playlist, ❌ failed.  
+Next up: **Phase 4** (full mapping CRUD + resync). See PLAN.md.
 
 **No Docker.** We use **Just** + native Go binaries.
 

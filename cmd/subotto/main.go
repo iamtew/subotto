@@ -1,8 +1,9 @@
 // Package main is the entry point for Subotto.
 //
 // Meat Bag:
-//   - `just run` — normal boot (config + DB + YouTube client if authorized)
-//   - `just auth-youtube` — one-time Google OAuth so Subotto can edit playlists
+//   - `just run` — Discord bot + YouTube (needs tokens + auth-youtube)
+//   - `just auth-youtube` — one-time Google OAuth
+//   - `just add-mapping CHANNEL PLAYLIST` — map a Discord channel to a playlist
 package main
 
 import (
@@ -11,15 +12,22 @@ import (
 	"flag"
 	"log/slog"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"subotto/internal/config"
 	"subotto/internal/db"
+	"subotto/internal/discord"
 	"subotto/internal/youtube"
 )
 
 func main() {
 	youtubeAuth := flag.Bool("youtube-auth", false, "Run the one-time YouTube OAuth flow and exit")
+	addChannel := flag.String("add-mapping-channel", "", "Discord channel ID to map (use with -add-mapping-playlist)")
+	addPlaylist := flag.String("add-mapping-playlist", "", "YouTube playlist ID to map")
+	addName := flag.String("add-mapping-name", "", "Optional label for the mapping")
+	addGuild := flag.String("add-mapping-guild", "", "Optional Discord guild/server ID")
 	flag.Parse()
 
 	cfg, err := config.Load()
@@ -52,7 +60,15 @@ func main() {
 		return
 	}
 
-	runNormal(ctx, cfg, store)
+	if *addChannel != "" || *addPlaylist != "" {
+		if err := runAddMapping(ctx, cfg, store, *addChannel, *addPlaylist, *addName, *addGuild); err != nil {
+			slog.Error("add mapping failed", "err", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	runBot(ctx, cfg, store)
 }
 
 func runYouTubeAuth(ctx context.Context, cfg *config.Config, store *db.DB) error {
@@ -77,33 +93,74 @@ func runYouTubeAuth(ctx context.Context, cfg *config.Config, store *db.DB) error
 	}
 	_ = store.LogActivity(ctx, "youtube_auth", map[string]any{"ok": true, "channel": title}, true)
 	slog.Info("YouTube authorization OK", "channel", title)
-	slog.Info("Phase 2 auth done. You can `just run` normally now.")
+	slog.Info("You can `just run` normally now.")
 	return nil
 }
 
-func runNormal(ctx context.Context, cfg *config.Config, store *db.DB) {
+func runAddMapping(ctx context.Context, cfg *config.Config, store *db.DB, channelID, playlistID, name, guildID string) error {
+	if channelID == "" || playlistID == "" {
+		return errors.New("need both -add-mapping-channel and -add-mapping-playlist")
+	}
+	if guildID == "" {
+		guildID = cfg.DiscordGuildID
+	}
+	if name == "" {
+		name = "mapping-" + channelID
+	}
+	m, err := store.UpsertMapping(ctx, channelID, guildID, playlistID, name, true)
+	if err != nil {
+		return err
+	}
+	_ = store.LogActivity(ctx, "mapping_upserted", map[string]any{
+		"channel_id":  m.DiscordChannelID,
+		"playlist_id": m.YouTubePlaylistID,
+		"name":        m.Name,
+	}, true)
+	slog.Info("channel mapping saved",
+		"channel", m.DiscordChannelID,
+		"playlist", m.YouTubePlaylistID,
+		"name", m.Name,
+		"guild", m.GuildID,
+	)
+	return nil
+}
+
+func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 	slog.Info("Subotto is online. Clanker stands ready, Meat Bag.")
 	slog.Info("config loaded",
 		"database_path", cfg.DatabasePath,
 		"log_level", cfg.LogLevel,
 		"admin_host", cfg.AdminHost,
 		"admin_port", cfg.AdminPort,
-		"resync_interval_hours", cfg.ResyncIntervalHours,
 	)
 
-	if missing := cfg.MissingSecrets(); len(missing) > 0 {
-		slog.Warn("some API credentials are not set yet",
-			"missing", strings.Join(missing, ", "),
-			"hint", "copy .env.example to .env; for YouTube also run `just auth-youtube`",
-		)
+	if cfg.DiscordBotToken == "" || cfg.DiscordBotToken == "your-discord-bot-token-here" {
+		slog.Error("DISCORD_BOT_TOKEN is required for Phase 3 — set it in .env")
+		os.Exit(1)
+	}
+	if len(cfg.MissingYouTubeSecrets()) > 0 {
+		slog.Error("YouTube OAuth client id/secret required", "missing", strings.Join(cfg.MissingYouTubeSecrets(), ", "))
+		os.Exit(1)
+	}
+	hasTok, err := youtube.HasStoredToken(ctx, store)
+	if err != nil {
+		slog.Error("failed to check youtube token", "err", err)
+		os.Exit(1)
+	}
+	if !hasTok {
+		slog.Error("no YouTube token yet — run `just auth-youtube` first")
+		os.Exit(1)
 	}
 
-	if err := store.LogActivity(ctx, "startup", map[string]any{
-		"message": "Phase 2 boot",
-		"phase":   2,
-	}, true); err != nil {
-		slog.Error("failed to write startup activity", "err", err)
+	yt, err := youtube.NewClient(ctx, store, cfg.YouTubeClientID, cfg.YouTubeClientSecret, cfg.YouTubeRedirectURL)
+	if err != nil {
+		slog.Error("failed to create youtube client", "err", err)
 		os.Exit(1)
+	}
+	if title, err := yt.Ping(ctx); err != nil {
+		slog.Warn("YouTube ping failed", "err", err)
+	} else {
+		slog.Info("YouTube client ready", "channel", title)
 	}
 
 	mappings, err := store.CountMappings(ctx)
@@ -111,49 +168,40 @@ func runNormal(ctx context.Context, cfg *config.Config, store *db.DB) {
 		slog.Error("failed to count mappings", "err", err)
 		os.Exit(1)
 	}
-	activities, err := store.CountActivity(ctx)
-	if err != nil {
-		slog.Error("failed to count activity", "err", err)
+	if mappings == 0 {
+		slog.Warn("no channel mappings yet — add one with: just add-mapping CHANNEL_ID PLAYLIST_ID")
+	} else {
+		slog.Info("channel mappings loaded", "count", mappings)
+	}
+
+	if err := store.LogActivity(ctx, "startup", map[string]any{"message": "Phase 3 boot", "phase": 3}, true); err != nil {
+		slog.Error("failed to write startup activity", "err", err)
 		os.Exit(1)
 	}
-	slog.Info("database ready",
-		"path", cfg.DatabasePath,
-		"mappings", mappings,
-		"activity_rows", activities,
-	)
 
-	// YouTube client: optional until Meat Bag finishes OAuth.
-	if len(cfg.MissingYouTubeSecrets()) > 0 {
-		slog.Warn("YouTube client skipped — OAuth client id/secret not configured")
-	} else {
-		hasTok, err := youtube.HasStoredToken(ctx, store)
-		if err != nil {
-			slog.Error("failed to check youtube token", "err", err)
-			os.Exit(1)
-		}
-		if !hasTok {
-			slog.Warn("YouTube client skipped — no token yet",
-				"hint", "run `just auth-youtube` once after filling YOUTUBE_CLIENT_ID/SECRET",
-			)
-		} else {
-			yt, err := youtube.NewClient(ctx, store, cfg.YouTubeClientID, cfg.YouTubeClientSecret, cfg.YouTubeRedirectURL)
-			if err != nil {
-				slog.Error("failed to create youtube client", "err", err)
-				os.Exit(1)
-			}
-			title, err := yt.Ping(ctx)
-			if err != nil {
-				slog.Warn("YouTube token present but ping failed", "err", err)
-			} else {
-				slog.Info("YouTube client ready", "channel", title)
-			}
-		}
+	bot, err := discord.New(cfg.DiscordBotToken, store, yt, cfg.DiscordGuildID)
+	if err != nil {
+		slog.Error("failed to create discord bot", "err", err)
+		os.Exit(1)
 	}
+	if err := bot.Open(); err != nil {
+		slog.Error("failed to connect to discord", "err", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if cerr := bot.Close(); cerr != nil {
+			slog.Error("failed to close discord", "err", cerr)
+		}
+	}()
 
-	slog.Info("Phase 2 ready — OAuth + AddVideoToPlaylist are implemented. Next: Discord bot core (Phase 3).")
+	slog.Info("listening for YouTube links in mapped channels — Ctrl+C to stop")
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	<-stop
+	slog.Info("shutting down Subotto — bye Meat Bag")
 }
 
-// newLogger builds a text slog logger at the requested level.
 func newLogger(level string) *slog.Logger {
 	var lvl slog.Level
 	switch strings.ToLower(level) {
