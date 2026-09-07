@@ -11,8 +11,8 @@ See **AGENTS.md** for how Clanker and Meat Bag are supposed to talk to each othe
 
 ## Quick Status
 
-This repository currently contains the planning documents.  
-Implementation starts with **Phase 0** in PLAN.md.
+**Phase 0 scaffold is ready.** You can `just run` and see Subotto say hello.  
+Next up: **Phase 1** (config loading + SQLite + slog). See PLAN.md.
 
 **No Docker.** We use **Just** + native Go binaries.
 

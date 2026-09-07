@@ -1,0 +1,30 @@
+# Secrets — never commit real tokens
+.env
+
+# Build output
+bin/
+
+# SQLite runtime DB (keep data/.gitkeep tracked)
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+
+# OAuth / token files Clanker may write later
+data/token.json
+data/youtube-token.json
+*.token.json
+
+# Go
+vendor/
+
+# OS junk
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*~

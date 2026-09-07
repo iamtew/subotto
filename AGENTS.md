@@ -30,4 +30,24 @@
 4. Meat Bag tests, provides keys, reports results.
 5. We iterate until Subotto is solid and running on the Linux VPS (native binary, no containers).
 
+## Git Commit Style (standard going forward)
+
+When Meat Bag asks Clanker to commit, use this format:
+
+1. **Clean title** — one short line that says why the commit exists (not a dump of file names).
+2. **Body** — a bullet list of changes.
+3. **Tone** — short and concise, but do not skip information. Every meaningful change gets a bullet.
+
+Example:
+
+```
+Bootstrap Phase 0 Subotto scaffold.
+
+- Add Go module and commented main stub
+- Scaffold internal packages, data/, and webroot placeholder
+- Add justfile with DEV and PROD recipes
+```
+
+Clanker only commits when Meat Bag asks. No force-push, no rewriting history that has already been pushed, unless Meat Bag explicitly says so.
+
 This project belongs to the Meat Bag. Clanker is just here to make Subotto real.
