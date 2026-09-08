@@ -35,6 +35,7 @@ func (s *Server) registerAPI(mux *http.ServeMux) {
 	mux.Handle("POST /api/resync", s.basicAuth(http.HandlerFunc(s.handleResync)))
 	mux.Handle("GET /api/discord/guilds", s.basicAuth(http.HandlerFunc(s.handleDiscordGuilds)))
 	mux.Handle("GET /api/discord/guilds/{guild}/channels", s.basicAuth(http.HandlerFunc(s.handleDiscordChannels)))
+	mux.Handle("POST /api/discord/reconnect", s.basicAuth(http.HandlerFunc(s.handleDiscordReconnect)))
 	mux.Handle("GET /api/settings/listen-messages", s.basicAuth(http.HandlerFunc(s.handleGetListenMessages)))
 	mux.Handle("PUT /api/settings/listen-messages", s.basicAuth(http.HandlerFunc(s.handlePutListenMessages)))
 	mux.Handle("GET /api/settings/air-messages", s.basicAuth(http.HandlerFunc(s.handleGetListenMessages)))
@@ -296,6 +297,25 @@ func (s *Server) handleUpsertMapping(w http.ResponseWriter, r *http.Request) {
 		"source":           "admin_ui",
 	}, true)
 	writeJSON(w, http.StatusOK, toMappingDTO(*m))
+}
+
+// handleDiscordReconnect forces a Discord gateway Close+Open (Admin status pill).
+func (s *Server) handleDiscordReconnect(w http.ResponseWriter, r *http.Request) {
+	if s.status == nil {
+		writeErr(w, http.StatusServiceUnavailable, "discord status provider not configured")
+		return
+	}
+	slog.Info("admin requested discord reconnect")
+	if err := s.status.Reconnect(); err != nil {
+		slog.Error("discord reconnect failed", "err", err)
+		writeErr(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":                true,
+		"discord_connected": s.status.Connected(),
+		"message":           "reconnect open succeeded — waiting for ready/resume if still down",
+	})
 }
 
 func (s *Server) handleDiscordGuilds(w http.ResponseWriter, r *http.Request) {

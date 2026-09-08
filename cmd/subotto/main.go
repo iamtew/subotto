@@ -498,10 +498,6 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 		slog.Error("failed to create discord bot", "err", err)
 		os.Exit(1)
 	}
-	if err := bot.Open(); err != nil {
-		slog.Error("failed to connect to discord", "err", err)
-		os.Exit(1)
-	}
 	defer func() {
 		if cerr := bot.Close(); cerr != nil {
 			slog.Error("failed to close discord", "err", cerr)
@@ -538,10 +534,13 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 		adminErr <- admin.Start()
 	}()
 
-	// Scheduler shares this cancel with shutdown so ticks stop promptly.
-	schedCtx, schedCancel := context.WithCancel(context.Background())
-	defer schedCancel()
-	go sched.Run(schedCtx)
+	// Shared cancel: Discord maintain + scheduler stop together on SIGINT.
+	runCtx, runCancel := context.WithCancel(context.Background())
+	defer runCancel()
+
+	// Keep Discord online in the background — do not exit if the first Open fails.
+	go bot.Maintain(runCtx)
+	go sched.Run(runCtx)
 
 	slog.Info("listening for content + picture listeners — Ctrl+C to stop")
 	slog.Info("Admin UI ready", "url", fmt.Sprintf("http://%s", admin.Addr()), "user", "admin")
@@ -562,7 +561,7 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 		}
 	}
 
-	schedCancel()
+	runCancel()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

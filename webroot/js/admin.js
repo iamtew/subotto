@@ -223,6 +223,31 @@ function pill(label, kind) {
   return span;
 }
 
+/** Discord-down pill: clickable button that POSTs /api/discord/reconnect. */
+function discordStatusPill(connected) {
+  if (connected) {
+    return pill("discord up", true);
+  }
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "pill bad pill-action";
+  btn.textContent = "discord down · reconnect";
+  btn.title = "Click to force a Discord gateway reconnect";
+  btn.addEventListener("click", async () => {
+    if (btn.disabled) return;
+    btn.disabled = true;
+    btn.textContent = "discord reconnecting…";
+    try {
+      const data = await api("/api/discord/reconnect", { method: "POST" });
+      toast(data.message || "discord reconnect requested", false);
+    } catch (err) {
+      toast(err.message || "discord reconnect failed", true);
+    }
+    await loadStatus();
+  });
+  return btn;
+}
+
 function esc(s) {
   return String(s ?? "")
     .replace(/&/g, "&amp;")
@@ -360,7 +385,7 @@ async function loadStatus() {
     const picOn = s.picture_listens_enabled ?? 0;
     const picTot = s.picture_listens_total ?? 0;
     host.replaceChildren(
-      pill(s.discord_connected ? "discord up" : "discord down", !!s.discord_connected),
+      discordStatusPill(!!s.discord_connected),
       pill(s.youtube_authorized ? "youtube ok" : "youtube missing", !!s.youtube_authorized),
       pill(`content ${on}/${tot}`, true),
       pill(`pics ${picOn}/${picTot}`, true),

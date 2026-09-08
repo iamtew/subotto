@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,9 +14,16 @@ import (
 	"subotto/internal/db"
 )
 
-type fakeStatus struct{ on bool }
+var errReconnectBoom = errors.New("reconnect boom")
+
+type fakeStatus struct {
+	on  bool
+	err error // if set, Reconnect returns this error
+}
 
 func (f fakeStatus) Connected() bool { return f.on }
+
+func (f fakeStatus) Reconnect() error { return f.err }
 
 func testServer(t *testing.T) (*Server, *db.DB) {
 	t.Helper()
@@ -236,5 +244,34 @@ func TestPictureListensAndPublicSlideshow(t *testing.T) {
 	s.httpServer.Handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("media: %d", rec.Code)
+	}
+}
+
+func TestDiscordReconnect(t *testing.T) {
+	s, _ := testServer(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/discord/reconnect", nil)
+	req.SetBasicAuth("admin", "test-pass")
+	rec := httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("reconnect ok: want 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["ok"] != true {
+		t.Fatalf("expected ok true: %v", body)
+	}
+
+	// Failure path: status provider returns an error.
+	s.status = fakeStatus{on: false, err: errReconnectBoom}
+	req = httptest.NewRequest(http.MethodPost, "/api/discord/reconnect", nil)
+	req.SetBasicAuth("admin", "test-pass")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("reconnect fail: want 503, got %d body=%s", rec.Code, rec.Body.String())
 	}
 }

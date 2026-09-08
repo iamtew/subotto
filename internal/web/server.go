@@ -20,10 +20,12 @@ import (
 	"subotto/internal/youtube"
 )
 
-// StatusProvider tells the Admin UI whether Discord is connected.
+// StatusProvider tells the Admin UI whether Discord is connected,
+// and lets the operator force a gateway reconnect.
 // *discord.Bot already matches this.
 type StatusProvider interface {
 	Connected() bool
+	Reconnect() error
 }
 
 // DiscordCatalog lists servers/channels the bot can see (Admin dropdowns).
