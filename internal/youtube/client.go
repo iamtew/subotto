@@ -132,7 +132,7 @@ func (c *Client) AddVideoToPlaylist(ctx context.Context, playlistID, videoID str
 // CreatePlaylist makes a new YouTube playlist owned by the authorized account.
 // Meat Bag: use this from the Admin UI when you cannot create an empty playlist
 // by hand — Subotto creates it, then stores the returned playlist ID.
-// Privacy is "private" by default (you can change it later on YouTube).
+// Privacy is "public" so Discord ONLINE notices can link the playlist for everyone.
 // This is voluntary association with your own Google account.
 func (c *Client) CreatePlaylist(ctx context.Context, title, description string) (playlistID string, err error) {
 	if c == nil || c.service == nil {
@@ -152,7 +152,7 @@ func (c *Client) CreatePlaylist(ctx context.Context, title, description string) 
 			Description: description,
 		},
 		Status: &ytapi.PlaylistStatus{
-			PrivacyStatus: "private",
+			PrivacyStatus: "public",
 		},
 	}
 

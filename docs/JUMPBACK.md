@@ -10,7 +10,7 @@
 
 ### Mental model
 1. **Listener** = one Discord channel under watch → one YouTube playlist (collection window / epoch)
-2. **START LISTENER** creates a private playlist; **CEASE** closes the epoch
+2. **START LISTENER** creates a public playlist; **CEASE** closes the epoch
 3. One live listener per channel; videos saved once per channel (won’t re-ingest after a new playlist)
 4. Resync stops at the previous epoch boundary
 5. Online/offline Discord messages are **global** templates you edit in Admin

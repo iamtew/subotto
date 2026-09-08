@@ -164,7 +164,7 @@ You need a Google account that **owns** (or can edit) the playlists Subotto will
 
 ### 4.3 Playlist
 
-Admin UI can **create** a private playlist from a name when you save a mapping.  
+Admin UI can **create** a public playlist from a name when you save a mapping.  
 You no longer need to invent an empty playlist by hand on YouTube.
 
 (Optional) If you already have a playlist ID (`list=` in the URL, looks like `PLxxxxxxxx…`), CLI `just add-mapping` still accepts it.
