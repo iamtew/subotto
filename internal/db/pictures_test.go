@@ -174,6 +174,15 @@ func TestCollectedPictures(t *testing.T) {
 		t.Fatalf("has attachment: ok=%v err=%v", ok, err)
 	}
 
+	prevID, found, err := store.CollectedAttachmentOnChannel(ctx, "chan-c", "att-1")
+	if err != nil || !found || prevID != pl.ID {
+		t.Fatalf("channel lookup: id=%d found=%v err=%v", prevID, found, err)
+	}
+	_, found, err = store.CollectedAttachmentOnChannel(ctx, "chan-c", "missing")
+	if err != nil || found {
+		t.Fatalf("missing attachment should be absent: found=%v err=%v", found, err)
+	}
+
 	if err := store.UpdatePictureReactions(ctx, "chan-c", "msg-1", map[string]int{"🔥": 3, "❤️": 1}); err != nil {
 		t.Fatalf("update reactions: %v", err)
 	}

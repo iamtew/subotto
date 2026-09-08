@@ -569,6 +569,28 @@ func (d *DB) HasCollectedAttachment(ctx context.Context, listenerID int64, attac
 	return n > 0, nil
 }
 
+// CollectedAttachmentOnChannel looks up an attachment already filed under any
+// picture listener on this Discord channel (current or previous epoch).
+// Returns the listener_id that owns the row, or ok=false if never collected.
+// Used to distinguish same-listener DUPE vs previous-listener OLD skips.
+func (d *DB) CollectedAttachmentOnChannel(ctx context.Context, channelID, attachmentID string) (listenerID int64, ok bool, err error) {
+	err = d.sql.QueryRowContext(ctx, `
+		SELECT c.listener_id
+		FROM collected_pictures c
+		JOIN picture_listeners p ON p.id = c.listener_id
+		WHERE p.discord_channel_id = ? AND c.discord_attachment_id = ?
+		ORDER BY c.id ASC
+		LIMIT 1
+	`, channelID, attachmentID).Scan(&listenerID)
+	if err == sql.ErrNoRows {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	return listenerID, true, nil
+}
+
 // InsertCollectedPicture records a newly saved image. reactions may be nil.
 func (d *DB) InsertCollectedPicture(ctx context.Context, p CollectedPicture) (*CollectedPicture, error) {
 	reactions := "{}"

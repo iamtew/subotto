@@ -168,8 +168,10 @@ func (b *Bot) handlePictureListener(ctx context.Context, s *discordgo.Session, m
 	case res.Failed > 0 && res.Saved == 0:
 		b.react(s, m.ChannelID, m.ID, "❌")
 	case res.Saved > 0:
-		b.react(s, m.ChannelID, m.ID, "🖼️")
-	case res.Skipped > 0:
+		b.react(s, m.ChannelID, m.ID, "💾") // saved to disk / slideshow
+	case res.SkippedOld > 0:
+		b.reactAll(s, m.ChannelID, m.ID, "🛑", "🇴", "🇱", "🇩")
+	case res.SkippedSame > 0 || res.Skipped > 0:
 		b.reactAll(s, m.ChannelID, m.ID, "♻️", "🇩", "🇺", "🇵", "🇪")
 	}
 }
@@ -182,6 +184,9 @@ func (b *Bot) onMessageReactionAdd(s *discordgo.Session, r *discordgo.MessageRea
 }
 
 func (b *Bot) onMessageReactionRemove(s *discordgo.Session, r *discordgo.MessageReactionRemove) {
+	if s.State.User != nil && r.UserID == s.State.User.ID {
+		return // ignore our own removes (status chrome)
+	}
 	b.refreshMessageReactions(r.ChannelID, r.MessageID)
 }
 
@@ -211,13 +216,23 @@ func (b *Bot) refreshMessageReactions(channelID, messageID string) {
 	}
 }
 
+// reactionsFromMessage builds emoji→count for the slideshow floaters.
+// Counts exclude Subotto's own reacts (Discord's Me flag) so status chrome
+// like 💾 / DUPE / OLD / ❌ never become floaters — only other users' reacts.
 func reactionsFromMessage(m *discordgo.Message) map[string]int {
 	out := map[string]int{}
 	if m == nil {
 		return out
 	}
 	for _, r := range m.Reactions {
-		if r == nil || r.Emoji.Name == "" {
+		if r == nil || r.Emoji == nil || r.Emoji.Name == "" {
+			continue
+		}
+		count := r.Count
+		if r.Me {
+			count--
+		}
+		if count <= 0 {
 			continue
 		}
 		key := r.Emoji.Name
@@ -229,7 +244,7 @@ func reactionsFromMessage(m *discordgo.Message) map[string]int {
 				key = r.Emoji.Name + ":" + r.Emoji.ID
 			}
 		}
-		out[key] = r.Count
+		out[key] = count
 	}
 	return out
 }

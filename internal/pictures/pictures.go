@@ -20,16 +20,23 @@ import (
 )
 
 // Result summarizes one message's picture ingest.
+// Skipped = SkippedSame + SkippedOld (kept for resync summaries / String()).
+// SkippedSame = already saved for this listener epoch (DUPE react).
+// SkippedOld  = already filed under a previous picture-listener epoch (OLD react).
 type Result struct {
-	Saved   int
-	Skipped int // already collected (dedupe)
-	Failed  int
+	Saved       int
+	Skipped     int
+	SkippedSame int
+	SkippedOld  int
+	Failed      int
 }
 
 // Merge adds another Result into r (used by picture resync to accumulate totals).
 func (r *Result) Merge(other Result) {
 	r.Saved += other.Saved
 	r.Skipped += other.Skipped
+	r.SkippedSame += other.SkippedSame
+	r.SkippedOld += other.SkippedOld
 	r.Failed += other.Failed
 }
 
@@ -111,14 +118,36 @@ func ProcessAttachments(
 			}
 		}
 
-		ok, err := store.HasCollectedAttachment(ctx, listener.ID, att.ID)
+		prevListenerID, already, err := store.CollectedAttachmentOnChannel(ctx, listener.DiscordChannelID, att.ID)
 		if err != nil {
 			slog.Error("picture dedupe lookup failed", "err", err)
 			res.Failed++
 			continue
 		}
-		if ok {
+		if already {
+			reason := "duplicate"
+			if prevListenerID == listener.ID {
+				res.SkippedSame++
+			} else {
+				res.SkippedOld++
+				reason = "duplicate_old"
+			}
 			res.Skipped++
+			slog.Info("skip duplicate picture",
+				"attachment", att.ID,
+				"channel", listener.DiscordChannelID,
+				"listener", listener.ID,
+				"prev_listener", prevListenerID,
+				"reason", reason,
+			)
+			_ = store.LogActivity(ctx, "picture_skipped", map[string]any{
+				"reason":          reason,
+				"attachment_id":   att.ID,
+				"listener_id":     listener.ID,
+				"prev_listener_id": prevListenerID,
+				"channel_id":      listener.DiscordChannelID,
+				"message_id":      messageID,
+			}, true)
 			continue
 		}
 

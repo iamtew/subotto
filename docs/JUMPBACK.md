@@ -1,9 +1,11 @@
 # Jump-Back Point — Subotto (2026-09-08)
 
-**Phases 0–8** — content + picture listeners, Admin tabs, public OBS slideshow, Linux package / deploy guide.  
+**Phases 0–8** — content + picture listeners, Admin tabs, public OBS slideshow (+ polish).  
+**Phase 8 handoff (new agent):** [HANDOFF-PHASE8.md](HANDOFF-PHASE8.md)  
 **PROD guide:** [DEPLOY.md](DEPLOY.md)  
-**Prior Phase 7 brief:** [HANDOFF-PHASE7.md](HANDOFF-PHASE7.md)  
-**Phase 6 context:** [HANDOFF-ADMIN-UI.md](HANDOFF-ADMIN-UI.md)
+**Prior Phase 7 brief:** [HANDOFF-PHASE7.md](HANDOFF-PHASE7.md)
+
+**Git:** `master` is **2 commits ahead of origin** (`ffec62a` Phase 8, `86a66f3` slideshow polish) — **not pushed**.
 
 ---
 
@@ -14,11 +16,11 @@
 2. **Picture listener** = Discord channel → images on disk under `data/pictures/{slug}/` + public slideshow
 3. **START** content listener creates a **public** playlist; **CEASE** closes the epoch
 4. One live content listener **and** one live picture listener may share the same channel
-5. Content resync stops at the previous content-listener epoch boundary
+5. Content / picture resync stop at previous epoch boundaries for that listener type
 6. ONLINE/OFFLINE Discord **notices** are global templates (content listeners) in Admin
-7. Public OBS overlay: `/slideshow/latest` or `/slideshow/{slug}` (no Basic Auth). Credit shows `Author: NAME` on frosted glass; reactions float nearby (Twemoji + Discord CDN custom emotes). **Reaction render** 1x–10x multiplies how many emote sprites appear. Configure via picture listener **Settings**.
+7. Public OBS overlay: `/slideshow/latest` or `/slideshow/{slug}` (no Basic Auth). Credit: `Author: NAME` on frosted glass; reaction **floaters** (Twemoji + Discord CDN). Settings: corner, advance, scales, **reaction render 1x–25x** (floater stage grows with it)
 8. Port default **50770**; scheduler optional via `RESYNC_INTERVAL_HOURS` (usually `0`)
-9. PROD is headless: copy `.env` + `data/` (DB + `pictures/`). Re-auth without a desktop = SSH tunnel cookbook in DEPLOY.md
+9. PROD is headless: copy `.env` + `data/` (DB + `pictures/`). Same Discord bot token → do not run DEV + PROD together
 
 ### Commands
 ```text
@@ -32,10 +34,8 @@ just test / just build / just build-linux / just package-linux
 Admin: `http://localhost:50770` · `admin` / `ADMIN_PASSWORD`  
 Slideshow: `http://localhost:50770/slideshow/latest`
 
-Content reacts: **💾** · **♻️ DUPE** · **🛑 OLD** · **❌**  
-Picture reacts: **🖼️** · **♻️ DUPE** · **❌**
-
-PROD: `just package-linux` → `dist/subotto-linux.zip` → [DEPLOY.md](DEPLOY.md)
+Content + picture reacts: **💾** · **♻️ DUPE** · **🛑 OLD** · **❌**  
+Slideshow floaters: human reacts only (bot status chrome excluded)
 
 ### Parked (later)
 - **Shows** — bi-weekly / scheduled listeners, show-runner Discord announce, richer automation
@@ -44,19 +44,17 @@ PROD: `just package-linux` → `dist/subotto-linux.zip` → [DEPLOY.md](DEPLOY.m
 
 ## 2. Agent notes
 
-- Keep docs and comments plain and beginner-friendly
+- Read [HANDOFF-PHASE8.md](HANDOFF-PHASE8.md) first when continuing Phase 8 polish
 - Product terms: **content listener**, **picture listener**, start/cease, **notices**, public **slideshow**
-- Prefer voluntary / operator-owned language in copy — never name opposing ideologies
-- No Docker; commit only on request
-- Prefer `/api/listens` and `/api/picture-listens`; keep legacy content aliases working
-- Public routes (no auth): `/slideshow/...`, `/api/slideshow/{slug}`, `/media/pictures/...`
+- Prefer `/api/listens` and `/api/picture-listens`; public `/slideshow/...`, `/api/slideshow/{slug}`, `/media/pictures/...`
+- No Docker; commit only on request; no push unless asked
 
 ### Architecture
 ```
-just run / just build-linux / just package-linux
+just run
   → Discord gateway
-       content:  links → ingest → 💾 / ♻️DUPE / 🛑OLD / ❌
-       picture:  attachments → data/pictures/{slug}/ → 🖼️
-  → Admin (webroot + /api/* Basic Auth, tabs)
+       content:  links → ingest → YouTube playlist
+       picture:  attachments → data/pictures/{slug}/
+  → Admin (Basic Auth, tabs)
   → Public slideshow (OBS Browser Source)
 ```

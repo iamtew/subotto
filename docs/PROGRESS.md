@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-08  
 **Branch:** `master`  
-**Status:** Phase 8 **in progress / code complete** — content + picture listeners, OBS slideshow, Admin tabs.  
+**Status:** Phase 8 **code complete + polished locally** — not pushed. See [HANDOFF-PHASE8.md](HANDOFF-PHASE8.md).  
 **Guide:** [DEPLOY.md](DEPLOY.md) · jump-back [JUMPBACK.md](JUMPBACK.md)
 
 ---
@@ -38,9 +38,10 @@ data/pictures/{slug}/        Saved images (next to DATABASE_PATH)
 ## Operator sign-off still needed (Phase 8 live)
 
 - [ ] Admin tabs: Content listeners + Picture listeners
-- [ ] Start picture listener → post image in Discord → **🖼️** + file under `data/pictures/{slug}/`
-- [ ] Open `/slideshow/{slug}` (and `/slideshow/latest`) in browser / OBS — transparent bg, credit corner, reactions
+- [ ] Start picture listener → post image in Discord → **💾** + file under `data/pictures/{slug}/`
+- [ ] Open `/slideshow/{slug}` (and `/slideshow/latest`) in browser / OBS — transparent bg, credit corner, floaters (no bot 💾/DUPE/OLD/❌)
 - [ ] Same channel: content + picture listeners both live
+- [ ] Picture DUPE / OLD chrome matches content when re-ingest / previous epoch hits
 
 ## Parked (not Phase 8)
 
