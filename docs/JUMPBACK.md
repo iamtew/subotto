@@ -1,6 +1,6 @@
 # Jump-Back Point — Subotto (2026-09-08)
 
-**Phases 0–7 complete enough** — listeners, Admin, Linux package / deploy guide.  
+**Phases 0–8** — content + picture listeners, Admin tabs, public OBS slideshow, Linux package / deploy guide.  
 **PROD guide:** [DEPLOY.md](DEPLOY.md)  
 **Prior Phase 7 brief:** [HANDOFF-PHASE7.md](HANDOFF-PHASE7.md)  
 **Phase 6 context:** [HANDOFF-ADMIN-UI.md](HANDOFF-ADMIN-UI.md)
@@ -10,44 +10,54 @@
 ## 1. Operator notes
 
 ### Mental model
-1. **Listener** = one Discord channel under watch → one YouTube playlist (collection window / epoch)
-2. **START LISTENER** creates a **public** playlist; **CEASE** closes the epoch
-3. One live listener per channel; videos saved once per channel (won’t re-ingest after a new playlist)
-4. Resync stops at the previous epoch boundary
-5. ONLINE/OFFLINE Discord **notices** are global templates in Admin
-6. Port default **50770**; scheduler optional via `RESYNC_INTERVAL_HOURS` (usually `0`)
-7. PROD is headless: copy `.env` + `data/subotto.db` (YouTube refresh token is in the DB). Re-auth without a desktop = SSH tunnel cookbook in DEPLOY.md
+1. **Content listener** = Discord channel → YouTube playlist (collection window / epoch)
+2. **Picture listener** = Discord channel → images on disk under `data/pictures/{slug}/` + public slideshow
+3. **START** content listener creates a **public** playlist; **CEASE** closes the epoch
+4. One live content listener **and** one live picture listener may share the same channel
+5. Content resync stops at the previous content-listener epoch boundary
+6. ONLINE/OFFLINE Discord **notices** are global templates (content listeners) in Admin
+7. Public OBS overlay: `/slideshow/latest` or `/slideshow/{slug}` (no Basic Auth). Admin stays behind `admin` / `ADMIN_PASSWORD`
+8. Port default **50770**; scheduler optional via `RESYNC_INTERVAL_HOURS` (usually `0`)
+9. PROD is headless: copy `.env` + `data/` (DB + `pictures/`). Re-auth without a desktop = SSH tunnel cookbook in DEPLOY.md
 
 ### Commands
 ```text
 just run
 just auth-youtube
-just start-listen / list-listens / cease-listen   # aliases of mapping recipes
+just start-listen / list-listens / cease-listen
+just start-picture-listen / list-picture-listens / cease-picture-listen / resync-pictures
+just start-listen / list-listens / cease-listen
 just test / just build / just build-linux / just package-linux
 ```
 
-Admin: `http://localhost:50770` · `admin` / `ADMIN_PASSWORD`
+Admin: `http://localhost:50770` · `admin` / `ADMIN_PASSWORD`  
+Slideshow: `http://localhost:50770/slideshow/latest`
 
-Reactions: **💾** · **♻️ DUPE** · **🛑 OLD** · **❌**
+Content reacts: **💾** · **♻️ DUPE** · **🛑 OLD** · **❌**  
+Picture reacts: **🖼️** · **♻️ DUPE** · **❌**
 
 PROD: `just package-linux` → `dist/subotto-linux.zip` → [DEPLOY.md](DEPLOY.md)
+
+### Parked (later)
+- **Shows** — bi-weekly / scheduled listeners, show-runner Discord announce, richer automation
 
 ---
 
 ## 2. Agent notes
 
 - Keep docs and comments plain and beginner-friendly
-- Product terms: **listener**, start/cease listener, **notices** — SIGINT / ops desk flavor
+- Product terms: **content listener**, **picture listener**, start/cease, **notices**, public **slideshow**
 - Prefer voluntary / operator-owned language in copy — never name opposing ideologies
 - No Docker; commit only on request
-- Prefer `/api/listens`; keep legacy aliases working
-- Phase 7 delivered: `package-linux`, `deploy/subotto.service`, [DEPLOY.md](DEPLOY.md)
+- Prefer `/api/listens` and `/api/picture-listens`; keep legacy content aliases working
+- Public routes (no auth): `/slideshow/...`, `/api/slideshow/{slug}`, `/media/pictures/...`
 
 ### Architecture
 ```
 just run / just build-linux / just package-linux
-  → Discord gateway (listen → ingest → 💾 / ♻️DUPE / 🛑OLD / ❌)
-  → Admin (webroot + /api/*)
-  → optional scheduler
-  → notices on start/cease listener
+  → Discord gateway
+       content:  links → ingest → 💾 / ♻️DUPE / 🛑OLD / ❌
+       picture:  attachments → data/pictures/{slug}/ → 🖼️
+  → Admin (webroot + /api/* Basic Auth, tabs)
+  → Public slideshow (OBS Browser Source)
 ```

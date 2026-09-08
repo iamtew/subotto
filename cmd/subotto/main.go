@@ -40,8 +40,17 @@ func main() {
 	enableMapping := flag.String("enable-mapping", "", "Enable mapping for this Discord channel ID")
 	disableMapping := flag.String("disable-mapping", "", "Disable mapping for this Discord channel ID")
 	deleteMapping := flag.String("delete-mapping", "", "Delete mapping for this Discord channel ID")
-	resyncChannel := flag.String("resync-channel", "", "Rescan recent messages in this Discord channel")
+	resyncChannel := flag.String("resync-channel", "", "Rescan recent messages in this Discord channel (content / YouTube)")
 	resyncLimit := flag.Int("resync-limit", 100, "How many recent messages to scan (max 500)")
+	resyncPictureChannel := flag.String("resync-picture-channel", "", "Rescan recent messages for image attachments (picture listener)")
+
+	addPicChannel := flag.String("add-picture-channel", "", "Discord channel ID for a picture listener")
+	addPicName := flag.String("add-picture-name", "", "Picture listener name (becomes slideshow slug)")
+	addPicGuild := flag.String("add-picture-guild", "", "Optional Discord guild/server ID")
+	listPictureListens := flag.Bool("list-picture-listens", false, "List live picture listeners and exit")
+	enablePicture := flag.String("enable-picture", "", "Enable picture listener for this Discord channel ID")
+	disablePicture := flag.String("disable-picture", "", "Disable picture listener for this Discord channel ID")
+	deletePicture := flag.String("delete-picture", "", "Cease picture listener for this Discord channel ID")
 	flag.Parse()
 
 	cfg, err := config.Load()
@@ -109,6 +118,50 @@ func main() {
 	if *resyncChannel != "" {
 		if err := runResync(ctx, cfg, store, *resyncChannel, *resyncLimit); err != nil {
 			slog.Error("resync failed", "err", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if *resyncPictureChannel != "" {
+		if err := runPictureResync(ctx, cfg, store, *resyncPictureChannel, *resyncLimit); err != nil {
+			slog.Error("picture resync failed", "err", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if *listPictureListens {
+		if err := runListPictureListens(ctx, store); err != nil {
+			slog.Error("list picture listens failed", "err", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *enablePicture != "" {
+		if err := runSetPictureEnabled(ctx, store, *enablePicture, true); err != nil {
+			slog.Error("enable picture listener failed", "err", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *disablePicture != "" {
+		if err := runSetPictureEnabled(ctx, store, *disablePicture, false); err != nil {
+			slog.Error("disable picture listener failed", "err", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *deletePicture != "" {
+		if err := runDeletePicture(ctx, store, *deletePicture); err != nil {
+			slog.Error("cease picture listener failed", "err", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *addPicChannel != "" || *addPicName != "" {
+		if err := runAddPicture(ctx, cfg, store, *addPicChannel, *addPicName, *addPicGuild); err != nil {
+			slog.Error("add picture listener failed", "err", err)
 			os.Exit(1)
 		}
 		return
@@ -249,6 +302,95 @@ func runDeleteMapping(ctx context.Context, store *db.DB, channelID string) error
 	return nil
 }
 
+func runAddPicture(ctx context.Context, cfg *config.Config, store *db.DB, channelID, name, guildID string) error {
+	if channelID == "" || name == "" {
+		return errors.New("need both -add-picture-channel and -add-picture-name")
+	}
+	if guildID == "" {
+		guildID = cfg.DiscordGuildID
+	}
+	p, err := store.UpsertPictureListener(ctx, db.PictureListenerInput{
+		DiscordChannelID: channelID,
+		GuildID:          guildID,
+		Name:             name,
+		Enabled:          true,
+		CreditCorner:     db.CreditCornerBR,
+		IntervalSeconds:  8,
+		ShowCredit:       true,
+		ShowReactions:    true,
+	})
+	if err != nil {
+		return err
+	}
+	_ = store.LogActivity(ctx, "picture_listen_started", map[string]any{
+		"channel_id": p.DiscordChannelID,
+		"slug":       p.Slug,
+		"name":       p.Name,
+		"source":     "cli",
+	}, true)
+	slog.Info("picture listener saved",
+		"channel", p.DiscordChannelID,
+		"slug", p.Slug,
+		"name", p.Name,
+		"slideshow", "/slideshow/"+p.Slug,
+	)
+	return nil
+}
+
+func runListPictureListens(ctx context.Context, store *db.DB) error {
+	list, err := store.ListPictureListeners(ctx)
+	if err != nil {
+		return err
+	}
+	if len(list) == 0 {
+		fmt.Println("No picture listeners yet.")
+		fmt.Println("Add one with: just start-picture-listen DISCORD_CHANNEL_ID \"Show Name\"")
+		return nil
+	}
+	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+	fmt.Fprintln(w, "ID\tENABLED\tNAME\tSLUG\tCHANNEL\tGUILD")
+	for _, p := range list {
+		enabled := "yes"
+		if !p.Enabled {
+			enabled = "no"
+		}
+		fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\t%s\n",
+			p.ID, enabled, p.Name, p.Slug, p.DiscordChannelID, p.GuildID)
+	}
+	return w.Flush()
+}
+
+func runSetPictureEnabled(ctx context.Context, store *db.DB, channelID string, enabled bool) error {
+	p, err := store.SetPictureListenerEnabled(ctx, channelID, enabled)
+	if err != nil {
+		return err
+	}
+	state := "enabled"
+	if !enabled {
+		state = "disabled"
+	}
+	slog.Info("picture listener "+state, "channel", p.DiscordChannelID, "slug", p.Slug)
+	return nil
+}
+
+func runDeletePicture(ctx context.Context, store *db.DB, channelID string) error {
+	p, err := store.GetPictureListenerByChannel(ctx, channelID)
+	if err != nil {
+		return err
+	}
+	if err := store.DeletePictureListener(ctx, channelID); err != nil {
+		return err
+	}
+	details := map[string]any{"channel_id": channelID}
+	if p != nil {
+		details["slug"] = p.Slug
+		details["name"] = p.Name
+	}
+	_ = store.LogActivity(ctx, "picture_listen_ceased", details, true)
+	slog.Info("picture listener ceased", "channel", channelID)
+	return nil
+}
+
 func runResync(ctx context.Context, cfg *config.Config, store *db.DB, channelID string, limit int) error {
 	if cfg.DiscordBotToken == "" || cfg.DiscordBotToken == "your-discord-bot-token-here" {
 		return errors.New("DISCORD_BOT_TOKEN is required for resync — set it in .env")
@@ -275,6 +417,20 @@ func runResync(ctx context.Context, cfg *config.Config, store *db.DB, channelID 
 		return err
 	}
 	fmt.Printf("Resync done: scanned=%d %s\n", summary.MessagesScanned, summary.Result.String())
+	return nil
+}
+
+func runPictureResync(ctx context.Context, cfg *config.Config, store *db.DB, channelID string, limit int) error {
+	if cfg.DiscordBotToken == "" || cfg.DiscordBotToken == "your-discord-bot-token-here" {
+		return errors.New("DISCORD_BOT_TOKEN is required for picture resync — set it in .env")
+	}
+
+	slog.Info("starting picture channel resync", "channel", channelID, "limit", limit)
+	summary, err := discord.ResyncPictureChannel(ctx, cfg.DiscordBotToken, store, channelID, limit)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Picture resync done: scanned=%d %s\n", summary.MessagesScanned, summary.Result.String())
 	return nil
 }
 
@@ -329,7 +485,7 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 		slog.Info("channel mappings loaded", "count", mappings)
 	}
 
-	if err := store.LogActivity(ctx, "startup", map[string]any{"message": "Phase 6 boot", "phase": 6}, true); err != nil {
+	if err := store.LogActivity(ctx, "startup", map[string]any{"message": "Phase 8 boot", "phase": 8}, true); err != nil {
 		slog.Error("failed to write startup activity", "err", err)
 		os.Exit(1)
 	}
@@ -384,8 +540,9 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 	defer schedCancel()
 	go sched.Run(schedCtx)
 
-	slog.Info("listening for YouTube links in mapped channels — Ctrl+C to stop")
+	slog.Info("listening for content + picture listeners — Ctrl+C to stop")
 	slog.Info("Admin UI ready", "url", fmt.Sprintf("http://%s", admin.Addr()), "user", "admin")
+	slog.Info("public slideshow", "latest", fmt.Sprintf("http://%s/slideshow/latest", admin.Addr()))
 	if sched.Enabled() {
 		slog.Info("background resync enabled", "interval_hours", cfg.ResyncIntervalHours)
 	}

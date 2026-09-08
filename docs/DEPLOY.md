@@ -16,12 +16,15 @@ just package-linux
 Produces `dist/subotto-linux.zip` with:
 
 - `subotto-linux` — amd64 Linux binary  
-- `webroot/` — Admin UI  
+- `webroot/` — Admin UI **and** `webroot/slideshow/` (OBS overlay)  
 - `.env.example` — secret template  
 - `deploy/subotto.service` — sample systemd unit  
 - `docs/DEPLOY.md` — this guide  
 
-**Not in the zip:** live `.env` or `data/*.db` (copy those yourself).
+**Not in the zip:** live `.env` or `data/` (copy those yourself — DB **and** `data/pictures/` if you already collected images).
+
+Public slideshow URLs (no Basic Auth): `/slideshow/latest`, `/slideshow/{slug}`, `/media/pictures/...`.  
+If you put Caddy in front, proxy the whole port (Admin + public slideshow) or expose slideshow paths publicly and keep Admin locked down as you prefer.
 
 ---
 
@@ -35,9 +38,13 @@ You already authorized on Windows; the refresh token lives in SQLite, not in `.e
 | Table | Role |
 |-------|------|
 | `oauth_tokens` | YouTube **refresh** token (must travel somehow) |
-| `channel_mappings` | Listeners / epochs |
-| `processed_videos` | Dedup history |
+| `channel_mappings` | Content listeners / epochs |
+| `processed_videos` | Content dedup history |
+| `picture_listeners` | Picture listeners / epochs |
+| `collected_pictures` | Saved image metadata (+ reactions) |
 | `activity_log` / `app_settings` | Ops / settings |
+
+Also copy **`data/pictures/`** if present — image files for picture listeners live there (next to the DB).
 
 `.env` still holds Discord bot token + YouTube **client** ID/secret. Same Discord/Google apps — no re-registration.
 

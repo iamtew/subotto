@@ -19,7 +19,9 @@ import (
 
 // DB wraps *sql.DB with Subotto-specific helpers.
 type DB struct {
-	sql *sql.DB
+	sql         *sql.DB
+	path        string // absolute-ish path to the SQLite file
+	picturesDir string // on-disk gallery root: <data dir>/pictures
 }
 
 // Open creates the parent directory if needed, opens SQLite, and runs migrations.
@@ -29,6 +31,12 @@ func Open(path string) (*DB, error) {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return nil, fmt.Errorf("create database directory %q: %w", dir, err)
 		}
+	}
+
+	// Picture listener files live next to the DB: data/pictures/{slug}/…
+	picturesDir := filepath.Join(dir, "pictures")
+	if err := os.MkdirAll(picturesDir, 0o755); err != nil {
+		return nil, fmt.Errorf("create pictures directory %q: %w", picturesDir, err)
 	}
 
 	// _pragma=foreign_keys(1) turns on foreign keys for this connection.
@@ -46,12 +54,20 @@ func Open(path string) (*DB, error) {
 		return nil, fmt.Errorf("ping sqlite: %w", err)
 	}
 
-	d := &DB{sql: sqlDB}
+	d := &DB{sql: sqlDB, path: path, picturesDir: picturesDir}
 	if err := d.migrate(); err != nil {
 		_ = sqlDB.Close()
 		return nil, fmt.Errorf("migrate schema: %w", err)
 	}
 	return d, nil
+}
+
+// PicturesDir is the host folder where picture listeners store image files.
+func (d *DB) PicturesDir() string {
+	if d == nil {
+		return ""
+	}
+	return d.picturesDir
 }
 
 // Close shuts down the database connection.
@@ -109,6 +125,36 @@ CREATE TABLE IF NOT EXISTS app_settings (
 	value TEXT NOT NULL,
 	updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS picture_listeners (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	discord_channel_id TEXT NOT NULL,
+	guild_id TEXT NOT NULL DEFAULT '',
+	name TEXT NOT NULL DEFAULT '',
+	slug TEXT NOT NULL,
+	enabled INTEGER NOT NULL DEFAULT 1,
+	credit_corner TEXT NOT NULL DEFAULT 'br',
+	interval_seconds INTEGER NOT NULL DEFAULT 8,
+	shuffle INTEGER NOT NULL DEFAULT 0,
+	show_credit INTEGER NOT NULL DEFAULT 1,
+	show_reactions INTEGER NOT NULL DEFAULT 1,
+	created_at TEXT NOT NULL DEFAULT (datetime('now')),
+	active_from TEXT NOT NULL DEFAULT (datetime('now')),
+	active_until TEXT
+);
+
+CREATE TABLE IF NOT EXISTS collected_pictures (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	listener_id INTEGER NOT NULL,
+	discord_message_id TEXT NOT NULL,
+	discord_attachment_id TEXT NOT NULL,
+	author_id TEXT NOT NULL DEFAULT '',
+	author_display_name TEXT NOT NULL DEFAULT '',
+	stored_path TEXT NOT NULL,
+	content_type TEXT NOT NULL DEFAULT '',
+	collected_at TEXT NOT NULL DEFAULT (datetime('now')),
+	reactions_json TEXT NOT NULL DEFAULT '{}'
+);
 `
 	if _, err := d.sql.Exec(schema); err != nil {
 		return err
@@ -150,7 +196,39 @@ func (d *DB) migrateUpgrades() error {
 		return fmt.Errorf("create active-channel unique index: %w", err)
 	}
 
-	return d.migrateProcessedVideosChannelScope()
+	if err := d.migrateProcessedVideosChannelScope(); err != nil {
+		return err
+	}
+	return d.migratePictureListenerIndexes()
+}
+
+// migratePictureListenerIndexes ensures unique constraints for live picture listeners.
+func (d *DB) migratePictureListenerIndexes() error {
+	if _, err := d.sql.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_picture_listeners_active_channel
+		ON picture_listeners (discord_channel_id) WHERE active_until IS NULL
+	`); err != nil {
+		return fmt.Errorf("create picture active-channel unique index: %w", err)
+	}
+	if _, err := d.sql.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_picture_listeners_active_slug
+		ON picture_listeners (slug) WHERE active_until IS NULL
+	`); err != nil {
+		return fmt.Errorf("create picture active-slug unique index: %w", err)
+	}
+	if _, err := d.sql.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_collected_pictures_listener_attachment
+		ON collected_pictures (listener_id, discord_attachment_id)
+	`); err != nil {
+		return fmt.Errorf("create collected_pictures unique index: %w", err)
+	}
+	if _, err := d.sql.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_collected_pictures_listener
+		ON collected_pictures (listener_id, id)
+	`); err != nil {
+		return fmt.Errorf("create collected_pictures listener index: %w", err)
+	}
+	return nil
 }
 
 func (d *DB) migrateProcessedVideosChannelScope() error {
@@ -229,10 +307,10 @@ func (d *DB) tableColumns(table string) (map[string]bool, error) {
 
 // ---------- Types Meat Bag will see in later phases ----------
 
-// ChannelMapping is one Discord channel → YouTube playlist *listener* epoch.
+// ChannelMapping is one Discord channel → YouTube playlist *content listener* epoch.
 // Meat Bag: you flip epochs in the Admin UI whenever you want (fortnight,
-// three weeks, whatever). Only one listener can be live per channel at a time —
-// voluntary and exclusive — only Meat Bag flips the collection window.
+// three weeks, whatever). Only one content listener can be live per channel —
+// a picture listener may also be live on the same channel at the same time.
 type ChannelMapping struct {
 	ID                int64
 	DiscordChannelID  string

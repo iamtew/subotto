@@ -2,8 +2,8 @@
 
 **Date:** 2026-09-08  
 **Branch:** `master`  
-**Status:** Phase 7 **shipped** — Linux package + deploy guide.  
-**Guide:** [DEPLOY.md](DEPLOY.md) · prior brief [HANDOFF-PHASE7.md](HANDOFF-PHASE7.md)
+**Status:** Phase 8 **in progress / code complete** — content + picture listeners, OBS slideshow, Admin tabs.  
+**Guide:** [DEPLOY.md](DEPLOY.md) · jump-back [JUMPBACK.md](JUMPBACK.md)
 
 ---
 
@@ -13,54 +13,40 @@
 |--------|--------|--------|
 | 0–5 | Core bot + Admin | Verified live DEV |
 | 6a | Scheduler + port 50770 | Shipped |
-| 6b | Listeners + ops desk UI | Dark digicam Admin, public playlists, epochs, notices, DUPE/OLD reacts, channel names, START confirm |
+| 6b | Content listeners + ops desk UI | Dark digicam Admin, public playlists, epochs, notices, DUPE/OLD reacts |
 | 7 | Linux package / deploy | `just package-linux`, sample systemd, headless + SSH-tunnel docs |
+| 8 | Picture listeners + OBS slideshow | Parallel picture epochs, `data/pictures/`, public `/slideshow/{slug\|latest}`, Admin tabs |
 
 ## Key paths
 
 ```
-cmd/subotto/main.go          Entry: run (bot + admin + scheduler) / auth / mapping CLI / resync
-internal/scheduler/          Optional interval re-scans of enabled mappings
-internal/web/                HTTP server, Basic Auth, JSON API
-webroot/                     Admin UI (index.html, css/, js/)
-internal/db/                 SQLite + mappings + activity + notice settings
-internal/ingest/             Shared live + resync pipeline (SkippedSame / SkippedOld)
-internal/discord/            Bot + REST resync + catalog + notices
-internal/youtube/            OAuth client; CreatePlaylist → public
-justfile                     run, build, build-linux, package-linux, auth-youtube, listener CRUD, resync
-scripts/package-linux.ps1    Zip staging for dist/subotto-linux.zip
-deploy/subotto.service       Sample systemd unit
-docs/DEPLOY.md               PROD cutover, SSH-tunnel YouTube auth, backup
-docs/DEV-VERIFY.md           DEV startup guide
+cmd/subotto/main.go          Entry: run / auth / content + picture CLI / resync
+internal/pictures/           Discord attachment download + save
+internal/db/pictures.go      picture_listeners + collected_pictures
+internal/web/slideshow.go    Public slideshow + media (no Basic Auth)
+internal/web/picture_api.go  Admin /api/picture-listens
+webroot/slideshow/           OBS overlay HTML/CSS/JS
+webroot/                     Admin UI (tabs: content | pictures)
+data/pictures/{slug}/        Saved images (next to DATABASE_PATH)
 ```
 
 ## Verified — code
 
-- `just test` — parser, youtube errors, db mappings, ingest, web API, scheduler, announce  
+- `just test` — parser, youtube, db (mappings + pictures), ingest, pictures package, web API (incl. public slideshow), scheduler, announce  
 - `just build` — Windows binary builds  
-- `just build-linux` / `just package-linux` — Linux binary + `dist/subotto-linux.zip`  
 
-## Verified — live DEV (operator sign-off, 2026-09-07+)
+## Operator sign-off still needed (Phase 8 live)
 
-Acceptance from [DEV-VERIFY.md](DEV-VERIFY.md) for Phases 0–5, plus Phase 6 product use:
+- [ ] Admin tabs: Content listeners + Picture listeners
+- [ ] Start picture listener → post image in Discord → **🖼️** + file under `data/pictures/{slug}/`
+- [ ] Open `/slideshow/{slug}` (and `/slideshow/latest`) in browser / OBS — transparent bg, credit corner, reactions
+- [ ] Same channel: content + picture listeners both live
 
-- [x] Discord bot token + **Message Content Intent** + bot invited  
-- [x] Google Cloud: YouTube Data API v3 + OAuth client + redirect + test user  
-- [x] Real `ADMIN_PASSWORD` in `.env`  
-- [x] `just auth-youtube` once  
-- [x] `just run` → Admin UI → listener → paste YouTube link → **💾** + playlist update  
-- [x] Reactions work (Add Reactions permission)  
-- [x] Phase 6 Admin polish (listeners, notices, digicam, public playlists) in daily use  
+## Parked (not Phase 8)
 
-Phase 6 live check (optional): set a small `RESYNC_INTERVAL_HOURS` in DEV and confirm scheduled activity rows; leave at `0` for normal use.
-
-Default Admin/OAuth port is **50770**.
+- **Shows** — bi-weekly listeners, Discord announce-as-show-runner, richer scheduling
+- Deeper overlay polish (fonts, transitions, emoji filters)
 
 ## PROD checklist
 
-Follow [DEPLOY.md](DEPLOY.md): package → copy `.env` + `data/subotto.db` → stop DEV → run on VPS → optional systemd/Caddy.
-
-## Optional leftovers (not blocking)
-
-- Admin notice **preview** before save (only if requested)  
-- Public `/healthz` without Basic Auth  
+Follow [DEPLOY.md](DEPLOY.md): package → copy `.env` + `data/` (DB **and** `pictures/`) → run on VPS → optional Caddy for public slideshow TLS.

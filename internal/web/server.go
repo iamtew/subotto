@@ -1,8 +1,7 @@
-// Package web serves Subotto's Admin UI and JSON API.
+// Package web serves Subotto's Admin UI, JSON API, and public OBS slideshow.
 //
-// Meat Bag: when Subotto is running, open http://localhost:50770 (or whatever
-// ADMIN_HOST / ADMIN_PORT you set). The browser will ask for a username and
-// password — use username "admin" and the ADMIN_PASSWORD from your .env.
+// Meat Bag: Admin is http://localhost:50770 (Basic Auth: admin / ADMIN_PASSWORD).
+// Public slideshow (no password): /slideshow/latest or /slideshow/{slug}.
 package web
 
 import (
@@ -115,8 +114,10 @@ func New(opts Options) (*Server, error) {
 	}
 
 	mux := http.NewServeMux()
+	s.registerPublic(mux) // OBS slideshow — no Basic Auth
 	s.registerAPI(mux)
-	// Static files last — "/" catches everything else under webroot.
+	s.registerPictureAPI(mux)
+	// Static Admin files last — "/" catches everything else under webroot (auth’d).
 	fileServer := http.FileServer(http.Dir(s.webroot))
 	mux.Handle("/", s.basicAuth(fileServer))
 
@@ -135,7 +136,7 @@ func (s *Server) Addr() string {
 
 // Start begins listening. Blocks until the server stops; run it in a goroutine.
 func (s *Server) Start() error {
-	slog.Info("admin UI listening", "addr", s.addr, "webroot", s.webroot)
+	slog.Info("HTTP listening", "addr", s.addr, "webroot", s.webroot, "public", "/slideshow/...")
 	err := s.httpServer.ListenAndServe()
 	if err == http.ErrServerClosed {
 		return nil

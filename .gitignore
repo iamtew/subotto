@@ -11,6 +11,10 @@ data/*.db-journal
 data/*.db-wal
 data/*.db-shm
 
+# Picture listener gallery files (keep data/pictures/.gitkeep)
+data/pictures/**
+!data/pictures/.gitkeep
+
 # OAuth / token files Clanker may write later
 data/token.json
 data/youtube-token.json

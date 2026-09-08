@@ -140,9 +140,12 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		sched = s.scheduler.Info()
 	}
 
+	picsTotal, _ := s.store.CountPictureListeners(ctx)
+	picsEnabled, _ := s.store.CountEnabledPictureListeners(ctx)
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":                 true,
-		"phase":              6,
+		"phase":              8,
 		"started_at":         s.startedAt.Format(time.RFC3339),
 		"discord_connected":  discordOK,
 		"youtube_authorized": hasTok,
@@ -153,6 +156,8 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"airs_enabled":       enabled,
 		"listens_total":      mappings,
 		"listens_enabled":    enabled,
+		"picture_listens_total":   picsTotal,
+		"picture_listens_enabled": picsEnabled,
 		"activity_total":     activity,
 		"listen_addr":        s.addr,
 		"resync_interval_hours": sched.IntervalHours,

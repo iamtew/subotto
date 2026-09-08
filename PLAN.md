@@ -10,7 +10,9 @@ Keep docs and comments plain and beginner-friendly.
 
 **No Docker.** Build and run native Go binaries using **Just** (justfile) as the classic build system.
 
-**Status:** Phases 0–7 are shipped. This document remains the architecture and phased history. See [docs/PROGRESS.md](docs/PROGRESS.md) and [docs/DEPLOY.md](docs/DEPLOY.md) for current status and deploy steps.
+**Status:** Phases 0–8 shipped in code (Phase 8 = content + picture listeners + OBS slideshow). This document remains the architecture and phased history. See [docs/PROGRESS.md](docs/PROGRESS.md) and [docs/DEPLOY.md](docs/DEPLOY.md) for current status and deploy steps.
+
+**Parked (post–Phase 8):** **shows** — bi-weekly / scheduled listeners, richer Discord announce automation, show-runner features. Not in scope until Meat Bag picks them up.
 
 ---
 

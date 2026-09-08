@@ -1,31 +1,64 @@
 /* Subotto Admin UI — vanilla JS for a sovereign Meat Bag.
    Talks to /api/... with browser Basic Auth (collected on page load).
-   Product language: LISTENERS (start listener / cease listener). */
+   Product language: content listeners + picture listeners (expandable tabs). */
 
-/* ---------- Digital camo backdrop (noise → quantized pixels, no tile) ----------
-   Meat Bag: woodland digicam like your refs — small pixels, irregular clusters,
-   one big canvas so it does not wallpaper-repeat across the screen. */
+/* ---------- Expandable tab registry ----------
+   Meat Bag: to add a future tab, push { id, label } here and add a
+   matching #tab-{id} panel in index.html. */
+const TAB_REGISTRY = [
+  { id: "content", label: "Content listeners" },
+  { id: "pictures", label: "Picture listeners" },
+];
+
+function initTabs() {
+  const bar = document.getElementById("tab-bar");
+  const saved = localStorage.getItem("subotto_admin_tab") || "content";
+  bar.innerHTML = TAB_REGISTRY.map((t) => {
+    const sel = t.id === saved ? "true" : "false";
+    return `<button type="button" class="tab-btn" role="tab" id="tabbtn-${t.id}"
+      data-tab="${t.id}" aria-selected="${sel}" aria-controls="tab-${t.id}">${t.label}</button>`;
+  }).join("");
+
+  bar.addEventListener("click", (ev) => {
+    const btn = ev.target.closest("[data-tab]");
+    if (!btn) return;
+    activateTab(btn.getAttribute("data-tab"));
+  });
+
+  activateTab(TAB_REGISTRY.some((t) => t.id === saved) ? saved : TAB_REGISTRY[0].id);
+}
+
+function activateTab(id) {
+  localStorage.setItem("subotto_admin_tab", id);
+  document.querySelectorAll(".tab-btn").forEach((btn) => {
+    btn.setAttribute("aria-selected", btn.getAttribute("data-tab") === id ? "true" : "false");
+  });
+  document.querySelectorAll(".tab-panel").forEach((panel) => {
+    panel.hidden = panel.getAttribute("data-tab") !== id;
+  });
+}
+
+/* ---------- Digital camo backdrop (noise → quantized pixels, no tile) ---------- */
 function paintDigicam() {
   const el = document.querySelector(".bg-camo");
   if (!el) return;
 
-  const cell = 7; // digicam block size in CSS px (bigger = chunkier camo)
+  const cell = 7;
   const w = Math.max(window.innerWidth, document.documentElement.clientWidth, 1280);
   const h = Math.max(window.innerHeight, document.documentElement.clientHeight, 800);
   const gw = Math.ceil(w / cell);
   const gh = Math.ceil(h / cell);
 
-  // Weighted toward darks; sparse olive / violet so panels stay readable.
   const palette = [
-    [12, 15, 11], // bg-input
-    [16, 20, 15], // bg0
-    [22, 27, 20], // between bg0/bg1
-    [26, 33, 24], // bg-panel
-    [45, 53, 40], // line
-    [108, 117, 74], // dusty olive
-    [154, 172, 98], // muted olive
-    [102, 102, 102], // gray
-    [134, 0, 223], // royal violet (rare)
+    [12, 15, 11],
+    [16, 20, 15],
+    [22, 27, 20],
+    [26, 33, 24],
+    [45, 53, 40],
+    [108, 117, 74],
+    [154, 172, 98],
+    [102, 102, 102],
+    [134, 0, 223],
   ];
 
   function hash2(x, y) {
@@ -48,7 +81,6 @@ function paintDigicam() {
     return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
   }
 
-  // Fractal noise → irregular blotches like military digicam.
   function fbm(x, y) {
     let v = 0;
     let amp = 0.55;
@@ -62,7 +94,7 @@ function paintDigicam() {
   }
 
   function pickColor(n, accent) {
-    if (accent > 0.965) return palette[8]; // rare violet fleck
+    if (accent > 0.965) return palette[8];
     if (n < 0.18) return palette[0];
     if (n < 0.32) return palette[1];
     if (n < 0.46) return palette[2];
@@ -80,7 +112,6 @@ function paintDigicam() {
   const img = lctx.createImageData(gw, gh);
   const data = img.data;
 
-  // Slightly stretch X so clusters lean horizontal (classic digicam vibe).
   const scaleX = 0.085;
   const scaleY = 0.11;
   for (let y = 0; y < gh; y++) {
@@ -181,8 +212,9 @@ function fmtDetails(details) {
 }
 
 let lastResyncChannel = "";
-// Latest listens from /api/listens — used for START confirm + channel labels.
+let lastPictureResyncChannel = "";
 let cachedListens = [];
+let cachedPictureListens = [];
 
 function channelLabel(m) {
   if (!m) return "";
@@ -208,8 +240,26 @@ function fillResyncSelect(listens) {
   }
 }
 
-async function loadGuilds() {
-  const sel = document.getElementById("guild-select");
+function fillPictureResyncSelect(listens) {
+  const sel = document.getElementById("picture-resync-channel");
+  if (!sel) return;
+  const prev = sel.value || lastPictureResyncChannel;
+  const options = ['<option value="">— select picture listener —</option>'];
+  for (const p of listens || []) {
+    const off = p.enabled ? "" : " (paused)";
+    const ch = channelLabel(p);
+    const label = (p.name ? p.name + " · " : "") + ch + " · " + (p.slug || "") + off;
+    options.push(
+      `<option value="${esc(p.discord_channel_id)}">${esc(label)}</option>`
+    );
+  }
+  sel.innerHTML = options.join("");
+  if (prev && [...sel.options].some((o) => o.value === prev)) {
+    sel.value = prev;
+  }
+}
+
+async function fillGuildSelect(sel) {
   try {
     const data = await api("/api/discord/guilds");
     const guilds = data.guilds || [];
@@ -227,8 +277,15 @@ async function loadGuilds() {
   }
 }
 
-async function loadChannelsForGuild(guildID) {
-  const sel = document.getElementById("channel-select");
+async function loadGuilds() {
+  await Promise.all([
+    fillGuildSelect(document.getElementById("guild-select")),
+    fillGuildSelect(document.getElementById("pic-guild-select")),
+  ]);
+}
+
+async function loadChannelsForGuild(guildID, channelSelectId) {
+  const sel = document.getElementById(channelSelectId);
   if (!guildID) {
     sel.disabled = true;
     sel.innerHTML = `<option value="">— pick a server first —</option>`;
@@ -260,10 +317,13 @@ async function loadStatus() {
     const s = await api("/api/status");
     const on = s.listens_enabled ?? s.airs_enabled ?? s.mappings_enabled;
     const tot = s.listens_total ?? s.airs_total ?? s.mappings_total;
+    const picOn = s.picture_listens_enabled ?? 0;
+    const picTot = s.picture_listens_total ?? 0;
     host.replaceChildren(
       pill(s.discord_connected ? "discord up" : "discord down", !!s.discord_connected),
       pill(s.youtube_authorized ? "youtube ok" : "youtube missing", !!s.youtube_authorized),
-      pill(`listen ${on}/${tot}`, true),
+      pill(`content ${on}/${tot}`, true),
+      pill(`pics ${picOn}/${picTot}`, true),
       pill(`log ${s.activity_total}`, "muted")
     );
     if (s.youtube_channel) {
@@ -293,7 +353,7 @@ async function loadListens() {
     cachedListens = rows;
     fillResyncSelect(rows);
     if (!rows.length) {
-      tbody.innerHTML = `<tr><td colspan="6" class="empty">no listeners — start listener above</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="empty">no content listeners — start one above</td></tr>`;
       return;
     }
     tbody.innerHTML = rows
@@ -326,6 +386,55 @@ async function loadListens() {
   } catch (err) {
     cachedListens = [];
     tbody.innerHTML = `<tr><td colspan="6" class="empty">failed: ${esc(err.message)}</td></tr>`;
+  }
+}
+
+async function loadPictureListens() {
+  const tbody = document.querySelector("#picture-listens-table tbody");
+  try {
+    const data = await api("/api/picture-listens");
+    const rows = data.picture_listens || [];
+    cachedPictureListens = rows;
+    fillPictureResyncSelect(rows);
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="7" class="empty">no picture listeners — start one above</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = rows
+      .map((p) => {
+        const ch = esc(p.discord_channel_id);
+        const chLabel = p.discord_channel_name
+          ? `#${esc(p.discord_channel_name)}`
+          : ch;
+        const state = p.enabled
+          ? `<span class="state-on">LISTENING</span>`
+          : `<span class="state-off">PAUSED</span>`;
+        const since = p.active_from ? new Date(p.active_from).toLocaleString() : "—";
+        const url = p.slideshow_url || ("/slideshow/" + p.slug);
+        return `<tr>
+          <td>${esc(p.name) || "—"}<br><span class="mono">${esc(p.slug)}</span></td>
+          <td class="mono" title="${ch}">${chLabel}</td>
+          <td class="mono">${esc(p.picture_count)}</td>
+          <td><a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a></td>
+          <td class="mono">${esc(since)}</td>
+          <td>${state}</td>
+          <td class="actions">
+            <button type="button" class="secondary" data-pact="settings" data-channel="${ch}"
+              data-corner="${esc(p.credit_corner)}" data-interval="${esc(p.interval_seconds)}"
+              data-shuffle="${p.shuffle}" data-credit="${p.show_credit}" data-reactions="${p.show_reactions}">Settings</button>
+            <button type="button" class="secondary" data-pact="toggle" data-channel="${ch}" data-enabled="${p.enabled}">
+              ${p.enabled ? "Pause" : "Resume"}
+            </button>
+            <button type="button" class="secondary" data-pact="resync" data-channel="${ch}">Resync</button>
+            <button type="button" class="danger" data-pact="delete" data-channel="${ch}">Cease</button>
+          </td>
+        </tr>`;
+      })
+      .join("");
+  } catch (err) {
+    cachedPictureListens = [];
+    fillPictureResyncSelect([]);
+    tbody.innerHTML = `<tr><td colspan="7" class="empty">failed: ${esc(err.message)}</td></tr>`;
   }
 }
 
@@ -369,11 +478,14 @@ async function loadAnnounce() {
 }
 
 async function refreshAll() {
-  await Promise.all([loadStatus(), loadListens(), loadActivity()]);
+  await Promise.all([loadStatus(), loadListens(), loadPictureListens(), loadActivity()]);
 }
 
 document.getElementById("guild-select").addEventListener("change", (ev) => {
-  loadChannelsForGuild(ev.target.value);
+  loadChannelsForGuild(ev.target.value, "channel-select");
+});
+document.getElementById("pic-guild-select").addEventListener("change", (ev) => {
+  loadChannelsForGuild(ev.target.value, "pic-channel-select");
 });
 
 document.getElementById("listen-form").addEventListener("submit", async (ev) => {
@@ -388,8 +500,6 @@ document.getElementById("listen-form").addEventListener("submit", async (ev) => 
     enabled: fd.get("enabled") === "on",
   };
 
-  // Meat Bag: starting again on a live channel soft-closes the old epoch and
-  // creates a new playlist — confirm so we do not orphan by accident.
   const existing = cachedListens.find(
     (m) => m.discord_channel_id === body.discord_channel_id
   );
@@ -397,7 +507,7 @@ document.getElementById("listen-form").addEventListener("submit", async (ev) => 
     const ch = channelLabel(existing);
     const codename = existing.name ? ` (“${existing.name}”)` : "";
     const ok = confirm(
-      `Channel ${ch} already has a live listener${codename}. ` +
+      `Channel ${ch} already has a live content listener${codename}. ` +
         "Starting again closes that epoch and creates a new YouTube playlist. Continue?"
     );
     if (!ok) return;
@@ -412,10 +522,63 @@ document.getElementById("listen-form").addEventListener("submit", async (ev) => 
     document.getElementById("channel-select").innerHTML =
       `<option value="">— pick a server first —</option>`;
     await loadGuilds();
-    toast("listener · " + (m.youtube_playlist_id || "ok"));
+    toast("content listener · " + (m.youtube_playlist_id || "ok"));
     await refreshAll();
   } catch (err) {
-    toast("start listener failed: " + err.message, true);
+    toast("start content listener failed: " + err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("picture-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const fd = new FormData(ev.target);
+  const btn = ev.target.querySelector('button[type="submit"]');
+  const body = {
+    name: fd.get("name") || "",
+    guild_id: fd.get("guild_id") || "",
+    discord_channel_id: fd.get("discord_channel_id"),
+    credit_corner: fd.get("credit_corner") || "br",
+    interval_seconds: Number(fd.get("interval_seconds") || 8),
+    shuffle: fd.get("shuffle") === "on",
+    show_credit: fd.get("show_credit") === "on",
+    show_reactions: fd.get("show_reactions") === "on",
+    enabled: fd.get("enabled") === "on",
+  };
+
+  const existing = cachedPictureListens.find(
+    (m) => m.discord_channel_id === body.discord_channel_id
+  );
+  if (existing) {
+    const ch = channelLabel(existing);
+    const ok = confirm(
+      `Channel ${ch} already has a live picture listener (“${existing.name}” / ${existing.slug}). ` +
+        "Starting with a new name/slug closes that epoch. Continue?"
+    );
+    if (!ok) return;
+  }
+
+  btn.disabled = true;
+  try {
+    const data = await api("/api/picture-listens", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    const p = data.picture_listen || {};
+    ev.target.reset();
+    ev.target.querySelector('[name="enabled"]').checked = true;
+    ev.target.querySelector('[name="show_credit"]').checked = true;
+    ev.target.querySelector('[name="show_reactions"]').checked = true;
+    ev.target.querySelector('[name="interval_seconds"]').value = "8";
+    document.getElementById("pic-channel-select").disabled = true;
+    document.getElementById("pic-channel-select").innerHTML =
+      `<option value="">— pick a server first —</option>`;
+    await loadGuilds();
+    toast("picture listener · /slideshow/" + (p.slug || "ok"));
+    await refreshAll();
+  } catch (err) {
+    toast("start picture listener failed: " + err.message, true);
   } finally {
     btn.disabled = false;
   }
@@ -464,11 +627,11 @@ document.getElementById("listens-table").addEventListener("click", async (ev) =>
         method: "PATCH",
         body: JSON.stringify({ enabled: !enabled }),
       });
-      toast(enabled ? "listener paused" : "listener resumed");
+      toast(enabled ? "content listener paused" : "content listener resumed");
     } else if (act === "delete") {
-      if (!confirm("Cease listener on channel " + channel + "? (epoch closes; history kept)")) return;
+      if (!confirm("Cease content listener on channel " + channel + "? (epoch closes; history kept)")) return;
       await api("/api/listens/" + encodeURIComponent(channel), { method: "DELETE" });
-      toast("listener offline");
+      toast("content listener offline");
     } else if (act === "resync") {
       lastResyncChannel = channel;
       const sel = document.getElementById("resync-channel");
@@ -481,6 +644,63 @@ document.getElementById("listens-table").addEventListener("click", async (ev) =>
       sel.value = channel;
       document.getElementById("resync-section").scrollIntoView({ behavior: "smooth", block: "center" });
       return;
+    }
+    await refreshAll();
+  } catch (err) {
+    toast(err.message, true);
+  }
+});
+
+document.getElementById("picture-listens-table").addEventListener("click", async (ev) => {
+  const btn = ev.target.closest("button[data-pact]");
+  if (!btn) return;
+  const channel = btn.getAttribute("data-channel");
+  const act = btn.getAttribute("data-pact");
+  try {
+    if (act === "toggle") {
+      const enabled = btn.getAttribute("data-enabled") === "true";
+      await api("/api/picture-listens/" + encodeURIComponent(channel), {
+        method: "PATCH",
+        body: JSON.stringify({ enabled: !enabled }),
+      });
+      toast(enabled ? "picture listener paused" : "picture listener resumed");
+    } else if (act === "delete") {
+      if (!confirm("Cease picture listener on channel " + channel + "? (epoch closes; saved pics stay on disk)")) return;
+      await api("/api/picture-listens/" + encodeURIComponent(channel), { method: "DELETE" });
+      toast("picture listener offline");
+    } else if (act === "resync") {
+      lastPictureResyncChannel = channel;
+      const sel = document.getElementById("picture-resync-channel");
+      if (sel) {
+        if (![...sel.options].some((o) => o.value === channel)) {
+          const opt = document.createElement("option");
+          opt.value = channel;
+          opt.textContent = channel;
+          sel.appendChild(opt);
+        }
+        sel.value = channel;
+      }
+      document.getElementById("picture-resync-section").scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    } else if (act === "settings") {
+      const corner = prompt("Credit corner (tl/tr/bl/br):", btn.getAttribute("data-corner") || "br");
+      if (corner === null) return;
+      const intervalRaw = prompt("Advance seconds:", btn.getAttribute("data-interval") || "8");
+      if (intervalRaw === null) return;
+      const shuffle = confirm("Shuffle images? OK = yes, Cancel = no");
+      const showCredit = confirm("Show submitter name? OK = yes, Cancel = no");
+      const showReactions = confirm("Show reactions? OK = yes, Cancel = no");
+      await api("/api/picture-listens/" + encodeURIComponent(channel), {
+        method: "PATCH",
+        body: JSON.stringify({
+          credit_corner: corner.trim() || "br",
+          interval_seconds: Number(intervalRaw) || 8,
+          shuffle,
+          show_credit: showCredit,
+          show_reactions: showReactions,
+        }),
+      });
+      toast("slideshow settings saved");
     }
     await refreshAll();
   } catch (err) {
@@ -527,6 +747,46 @@ document.getElementById("resync-channel").addEventListener("change", (ev) => {
   lastResyncChannel = ev.target.value || "";
 });
 
+document.getElementById("picture-resync-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const fd = new FormData(ev.target);
+  const channel = fd.get("channel_id");
+  if (!channel) {
+    toast("pick a picture listener", true);
+    return;
+  }
+  lastPictureResyncChannel = String(channel);
+  const out = document.getElementById("picture-resync-result");
+  const btn = ev.target.querySelector('button[type="submit"]');
+  out.hidden = false;
+  out.classList.remove("err");
+  out.textContent = "running…";
+  btn.disabled = true;
+  try {
+    const data = await api("/api/picture-resync", {
+      method: "POST",
+      body: JSON.stringify({
+        channel_id: channel,
+        limit: Number(fd.get("limit") || 100),
+      }),
+    });
+    out.textContent = `scanned=${data.messages_scanned} saved=${data.saved} skipped=${data.skipped} failed=${data.failed}`;
+    toast("picture resync done");
+    await refreshAll();
+  } catch (err) {
+    out.classList.add("err");
+    out.textContent = err.message;
+    toast(err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("picture-resync-channel").addEventListener("change", (ev) => {
+  lastPictureResyncChannel = ev.target.value || "";
+});
+
+initTabs();
 loadGuilds();
 loadAnnounce();
 refreshAll();

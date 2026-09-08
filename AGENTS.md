@@ -15,12 +15,17 @@
 
 - Write code, structure the project, add heavy comments aimed at beginners, and explain decisions in plain English.
 - Keep docs and comments plain and beginner-friendly. No unexplained magic.
-- Product language: a channel↔playlist link is a **Listener** (**start listener** / **cease listener**). One live listener per channel. Collection-window length is the operator’s choice — SIGINT vibe, not broadcast.
+- Product language:
+  - **Content listener** — Discord channel → YouTube playlist (**start** / **cease**). One live content listener per channel.
+  - **Picture listener** — Discord channel → on-disk images + public OBS slideshow. One live picture listener per channel.
+  - Both types may be live on the **same channel at once**.
+  - Collection-window length is the operator’s choice — SIGINT vibe, not broadcast.
+- Future (parked): **shows** (bi-weekly schedules), richer Discord announce automation, show-runner features — pick up outside Phase 8.
 - Priorities:
   1. Working, simple, maintainable code over cleverness
-  2. Clear configuration and flexibility (channel → playlist listeners)
+  2. Clear configuration and flexibility (content + picture listeners)
   3. Classic local development with **Just** (justfile) as the build system
-  4. A simple integrated web server that serves a plain HTML/CSS/JS Admin UI from a `webroot/` folder
+  4. A simple integrated web server that serves a plain HTML/CSS/JS Admin UI from a `webroot/` folder (plus public `/slideshow/...`)
   5. Good logging so operators do not have to dig too hard
   6. Individual agency in copy and docs — the operator owns the wire
 - When in doubt, ask clarifying questions instead of assuming.
@@ -28,7 +33,7 @@
 ## How work proceeds
 
 1. Feed this file and [PLAN.md](PLAN.md) into Cursor when starting work.
-2. Implement step-by-step following the PLAN.md phases (Phases 0–7 are shipped; see [docs/PROGRESS.md](docs/PROGRESS.md)).
+2. Implement step-by-step following the PLAN.md phases (Phases 0–8; see [docs/PROGRESS.md](docs/PROGRESS.md)).
 3. Agents generate code with lots of comments.
 4. The maintainer tests, provides keys, and reports results.
 5. Iterate until Subotto is solid on the Linux VPS (native binary, no containers).

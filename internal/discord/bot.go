@@ -1,7 +1,8 @@
 // Package discord runs the Subotto Discord bot.
 //
-// Meat Bag: when someone posts a YouTube link in a *mapped* channel, Subotto
-// grabs the video ID and adds it to that channel's YouTube playlist.
+// Meat Bag: Subotto can run two listener types on the same channel at once:
+//   - Content listener — YouTube links → playlist
+//   - Picture listener — image attachments → data/pictures/{slug}/ + public slideshow
 package discord
 
 import (
@@ -15,10 +16,11 @@ import (
 
 	"subotto/internal/db"
 	"subotto/internal/ingest"
+	"subotto/internal/pictures"
 	"subotto/internal/youtube"
 )
 
-// Bot listens for Discord messages and forwards YouTube links to playlists.
+// Bot listens for Discord messages and forwards content to the right listeners.
 type Bot struct {
 	session *discordgo.Session
 	store   *db.DB
@@ -40,9 +42,11 @@ func New(token string, store *db.DB, yt *youtube.Client, guildID string) (*Bot, 
 		return nil, fmt.Errorf("create discord session: %w", err)
 	}
 
-	// Guilds: basic server info. GuildMessages: message events.
-	// MessageContent: actual message text (required to see YouTube links).
-	session.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentMessageContent
+	// Guilds + messages + message content (YouTube links) + reactions (slideshow credits).
+	session.Identify.Intents = discordgo.IntentsGuilds |
+		discordgo.IntentsGuildMessages |
+		discordgo.IntentMessageContent |
+		discordgo.IntentsGuildMessageReactions
 
 	b := &Bot{
 		session: session,
@@ -51,6 +55,9 @@ func New(token string, store *db.DB, yt *youtube.Client, guildID string) (*Bot, 
 		guildID: strings.TrimSpace(guildID),
 	}
 	session.AddHandler(b.onMessageCreate)
+	session.AddHandler(b.onMessageReactionAdd)
+	session.AddHandler(b.onMessageReactionRemove)
+	session.AddHandler(b.onMessageReactionRemoveAll)
 	session.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
 		b.ready.Store(true)
 		slog.Info("discord connected", "user", r.User.Username, "guilds", len(r.Guilds))
@@ -96,13 +103,18 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 	}
 
 	ctx := context.Background()
+	b.handleContentListener(ctx, s, m)
+	b.handlePictureListener(ctx, s, m)
+}
+
+func (b *Bot) handleContentListener(ctx context.Context, s *discordgo.Session, m *discordgo.MessageCreate) {
 	mapping, err := b.store.GetEnabledMappingByChannel(ctx, m.ChannelID)
 	if err != nil {
-		slog.Error("lookup channel mapping failed", "channel", m.ChannelID, "err", err)
+		slog.Error("lookup content listener failed", "channel", m.ChannelID, "err", err)
 		return
 	}
 	if mapping == nil {
-		return // channel not mapped — stay quiet
+		return
 	}
 
 	res := ingest.ProcessContent(ctx, b.store, b.yt, mapping, m.ChannelID, m.ID, m.Content)
@@ -112,35 +124,127 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 
 	switch {
 	case res.Failed > 0 && res.Added == 0:
-		b.react(s, m, "❌")
+		b.react(s, m.ChannelID, m.ID, "❌")
 	case res.Added > 0:
-		b.react(s, m, "💾") // saved to playlist (floppy = classic "saved")
+		b.react(s, m.ChannelID, m.ID, "💾") // saved to playlist
 	case res.SkippedOld > 0:
-		// Previous listener epoch — stop sign + spell OLD with letter reacts.
-		b.reactAll(s, m, "🛑", "🇴", "🇱", "🇩")
+		b.reactAll(s, m.ChannelID, m.ID, "🛑", "🇴", "🇱", "🇩")
 	case res.SkippedSame > 0 || res.Skipped > 0:
-		// Same listener — recycle + spell DUPE with letter reacts.
-		b.reactAll(s, m, "♻️", "🇩", "🇺", "🇵", "🇪")
+		b.reactAll(s, m.ChannelID, m.ID, "♻️", "🇩", "🇺", "🇵", "🇪")
 	}
 }
 
-func (b *Bot) react(s *discordgo.Session, m *discordgo.MessageCreate, emoji string) {
-	b.reactAll(s, m, emoji)
+func (b *Bot) handlePictureListener(ctx context.Context, s *discordgo.Session, m *discordgo.MessageCreate) {
+	pl, err := b.store.GetEnabledPictureListenerByChannel(ctx, m.ChannelID)
+	if err != nil {
+		slog.Error("lookup picture listener failed", "channel", m.ChannelID, "err", err)
+		return
+	}
+	if pl == nil || len(m.Attachments) == 0 {
+		return
+	}
+
+	atts := make([]pictures.Attachment, 0, len(m.Attachments))
+	for _, a := range m.Attachments {
+		atts = append(atts, pictures.Attachment{
+			ID:          a.ID,
+			URL:         a.URL,
+			Filename:    a.Filename,
+			ContentType: a.ContentType,
+			Width:       a.Width,
+			Height:      a.Height,
+		})
+	}
+
+	reactions := reactionsFromMessage(m.Message)
+	res := pictures.ProcessAttachments(
+		ctx, b.store, pl, m.ID, m.Author.ID, displayNameFromMessage(m.Message), atts, reactions,
+	)
+	if res.Saved == 0 && res.Skipped == 0 && res.Failed == 0 {
+		return // no image attachments
+	}
+
+	switch {
+	case res.Failed > 0 && res.Saved == 0:
+		b.react(s, m.ChannelID, m.ID, "❌")
+	case res.Saved > 0:
+		b.react(s, m.ChannelID, m.ID, "🖼️")
+	case res.Skipped > 0:
+		b.reactAll(s, m.ChannelID, m.ID, "♻️", "🇩", "🇺", "🇵", "🇪")
+	}
+}
+
+func (b *Bot) onMessageReactionAdd(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
+	if r.UserID == s.State.User.ID {
+		return // ignore our own reacts
+	}
+	b.refreshMessageReactions(r.ChannelID, r.MessageID)
+}
+
+func (b *Bot) onMessageReactionRemove(s *discordgo.Session, r *discordgo.MessageReactionRemove) {
+	b.refreshMessageReactions(r.ChannelID, r.MessageID)
+}
+
+func (b *Bot) onMessageReactionRemoveAll(s *discordgo.Session, r *discordgo.MessageReactionRemoveAll) {
+	b.refreshMessageReactions(r.ChannelID, r.MessageID)
+}
+
+func (b *Bot) refreshMessageReactions(channelID, messageID string) {
+	ctx := context.Background()
+	pl, err := b.store.GetEnabledPictureListenerByChannel(ctx, channelID)
+	if err != nil || pl == nil {
+		return
+	}
+	pics, err := b.store.ListCollectedPicturesByMessage(ctx, channelID, messageID)
+	if err != nil || len(pics) == 0 {
+		return
+	}
+
+	msg, err := b.session.ChannelMessage(channelID, messageID)
+	if err != nil {
+		slog.Warn("fetch message for reactions failed", "channel", channelID, "message", messageID, "err", err)
+		return
+	}
+	reactions := reactionsFromMessage(msg)
+	if err := b.store.UpdatePictureReactions(ctx, channelID, messageID, reactions); err != nil {
+		slog.Error("update picture reactions failed", "err", err)
+	}
+}
+
+func reactionsFromMessage(m *discordgo.Message) map[string]int {
+	out := map[string]int{}
+	if m == nil {
+		return out
+	}
+	for _, r := range m.Reactions {
+		if r == nil || r.Emoji.Name == "" {
+			continue
+		}
+		key := r.Emoji.Name
+		if r.Emoji.ID != "" {
+			// Custom emoji: name:id so slideshow can show a stable key.
+			key = r.Emoji.Name + ":" + r.Emoji.ID
+		}
+		out[key] = r.Count
+	}
+	return out
+}
+
+func (b *Bot) react(s *discordgo.Session, channelID, messageID, emoji string) {
+	b.reactAll(s, channelID, messageID, emoji)
 }
 
 // reactAll adds one or more reactions in order (lead emoji, then letter spells).
-// Meat Bag: if videos land on the playlist but you see no emoji, Discord
-// usually denied "Add Reactions". We log at Warn so it shows at default info level.
-func (b *Bot) reactAll(s *discordgo.Session, m *discordgo.MessageCreate, emojis ...string) {
+func (b *Bot) reactAll(s *discordgo.Session, channelID, messageID string, emojis ...string) {
 	for _, emoji := range emojis {
-		if err := s.MessageReactionAdd(m.ChannelID, m.ID, emoji); err != nil {
+		if err := s.MessageReactionAdd(channelID, messageID, emoji); err != nil {
 			slog.Warn("could not add reaction",
 				"emoji", emoji,
-				"channel", m.ChannelID,
-				"message", m.ID,
+				"channel", channelID,
+				"message", messageID,
 				"err", err,
 			)
-			return // stop the spell if Discord rejects mid-sequence
+			return
 		}
 	}
 }

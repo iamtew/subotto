@@ -55,6 +55,30 @@ delete-mapping channel:
 cease-listen channel:
     just delete-mapping {{channel}}
 
+# ---------- Picture listeners (disk + OBS slideshow) ----------
+
+# Start a picture listener. Usage: just start-picture-listen CHANNEL "Show Name"
+start-picture-listen channel name:
+    go run ./cmd/subotto -add-picture-channel {{channel}} -add-picture-name "{{name}}"
+
+list-picture-listens:
+    go run ./cmd/subotto -list-picture-listens
+
+enable-picture-listen channel:
+    go run ./cmd/subotto -enable-picture {{channel}}
+
+pause-picture-listen channel:
+    go run ./cmd/subotto -disable-picture {{channel}}
+
+cease-picture-listen channel:
+    go run ./cmd/subotto -delete-picture {{channel}}
+
+# Rescan recent Discord messages for image attachments (REST only, no reactions).
+# Usage: just resync-pictures DISCORD_CHANNEL_ID
+# Optional 2nd arg = message limit (default 100, max 500).
+resync-pictures channel limit="100":
+    go run ./cmd/subotto -resync-picture-channel {{channel}} -resync-limit {{limit}}
+
 # Rescan recent Discord messages for YouTube links (REST only, no reactions).
 # Usage: just resync DISCORD_CHANNEL_ID
 # Optional 2nd arg = message limit (default 100, max 500).
