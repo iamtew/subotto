@@ -72,11 +72,17 @@ build:
 build-linux:
     GOOS=linux GOARCH=amd64 go build -o bin/subotto-linux ./cmd/subotto
 
+# Build Linux binary and zip a deployable drop (no .env / no SQLite secrets).
+# Output: dist/subotto-linux.zip — see docs/DEPLOY.md
+package-linux: build-linux
+    powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-linux.ps1
+
 # ---------- Utility ----------
 
 # Clean build artifacts (cmd.exe syntax; Just's default shell on Windows)
 clean:
     if exist bin rmdir /s /q bin
+    if exist dist rmdir /s /q dist
 
 # Run all Go tests
 test:

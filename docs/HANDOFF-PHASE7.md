@@ -1,5 +1,8 @@
 # Handoff — Phase 7 native Linux VPS deploy
 
+**Status:** Phase 7 **implemented** — use **[DEPLOY.md](DEPLOY.md)** (`just package-linux`).  
+This file remains historical context for how Phase 7 was scoped.
+
 **For:** next Clanker / Cursor agent  
 **From:** Phase 0–6 arc (DEV verified + Phase 6 Admin polish)  
 **Date:** 2026-09-08  

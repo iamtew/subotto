@@ -2,8 +2,8 @@
 
 **Date:** 2026-09-08  
 **Branch:** `master`  
-**Status:** Phase 6 **complete enough** for deploy planning. Phase 7 next — [HANDOFF-PHASE7.md](HANDOFF-PHASE7.md).  
-**Later:** Native Linux VPS / systemd / backup / optional reverse proxy  
+**Status:** Phase 7 **shipped** — Linux package + deploy guide.  
+**Guide:** [DEPLOY.md](DEPLOY.md) · prior brief [HANDOFF-PHASE7.md](HANDOFF-PHASE7.md)
 
 ---
 
@@ -14,6 +14,7 @@
 | 0–5 | Core bot + Admin | Verified live DEV |
 | 6a | Scheduler + port 50770 | Shipped |
 | 6b | Listeners + ops desk UI | Dark digicam Admin, public playlists, epochs, notices, DUPE/OLD reacts, channel names, START confirm |
+| 7 | Linux package / deploy | `just package-linux`, sample systemd, headless + SSH-tunnel docs |
 
 ## Key paths
 
@@ -26,16 +27,18 @@ internal/db/                 SQLite + mappings + activity + notice settings
 internal/ingest/             Shared live + resync pipeline (SkippedSame / SkippedOld)
 internal/discord/            Bot + REST resync + catalog + notices
 internal/youtube/            OAuth client; CreatePlaylist → public
-justfile                     run, build, build-linux, auth-youtube, listener CRUD, resync
+justfile                     run, build, build-linux, package-linux, auth-youtube, listener CRUD, resync
+scripts/package-linux.ps1    Zip staging for dist/subotto-linux.zip
+deploy/subotto.service       Sample systemd unit
+docs/DEPLOY.md               PROD cutover, SSH-tunnel YouTube auth, backup
 docs/DEV-VERIFY.md           DEV startup guide
-docs/HANDOFF-PHASE7.md       Next agent: Phase 7 deploy
 ```
 
 ## Verified — code
 
 - `just test` — parser, youtube errors, db mappings, ingest, web API, scheduler, announce  
 - `just build` — Windows binary builds  
-- `just build-linux` — recipe ready for PROD binary  
+- `just build-linux` / `just package-linux` — Linux binary + `dist/subotto-linux.zip`  
 
 ## Verified — live DEV (Meat Bag sign-off, 2026-09-07+)
 
@@ -53,7 +56,11 @@ Phase 6 live check (optional): set a small `RESYNC_INTERVAL_HOURS` in DEV and co
 
 Default Admin/OAuth port is **50770**.
 
-## Not done yet (PLAN.md)
+## Meat Bag PROD checklist
 
-- **Phase 7** — Linux VPS / systemd deploy guide → [HANDOFF-PHASE7.md](HANDOFF-PHASE7.md)  
-- Optional leftover: Admin notice **preview** before save (only if Meat Bag asks)  
+Follow [DEPLOY.md](DEPLOY.md): package → copy `.env` + `data/subotto.db` → stop DEV → run on VPS → optional systemd/Caddy.
+
+## Optional leftovers (not blocking)
+
+- Admin notice **preview** before save (only if Meat Bag asks)  
+- Public `/healthz` without Basic Auth  

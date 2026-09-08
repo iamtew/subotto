@@ -1,0 +1,27 @@
+# Sample systemd unit for Subotto on a Linux VPS.
+# Meat Bag: copy to /etc/systemd/system/subotto.service, edit paths, then:
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now subotto
+#
+# Subotto loads .env from WorkingDirectory (godotenv). Keep .env next to the binary.
+# Do NOT put secrets in this unit file.
+
+[Unit]
+Description=Subotto (Discord → YouTube playlist listener)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/subotto
+ExecStart=/opt/subotto/subotto-linux
+Restart=on-failure
+RestartSec=5
+
+# Optional hardening — uncomment if your user layout matches:
+# User=subotto
+# Group=subotto
+# NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

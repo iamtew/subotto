@@ -3,6 +3,7 @@
 
 # Build output
 bin/
+dist/
 
 # SQLite runtime DB (keep data/.gitkeep tracked)
 data/*.db

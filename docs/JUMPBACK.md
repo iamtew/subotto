@@ -1,8 +1,8 @@
 # Jump-Back Point — Subotto (2026-09-08)
 
-**Phase 6 complete enough** — listeners, dark Admin, epochs, notices, public playlists.  
-**Next:** Phase 7 native Linux VPS / systemd deploy.  
-**Handoff:** [HANDOFF-PHASE7.md](HANDOFF-PHASE7.md)  
+**Phases 0–7 complete enough** — listeners, Admin, Linux package / deploy guide.  
+**PROD guide:** [DEPLOY.md](DEPLOY.md)  
+**Prior Phase 7 brief:** [HANDOFF-PHASE7.md](HANDOFF-PHASE7.md)  
 **Phase 6 context:** [HANDOFF-ADMIN-UI.md](HANDOFF-ADMIN-UI.md)
 
 ---
@@ -16,18 +16,21 @@
 4. Resync stops at the previous epoch boundary
 5. ONLINE/OFFLINE Discord **notices** are global templates in Admin
 6. Port default **50770**; scheduler optional via `RESYNC_INTERVAL_HOURS` (usually `0`)
+7. PROD is headless: copy `.env` + `data/subotto.db` (YouTube refresh token is in the DB). Re-auth without a desktop = SSH tunnel cookbook in DEPLOY.md
 
 ### Commands
 ```text
 just run
 just auth-youtube
 just start-listen / list-listens / cease-listen   # aliases of mapping recipes
-just test / just build / just build-linux
+just test / just build / just build-linux / just package-linux
 ```
 
 Admin: `http://localhost:50770` · `admin` / `ADMIN_PASSWORD`
 
 Reactions: **💾** · **♻️ DUPE** · **🛑 OLD** · **❌**
+
+PROD: `just package-linux` → `dist/subotto-linux.zip` → [DEPLOY.md](DEPLOY.md)
 
 ---
 
@@ -38,11 +41,11 @@ Reactions: **💾** · **♻️ DUPE** · **🛑 OLD** · **❌**
 - Libertarian tone via voluntary / sovereignty language only — never name opposing ideologies in copy
 - No Docker; commit only on request
 - Prefer `/api/listens`; keep legacy aliases working
-- Phase 7 = native binary + systemd + backup + optional reverse proxy — see [HANDOFF-PHASE7.md](HANDOFF-PHASE7.md)
+- Phase 7 delivered: `package-linux`, `deploy/subotto.service`, [DEPLOY.md](DEPLOY.md)
 
 ### Architecture
 ```
-just run / just build-linux
+just run / just build-linux / just package-linux
   → Discord gateway (listen → ingest → 💾 / ♻️DUPE / 🛑OLD / ❌)
   → Admin (webroot + /api/*)
   → optional scheduler
