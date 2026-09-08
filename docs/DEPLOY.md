@@ -1,7 +1,7 @@
 # Deploy Subotto to a Linux VPS (Phase 7)
 
-**No Docker.** Cross-compile on Windows, zip, copy to your box, run the native binary (or systemd).  
-You own Caddy / TLS / firewall — this guide only covers Subotto’s side.
+**No Docker.** Cross-compile on Windows, zip, copy to the VPS, run the native binary (or systemd).  
+Caddy / TLS / firewall stay with the operator — this guide only covers Subotto’s side.
 
 Default Admin port: **50770**.
 
@@ -138,7 +138,7 @@ Subotto loads `.env` from `WorkingDirectory`. Keep `.env`, the binary, `webroot/
 
 ---
 
-## 6. Caddy (you own the rest)
+## 6. Caddy (edge is operator-owned)
 
 Bind Subotto to loopback so only the proxy is public:
 
@@ -147,7 +147,7 @@ ADMIN_HOST=127.0.0.1
 ADMIN_PORT=50770
 ```
 
-Point Caddy (or Nginx) at `http://127.0.0.1:50770`. TLS, hostnames, and auth at the edge are your call — Subotto still uses Basic Auth (`admin` / `ADMIN_PASSWORD`).
+Point Caddy (or Nginx) at `http://127.0.0.1:50770`. TLS, hostnames, and edge auth are up to the operator — Subotto still uses Basic Auth (`admin` / `ADMIN_PASSWORD`).
 
 ---
 
@@ -172,5 +172,3 @@ If you prefer online backups later, use SQLite’s `.backup` / `sqlite3` backup 
 - [ ] At least one enabled listener  
 - [ ] Paste a YouTube link → **💾** (or expected ♻️ / 🛑)  
 - [ ] Windows DEV bot is **not** running with the same token  
-
-Your keys, your box, your epochs.

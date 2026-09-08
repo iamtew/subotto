@@ -1,11 +1,10 @@
 # Get Subotto Running (DEV on Windows)
 
-**Audience:** Meat Bag (you)  
 **Goal:** Run Subotto in DEV and confirm Phases 0–5 still work.  
-**Status:** Meat Bag verified good (2026-09-07). Use this anytime you need to re-check.  
+**Status:** Verified good (2026-09-07). Use this anytime you need to re-check.  
 **Machine:** Windows 10, repo root, **no Docker** — Go + Just only.
 
-Clanker wrote this so you can follow it like a recipe. When something goes boom, jump to [Troubleshooting](#troubleshooting).
+Follow this like a recipe. When something breaks, jump to [Troubleshooting](#troubleshooting).
 
 ---
 
@@ -27,7 +26,7 @@ You also get:
 - An **Admin UI** in the browser (manage mappings, see activity, resync history)
 - **CLI** helpers via `just …` if you prefer the terminal
 
-Phases **6–7** come after this guide. **Meat Bag verified DEV good (2026-09-07)** — keep this recipe for re-checks and regressions.
+Phases **6–7** come after this guide. **DEV verified good (2026-09-07)** — keep this recipe for re-checks and regressions.
 
 ---
 
@@ -61,7 +60,7 @@ just test
 just build
 ```
 
-Both should succeed. That proves the code Clanker shipped compiles and unit-tests pass.
+Both should succeed. That proves the code compiles and unit-tests pass.
 
 ---
 
@@ -334,7 +333,7 @@ just resync CHANNEL [limit]
 
 Check these off for yourself:
 
-- [x] `just test` and `just build` OK *(code checks; Meat Bag / Clanker)*  
+- [x] `just test` and `just build` OK *(code checks)*  
 - [x] `.env` filled; Discord intent on; bot invited  
 - [x] `just auth-youtube` printed your YouTube channel name  
 - [x] `just run` shows Discord + Admin UI ready  
@@ -344,7 +343,7 @@ Check these off for yourself:
 - [x] Same link again → ♻️ + DUPE  
 - [x] Activity shows up in the Admin UI  
 
-**Sign-off:** Meat Bag verified good (2026-09-07). Phase 6 Admin polish followed; **next is Phase 7** — see [HANDOFF-PHASE7.md](HANDOFF-PHASE7.md).
+**Sign-off:** Verified good (2026-09-07). Phase 6 Admin polish followed; **Phase 7** deploy is documented in [HANDOFF-PHASE7.md](HANDOFF-PHASE7.md) and [DEPLOY.md](DEPLOY.md).
 
 ---
 
@@ -357,5 +356,5 @@ Check these off for yourself:
 | [HANDOFF-ADMIN-UI.md](HANDOFF-ADMIN-UI.md) | Phase 6 Admin context |
 | [JUMPBACK.md](JUMPBACK.md) | Resume notes for the next session |
 | [PLAN.md](../PLAN.md) | Full roadmap |
-| [AGENTS.md](../AGENTS.md) | How Clanker ↔ Meat Bag work |
+| [AGENTS.md](../AGENTS.md) | Contributor and Cursor agent conventions |
 | [README.md](../README.md) | Project overview |

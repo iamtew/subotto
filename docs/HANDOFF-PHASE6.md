@@ -1,32 +1,32 @@
 # Handoff — Phase 6 (Scheduling & Polish)
 
-**For:** the next Clanker / Cursor agent  
-**From:** Phase 0–5 arc + Meat Bag live DEV verification  
+**For:** the next Cursor agent / maintainer  
+**From:** Phase 0–5 arc + live DEV verification  
 **Date:** 2026-09-07  
 **Branch:** `master` (verified good)
 
-Meat Bag has signed off: **Subotto works in DEV** (Discord → playlist, Admin UI, reactions).  
-Your job is to **prepare and implement Phase 6** from [PLAN.md](../PLAN.md). Do **not** jump to Phase 7 unless asked.
+**Subotto works in DEV** (Discord → playlist, Admin UI, reactions).  
+This handoff was to **prepare and implement Phase 6** from [PLAN.md](../PLAN.md). Do **not** jump to Phase 7 unless asked. Phase 6 has since shipped — see [PROGRESS.md](PROGRESS.md) and [HANDOFF-PHASE7.md](HANDOFF-PHASE7.md).
 
 ---
 
 ## 1. Read these first (in order)
 
-1. [AGENTS.md](../AGENTS.md) — voice, Just/no Docker, git message style  
+1. [AGENTS.md](../AGENTS.md) — conventions, Just/no Docker, git message style  
 2. [JUMPBACK.md](JUMPBACK.md) — current resume snapshot  
 3. [PROGRESS.md](PROGRESS.md) — what shipped + verify status  
-4. [DEV-VERIFY.md](DEV-VERIFY.md) — how Meat Bag runs DEV (do not break this path)  
+4. [DEV-VERIFY.md](DEV-VERIFY.md) — how operators run DEV (do not break this path)  
 5. This file  
 6. [PLAN.md](../PLAN.md) § Phase 6  
 
-Suggested Meat Bag opener:  
-> Clanker, read docs/HANDOFF-PHASE6.md and continue Phase 6.
+Suggested opener:  
+> Read docs/HANDOFF-PHASE6.md and continue Phase 6.
 
 ---
 
 ## 2. Verification status (do not re-litigate)
 
-Meat Bag confirmed live DEV:
+Live DEV confirmed:
 
 - Discord connects (Message Content Intent on)
 - YouTube OAuth + playlist writes work
@@ -47,7 +47,7 @@ Code checks already green historically: `just test`, `just build`. Re-run after 
 | Optional background re-scans | Honor `RESYNC_INTERVAL_HOURS` (already in config; **0 = disabled**, unused today) |
 | Rate-limit handling | Graceful retries / clearer handling when Discord or YouTube throttle |
 | Graceful shutdown | Largely done in Phase 5 (signal → admin Shutdown + Discord Close) — polish if gaps remain |
-| Health / status endpoint | `/api/status` exists; may extend (uptime, last resync, scheduler state) — keep Basic Auth unless Meat Bag asks for a public `/healthz` |
+| Health / status endpoint | `/api/status` exists; may extend (uptime, last resync, scheduler state) — keep Basic Auth unless a public `/healthz` is requested |
 | Final justfile / README polish | DEV recipes stay clear; light deploy notes OK, but **full VPS/systemd guide is Phase 7** |
 
 Empty scaffold waiting: `internal/scheduler/` (was `.gitkeep` only; package may need creating).
@@ -85,9 +85,9 @@ Shared pipeline: internal/ingest (live + CLI/UI resync + future scheduled resync
 ### Hard constraints
 
 - **No Docker.** Just + native Go. Pure Go SQLite (`modernc.org/sqlite`), no CGO.  
-- Clanker ↔ Meat Bag voice; beginner-friendly comments.  
+- Plain, beginner-friendly comments.  
 - Do not commit `.env` or `data/*.db`.  
-- Commit only when Meat Bag asks; title + bullet body; prefer `-F` file on Windows PowerShell.  
+- Commit only when the maintainer asks; title + bullet body; prefer `-F` file on Windows PowerShell.  
 - OAuth one-shot and Admin both default to port **50770** — auth exits; bot holds the port. Don’t break that.  
 - `DeleteMapping` leaves `processed_videos` (intentional).  
 - Scheduled resync should **reuse** `discord.ResyncChannel` / ingest — no second pipeline.  
@@ -97,7 +97,7 @@ Shared pipeline: internal/ingest (live + CLI/UI resync + future scheduled resync
 
 ## 5. Suggested Phase 6 implementation shape
 
-Not mandatory dogma — ask Meat Bag if trade-offs are big — but a sane default:
+Not mandatory dogma — ask if trade-offs are big — but a sane default:
 
 1. **`internal/scheduler`**  
    - If `ResyncIntervalHours <= 0`, no-op.  
@@ -124,7 +124,7 @@ Not mandatory dogma — ask Meat Bag if trade-offs are big — but a sane defaul
 
 6. **Verify**  
    - `just test` + `just build`.  
-   - Manual: interval `0` = quiet; small interval in DEV with one mapping = scheduled activity rows (Meat Bag can confirm).
+   - Manual: interval `0` = quiet; small interval in DEV with one mapping = scheduled activity rows (operator can confirm).
 
 ---
 
@@ -156,12 +156,12 @@ Use `git log` for the full list.
 - [x] Interval 0 keeps today’s behavior (no scheduled scans)  
 - [x] Shutdown stops scheduler without hanging  
 - [x] Rate-limit / quota errors are clearer or retried sensibly  
-- [x] Status (or health) reflects scheduler state enough for Meat Bag  
+- [x] Status (or health) reflects scheduler state enough for operators  
 - [x] Docs updated; `just test` / `just build` green  
-- [ ] Meat Bag can re-check with [DEV-VERIFY.md](DEV-VERIFY.md) smoke (live link still 💾)
+- [ ] Operator can re-check with [DEV-VERIFY.md](DEV-VERIFY.md) smoke (live link still 💾)
 
 Then hand off toward **Phase 7** (deploy guide) — see [HANDOFF-PHASE7.md](HANDOFF-PHASE7.md).
 
 ---
 
-**Clanker’s note:** Phase 6 shipped (scheduler + Admin polish). Default port is **50770**. Scheduler stays off until Meat Bag sets `RESYNC_INTERVAL_HOURS`. Next stop: native VPS deploy.
+**Note:** Phase 6 shipped (scheduler + Admin polish). Default port is **50770**. Scheduler stays off until `RESYNC_INTERVAL_HOURS` is set. Next stop: native VPS deploy.

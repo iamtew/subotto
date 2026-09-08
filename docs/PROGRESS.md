@@ -7,7 +7,7 @@
 
 ---
 
-## What we built
+## What shipped
 
 | Phase | Title | Result |
 |--------|--------|--------|
@@ -40,7 +40,7 @@ docs/DEV-VERIFY.md           DEV startup guide
 - `just build` — Windows binary builds  
 - `just build-linux` / `just package-linux` — Linux binary + `dist/subotto-linux.zip`  
 
-## Verified — live DEV (Meat Bag sign-off, 2026-09-07+)
+## Verified — live DEV (operator sign-off, 2026-09-07+)
 
 Acceptance from [DEV-VERIFY.md](DEV-VERIFY.md) for Phases 0–5, plus Phase 6 product use:
 
@@ -56,11 +56,11 @@ Phase 6 live check (optional): set a small `RESYNC_INTERVAL_HOURS` in DEV and co
 
 Default Admin/OAuth port is **50770**.
 
-## Meat Bag PROD checklist
+## PROD checklist
 
 Follow [DEPLOY.md](DEPLOY.md): package → copy `.env` + `data/subotto.db` → stop DEV → run on VPS → optional systemd/Caddy.
 
 ## Optional leftovers (not blocking)
 
-- Admin notice **preview** before save (only if Meat Bag asks)  
+- Admin notice **preview** before save (only if requested)  
 - Public `/healthz` without Basic Auth  

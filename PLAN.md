@@ -4,11 +4,13 @@
 **Bot name:** Subotto
 
 **Goal:**  
-A flexible Discord bot written in **Go** that watches specific Discord text channels for YouTube links and automatically adds those videos to corresponding YouTube playlists. Different channels can map to different playlists. An integrated Admin Web UI (plain HTML/CSS/JS) lets you manage the mappings, view activity, and trigger updates. Designed for a Meat Bag who is new to this stack.
+A flexible Discord bot written in **Go** that watches specific Discord text channels for YouTube links and automatically adds those videos to corresponding YouTube playlists. Different channels can map to different playlists. An integrated Admin Web UI (plain HTML/CSS/JS) lets operators manage the mappings, view activity, and trigger updates. Written with beginner-friendly comments.
 
-**Clanker ↔ Meat Bag language is required** in docs and comments.
+Keep docs and comments plain and beginner-friendly.
 
-**No Docker.** We build and run native Go binaries using **Just** (justfile) as the classic build system.
+**No Docker.** Build and run native Go binaries using **Just** (justfile) as the classic build system.
+
+**Status:** Phases 0–7 are shipped. This document remains the architecture and phased history. See [docs/PROGRESS.md](docs/PROGRESS.md) and [docs/DEPLOY.md](docs/DEPLOY.md) for current status and deploy steps.
 
 ---
 
@@ -52,19 +54,19 @@ A flexible Discord bot written in **Go** that watches specific Discord text chan
 
 ---
 
-## 2. Important Technical Reality Check (Read This, Meat Bag)
+## 2. Important Technical Reality Check
 
 **YouTube Data API write operations require OAuth 2.0**, not just an API key.
 
 - An API key is enough for reading public data.
 - Adding a video to a playlist (`playlistItems.insert`) requires the authenticated user (the Google account that owns the playlist) to have granted permission via OAuth.
-- Therefore Subotto will need:
+- Therefore Subotto needs:
   1. A Google Cloud project with YouTube Data API v3 enabled.
   2. OAuth 2.0 Client ID (Desktop or Web application type).
-  3. A one-time (or occasional) authorization flow so the bot can act on behalf of your Google account.
-  4. Storage of the OAuth refresh token so Subotto can keep working without you logging in every day.
+  3. A one-time (or occasional) authorization flow so the bot can act on behalf of the Google account.
+  4. Storage of the OAuth refresh token so Subotto can keep working without logging in every day.
 
-Clanker will implement a simple OAuth flow + token storage. You will do the Google Cloud console setup once.
+Subotto implements a simple OAuth flow + token storage. The operator does the Google Cloud console setup once.
 
 Discord side is simpler: Bot token + Message Content Intent + (optionally) Server Members Intent.
 
@@ -74,7 +76,7 @@ Discord side is simpler: Bot token + Message Content Intent + (optionally) Serve
 
 | Layer              | Choice                              | Why                                      |
 |--------------------|-------------------------------------|------------------------------------------|
-| Language           | Go 1.22+                            | Meat Bag requested it. Fast, simple, single binary. |
+| Language           | Go 1.22+                            | Fast, simple, single binary.             |
 | Discord            | github.com/bwmarrin/discordgo       | Most popular & maintained Go Discord library. |
 | YouTube API        | google.golang.org/api/youtube/v3 + golang.org/x/oauth2 | Official. |
 | Web / Admin UI     | net/http (stdlib) or Gin + static files from `webroot/` | Plain HTML/CSS/JS. No frontend build step. |
@@ -148,17 +150,17 @@ subotto/
 └── go.mod
 ```
 
-All code heavily commented for Meat Bag.
+All code heavily commented for beginners.
 
 ---
 
-## 6. Implementation Phases (Feed this into Cursor)
+## 6. Implementation Phases (historical roadmap)
 
 ### Phase 0 – Project Bootstrap (Do this first)
 - Initialize Go module.
 - Create the folder structure above.
 - Add AGENTS.md, PLAN.md, README.md.
-- Create a basic `main.go` that prints "Subotto is online. Clanker stands ready, Meat Bag."
+- Create a basic `main.go` that prints a ready-online startup line.
 - Create a starter `justfile` with clear **DEV (Windows)** and **PROD (Linux)** targets (`run`, `build`, `build-linux`, `clean`, etc.).
 - Create `.env.example`.
 - Create a minimal `webroot/index.html` so the web server has something to serve.
@@ -212,7 +214,7 @@ All code heavily commented for Meat Bag.
 
 ---
 
-## 7. Configuration Keys (what Meat Bag needs to provide)
+## 7. Configuration Keys (what the operator needs to provide)
 
 ```env
 # Discord
@@ -241,15 +243,15 @@ RESYNC_INTERVAL_HOURS=0       # 0 = disabled
 
 ## 8. Justfile Philosophy (DEV = Windows, PROD = Linux)
 
-We use **Just** (https://github.com/casey/just) as our build system.
+Subotto uses **Just** (https://github.com/casey/just) as the build system.
 
 **Important:**
-- **DEV environment** = Windows 10 (Meat Bag’s machine)
+- **DEV environment** = Windows 10 (developer machine)
 - **PROD environment** = Linux VPS (EU datacenter)
 
 The justfile **must** have clear, separate targets for both.
 
-Clanker will create a justfile with at least these recipes:
+Example recipes:
 
 ```just
 # ============================================
@@ -296,38 +298,35 @@ test:
     go test ./...
 ```
 
-Notes for Meat Bag:
-- On Windows you will mostly use: `just run` and `just build`
-- When you are ready to deploy: `just build-linux` → copy `bin/subotto-linux` + `webroot/` + `data/` to the VPS
-- On the Linux VPS you just run the binary (or put it under systemd). No Just required on the server.
+Notes for operators:
+- On Windows: mostly `just run` and `just build`
+- When ready to deploy: `just build-linux` → copy `bin/subotto-linux` + `webroot/` + `data/` to the VPS (or use `just package-linux`)
+- On the Linux VPS, run the binary (or put it under systemd). No Just required on the server.
 
-Clanker must keep the Windows (DEV) and Linux (PROD) targets clearly separated and working.
+Keep the Windows (DEV) and Linux (PROD) targets clearly separated and working.
 
 ---
 
-## 9. How Meat Bag Should Work With Cursor
+## 9. Working with Cursor
 
 1. Open the project folder in Cursor.
 2. Make sure AGENTS.md and PLAN.md are in the root.
-3. Start with Phase 0. Tell Cursor:  
-   "Clanker, implement Phase 0 from PLAN.md for Subotto. No Docker. Use Just. Keep comments friendly for Meat Bag."
+3. Start from the current phase (or a handoff doc under `docs/`). Example prompt:  
+   "Implement the next step from PLAN.md / the relevant docs/HANDOFF-*.md. No Docker. Use Just. Keep comments beginner-friendly."
 4. After each phase, test what you can, then move to the next.
-5. When you hit the OAuth part, Clanker will give you exact Google Cloud Console steps.
-6. When Subotto is running locally, invite the bot to your test server and drop a YouTube link in a mapped channel.
+5. For OAuth, follow the Google Cloud Console steps in [docs/DEV-VERIFY.md](docs/DEV-VERIFY.md).
+6. When Subotto is running locally, invite the bot to a test server and drop a YouTube link in a mapped channel.
 
 ---
 
-## 10. Immediate Next Steps for Meat Bag (Right Now)
+## 10. Operator setup checklist
 
 1. Create a Discord Application → Bot → copy token. Enable **Message Content Intent**.
 2. Create a Google Cloud project → enable YouTube Data API v3 → create OAuth 2.0 Client ID.
-3. Drop these updated files into your repo.
-4. Install Just if you don’t have it yet (https://github.com/casey/just#installation).
-5. Tell Clanker (in Cursor) to start Phase 0 for Subotto.
+3. Copy `.env.example` → `.env` and fill in secrets.
+4. Install Just if needed (https://github.com/casey/just#installation).
+5. Follow [docs/DEV-VERIFY.md](docs/DEV-VERIFY.md) for DEV, [docs/DEPLOY.md](docs/DEPLOY.md) for PROD.
 
 ---
 
-**Clanker’s promise:**  
-No Docker. Classic Just + Go. Plain webroot for the Admin UI. Simple, readable code with lots of comments for Meat Bag.
-
-Subotto is ready to be built the old-school way.
+No Docker. Classic Just + Go. Plain webroot for the Admin UI. Simple, readable code with lots of beginner-friendly comments.

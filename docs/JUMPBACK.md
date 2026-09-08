@@ -7,7 +7,7 @@
 
 ---
 
-## 1. For Meat Bag
+## 1. Operator notes
 
 ### Mental model
 1. **Listener** = one Discord channel under watch → one YouTube playlist (collection window / epoch)
@@ -34,11 +34,11 @@ PROD: `just package-linux` → `dist/subotto-linux.zip` → [DEPLOY.md](DEPLOY.m
 
 ---
 
-## 2. For Clanker
+## 2. Agent notes
 
-- Voice: Clanker ↔ Meat Bag; beginner comments
+- Keep docs and comments plain and beginner-friendly
 - Product terms: **listener**, start/cease listener, **notices** — SIGINT / ops desk flavor
-- Libertarian tone via voluntary / sovereignty language only — never name opposing ideologies in copy
+- Prefer voluntary / operator-owned language in copy — never name opposing ideologies
 - No Docker; commit only on request
 - Prefer `/api/listens`; keep legacy aliases working
 - Phase 7 delivered: `package-linux`, `deploy/subotto.service`, [DEPLOY.md](DEPLOY.md)

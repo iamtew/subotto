@@ -2,10 +2,10 @@
 
 **Discord channels → YouTube playlists, automatically.**
 
-Written in Go. Designed for a human (Meat Bag) by an AI (Clanker).
+A Go bot that watches Discord text channels for YouTube links and adds those videos to mapped playlists. Includes a plain HTML/CSS/JS Admin UI.
 
-See **PLAN.md** for the full architecture and phased implementation plan.  
-See **AGENTS.md** for how Clanker and Meat Bag are supposed to talk to each other.
+See **[PLAN.md](PLAN.md)** for architecture and phased history.  
+See **[AGENTS.md](AGENTS.md)** for contributor and Cursor agent conventions.
 
 ---
 
@@ -30,7 +30,7 @@ Optional: set `RESYNC_INTERVAL_HOURS` (e.g. `6`) for background history re-scans
 
 Session notes: [docs/PROGRESS.md](docs/PROGRESS.md)
 
-**No Docker.** We use **Just** + native Go binaries.
+**No Docker.** Subotto uses **Just** + native Go binaries.
 
 ---
 
@@ -45,7 +45,7 @@ Session notes: [docs/PROGRESS.md](docs/PROGRESS.md)
 
 ---
 
-## Prerequisites (Meat Bag Checklist)
+## Prerequisites
 
 - [ ] Go 1.22+ installed
 - [ ] Just installed (https://github.com/casey/just)
@@ -96,5 +96,3 @@ Full PROD walkthrough (headless cutover, SSH-tunnel re-auth, backup): [docs/DEPL
 - Prefer simple, readable Go over clever abstractions.
 - Heavy comments written for a beginner.
 - Configuration over code changes.
-
-Clanker is ready. Verify Subotto the classic way, Meat Bag.

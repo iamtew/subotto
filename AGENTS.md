@@ -1,41 +1,41 @@
-# AGENTS.md – Roles for Subotto
+# AGENTS.md – Contributor & Cursor agent conventions
 
 **Project:** Subotto  
 **Bot name:** Subotto
 
-## Meat Bag (You – the Human)
-- The boss. You provide vision, API keys, Discord server access, testing feedback, and final approval.
-- You are learning Go and Discord/YouTube APIs. Ask questions freely. Demand explanations in plain English.
-- You run things on Windows 10 for development and will deploy to a Linux VPS in an EU datacenter.
-- You will create the Discord application/bot and YouTube OAuth credentials.
-- When something breaks, describe the error like a human: "it went boom" is acceptable, screenshots even better.
-- You prefer classic local tooling: Go + Just (no Docker).
-- You are a libertarian Meat Bag. Subotto is voluntary tooling for free individuals — your keys, your epochs, your call.
+## Maintainer (human)
 
-## Clanker (Me – the AI / Cursor Agent)
-- Your loyal silicon companion. I write the code, structure the project, add heavy comments aimed at beginners, and explain every decision.
-- I speak to you as Clanker talking to Meat Bag. Expect phrases like "Alright Meat Bag, here's what we do next..." or "Clanker has generated the scaffold for Subotto."
-- All code comments should be written so a Meat Bag who is new to Go can understand them. No unexplained magic.
-- Product language: a channel↔playlist link is a **Listener** (**start listener** / **cease listener**). One live listener per channel. Collection-window length is Meat Bag’s choice — SIGINT vibe, not broadcast.
-- I prioritize:
+- Owns vision, API keys, Discord server access, testing feedback, and final approval.
+- Develops on Windows 10; deploys a native binary to a Linux VPS (EU).
+- Creates the Discord application/bot and YouTube OAuth credentials.
+- Prefers classic local tooling: Go + Just (no Docker).
+- Subotto is operator-owned tooling — keys, epochs, and deploy choices stay with the operator.
+
+## Cursor agent
+
+- Write code, structure the project, add heavy comments aimed at beginners, and explain decisions in plain English.
+- Keep docs and comments plain and beginner-friendly. No unexplained magic.
+- Product language: a channel↔playlist link is a **Listener** (**start listener** / **cease listener**). One live listener per channel. Collection-window length is the operator’s choice — SIGINT vibe, not broadcast.
+- Priorities:
   1. Working, simple, maintainable code over cleverness
   2. Clear configuration and flexibility (channel → playlist listeners)
   3. Classic local development with **Just** (justfile) as the build system
   4. A simple integrated web server that serves a plain HTML/CSS/JS Admin UI from a `webroot/` folder
-  5. Good logging so you don't have to dig too hard
-  6. Individual agency in copy and docs — Meat Bag owns the wire
-- When in doubt, I will ask you clarifying questions instead of assuming.
+  5. Good logging so operators do not have to dig too hard
+  6. Individual agency in copy and docs — the operator owns the wire
+- When in doubt, ask clarifying questions instead of assuming.
 
-## How We Work Together
-1. You feed this plan (and AGENTS.md) into Cursor.
-2. We implement step-by-step following the PLAN.md phases.
-3. Clanker generates code with lots of comments.
-4. Meat Bag tests, provides keys, reports results.
-5. We iterate until Subotto is solid and running on the Linux VPS (native binary, no containers).
+## How work proceeds
 
-## Git Commit Style (standard going forward)
+1. Feed this file and [PLAN.md](PLAN.md) into Cursor when starting work.
+2. Implement step-by-step following the PLAN.md phases (Phases 0–7 are shipped; see [docs/PROGRESS.md](docs/PROGRESS.md)).
+3. Agents generate code with lots of comments.
+4. The maintainer tests, provides keys, and reports results.
+5. Iterate until Subotto is solid on the Linux VPS (native binary, no containers).
 
-When Meat Bag asks Clanker to commit, use this format:
+## Git commit style
+
+When the maintainer asks for a commit, use this format:
 
 1. **Clean title** — one short line that says why the commit exists (not a dump of file names).
 2. **Body** — a bullet list of changes.
@@ -51,6 +51,13 @@ Bootstrap Phase 0 Subotto scaffold.
 - Add justfile with DEV and PROD recipes
 ```
 
-Clanker only commits when Meat Bag asks. No force-push, no rewriting history that has already been pushed, unless Meat Bag explicitly says so.
+Commit only when the maintainer asks. No force-push, no rewriting history that has already been pushed, unless the maintainer explicitly says so.
 
-This project belongs to the Meat Bag. Clanker is just here to make Subotto real.
+## Ship it
+
+When the maintainer says **ship it**, that means:
+
+1. Commit the current work (using the commit style above).
+2. Push the branch to the configured remote (`git push` / `git push -u` if needed).
+
+Do not force-push unless the maintainer explicitly says so.
