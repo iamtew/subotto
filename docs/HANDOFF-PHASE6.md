@@ -160,8 +160,8 @@ Use `git log` for the full list.
 - [x] Docs updated; `just test` / `just build` green  
 - [ ] Meat Bag can re-check with [DEV-VERIFY.md](DEV-VERIFY.md) smoke (live link still 💾)
 
-Then hand off toward **Phase 7** (deploy guide) similarly — or wait for Meat Bag.
+Then hand off toward **Phase 7** (deploy guide) — see [HANDOFF-PHASE7.md](HANDOFF-PHASE7.md).
 
 ---
 
-**Clanker’s note:** Phase 6 shipped. Default port is **50770**. Scheduler stays off until Meat Bag sets `RESYNC_INTERVAL_HOURS`.
+**Clanker’s note:** Phase 6 shipped (scheduler + Admin polish). Default port is **50770**. Scheduler stays off until Meat Bag sets `RESYNC_INTERVAL_HOURS`. Next stop: native VPS deploy.

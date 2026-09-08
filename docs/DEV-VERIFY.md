@@ -344,7 +344,7 @@ Check these off for yourself:
 - [x] Same link again → ♻️ + DUPE  
 - [x] Activity shows up in the Admin UI  
 
-**Sign-off:** Meat Bag verified good (2026-09-07). Next work is Phase 6 — see [HANDOFF-PHASE6.md](HANDOFF-PHASE6.md).
+**Sign-off:** Meat Bag verified good (2026-09-07). Phase 6 Admin polish followed; **next is Phase 7** — see [HANDOFF-PHASE7.md](HANDOFF-PHASE7.md).
 
 ---
 
@@ -352,8 +352,9 @@ Check these off for yourself:
 
 | File | Role |
 |------|------|
-| [PROGRESS.md](PROGRESS.md) | What Phases 0–5 delivered + verify sign-off |
-| [HANDOFF-PHASE6.md](HANDOFF-PHASE6.md) | Next agent: Phase 6 brief |
+| [PROGRESS.md](PROGRESS.md) | What shipped + verify sign-off |
+| [HANDOFF-PHASE7.md](HANDOFF-PHASE7.md) | Next agent: Phase 7 deploy brief |
+| [HANDOFF-ADMIN-UI.md](HANDOFF-ADMIN-UI.md) | Phase 6 Admin context |
 | [JUMPBACK.md](JUMPBACK.md) | Resume notes for the next session |
 | [PLAN.md](../PLAN.md) | Full roadmap |
 | [AGENTS.md](../AGENTS.md) | How Clanker ↔ Meat Bag work |

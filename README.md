@@ -11,10 +11,10 @@ See **AGENTS.md** for how Clanker and Meat Bag are supposed to talk to each othe
 
 ## Quick Status
 
-**Phases 0–6a done** (scheduler + port 50770). **Phase 6 continuing:** Admin UI polish — [docs/HANDOFF-ADMIN-UI.md](docs/HANDOFF-ADMIN-UI.md).  
-**Later:** Phase 7 (native Linux VPS / systemd).
+**Phases 0–6 done** (core + scheduler + Admin listeners / notices polish).  
+**Next:** Phase 7 native Linux VPS / systemd — [docs/HANDOFF-PHASE7.md](docs/HANDOFF-PHASE7.md).
 
-DEV recipe: [docs/DEV-VERIFY.md](docs/DEV-VERIFY.md).
+DEV recipe: [docs/DEV-VERIFY.md](docs/DEV-VERIFY.md). Jump-back: [docs/JUMPBACK.md](docs/JUMPBACK.md).
 
 Short path once secrets exist:
 
@@ -24,11 +24,11 @@ just run
 ```
 
 Open `http://localhost:50770` — username `admin`, password = `ADMIN_PASSWORD`.  
-Paste a YouTube link in a mapped channel → expect 💾 (or ♻️ / ❌).
+Paste a YouTube link in a mapped channel → expect 💾 (or ♻️ DUPE / 🛑 OLD / ❌).
 
-Optional: set `RESYNC_INTERVAL_HOURS` (e.g. `6`) for background history re-scans of enabled mappings. `0` keeps scheduler off.
+Optional: set `RESYNC_INTERVAL_HOURS` (e.g. `6`) for background history re-scans of enabled listeners. `0` keeps scheduler off.
 
-Session notes: [docs/PROGRESS.md](docs/PROGRESS.md) · jump-back: [docs/JUMPBACK.md](docs/JUMPBACK.md)
+Session notes: [docs/PROGRESS.md](docs/PROGRESS.md)
 
 **No Docker.** We use **Just** + native Go binaries.
 
@@ -83,7 +83,7 @@ Full walkthrough: [docs/DEV-VERIFY.md](docs/DEV-VERIFY.md).
 | Web UI files     | `webroot/`                        | Copy `webroot/` next to the binary     |
 | Secrets          | `.env` file                       | `.env` or environment variables        |
 
-PROD deploy docs are **Phase 7** (paused until DEV verify is done).
+PROD deploy docs are **Phase 7** — start from [docs/HANDOFF-PHASE7.md](docs/HANDOFF-PHASE7.md).
 
 ---
 

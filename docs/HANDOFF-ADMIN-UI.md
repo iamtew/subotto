@@ -1,25 +1,29 @@
 # Handoff — Phase 6 listeners + Admin ops desk
 
-**For:** next Clanker / Cursor agent  
+**For:** historical context / Phase 6 polish only  
 **Date:** 2026-09-08  
 **Branch:** `master`
 
-Meat Bag is staying on **Phase 6**. Admin UI is a dark SIGINT-flavored ops desk. Product language is **listeners**, not “mappings” or “airs”.
+**Status:** Phase 6 product work is **complete enough**. Meat Bag is moving to **Phase 7 deploy** — use [HANDOFF-PHASE7.md](HANDOFF-PHASE7.md) and [JUMPBACK.md](JUMPBACK.md).
 
-Suggested opener:  
-> Clanker, read docs/HANDOFF-ADMIN-UI.md and docs/JUMPBACK.md — continue Phase 6 polish.
+Suggested opener (Phase 6 leftovers only):  
+> Clanker, read docs/HANDOFF-ADMIN-UI.md — optional Phase 6 polish (e.g. notice preview).
+
+Suggested opener (deploy):  
+> Clanker, read docs/HANDOFF-PHASE7.md and docs/JUMPBACK.md — plan Phase 7 deployment with me.
 
 ---
 
-## 1. What just shipped (uncommitted → about to land)
+## 1. What shipped in Phase 6
 
 - Default Admin/OAuth port **50770**
-- Scheduler (`RESYNC_INTERVAL_HOURS`) + rate-limit polish
-- Dark theme: Better VCR + Inter, Meat Bag palette
-- **Listeners:** create YouTube playlist by name, guild/channel dropdowns
-- **Epochs:** one live listener per channel; soft-close on cease; resync won’t dig past previous epoch; channel-scoped video dedup
-- **Rename playlist** on an active listener (YouTube title update)
-- **Global** online/offline Discord announce templates (`/api/settings/listen-messages`)
+- Scheduler (`RESYNC_INTERVAL_HOURS`) + Discord/YouTube rate-limit retries
+- Dark digicam Admin: Better VCR + Inter, Meat Bag palette
+- **Listeners:** public YouTube playlist by name, guild/channel dropdowns, `#channel` names
+- **Epochs:** one live listener per channel; soft-close on cease; resync epoch floor; channel-scoped dedup
+- START confirm when replacing a live listener
+- **Notices:** global ONLINE/OFFLINE Discord templates (`/api/settings/listen-messages`)
+- Reactions: 💾 / ♻️DUPE / 🛑OLD / ❌
 - Tone: voluntary / sovereignty / ops desk — **do not** write the word communism (or anti-communism slogans) in code or docs
 
 ---
@@ -38,21 +42,19 @@ Suggested opener:
 | Path | Role |
 |------|------|
 | `webroot/` | Ops desk UI |
-| `internal/web/api.go` | Listens, announce, Discord catalog |
+| `internal/web/api.go` | Listens, notices, Discord catalog |
 | `internal/db/mappings.go` | Epochs + lookback |
 | `internal/db/settings.go` | Global listen start/stop notices |
-| `internal/discord/announce.go` | Channel announce helper |
-| `internal/youtube/client.go` | CreatePlaylist + UpdatePlaylistTitle |
+| `internal/discord/announce.go` | Channel notice helper |
+| `internal/youtube/client.go` | CreatePlaylist (public) + UpdatePlaylistTitle |
 | `internal/scheduler/` | Background resync |
 
 ---
 
-## 4. Sensible next polish (ask Meat Bag)
+## 4. Optional leftover polish (ask Meat Bag)
 
-- ~~Live Discord channel names in the listens table (not only snowflakes)~~
-- ~~Confirm before START LISTENER when a listener already exists on that channel~~
 - Preview announce notices before save
-- Phase 7 only when Meat Bag says so
+- Otherwise prefer Phase 7 — [HANDOFF-PHASE7.md](HANDOFF-PHASE7.md)
 
 ---
 
