@@ -1,6 +1,6 @@
 # Jump-Back Point — Subotto (2026-09-08)
 
-**Phase 6 in progress** — listeners, dark Admin, epochs, announce copy.  
+**Phase 6 in progress** — listeners, dark Admin, epochs, ONLINE/OFFLINE notices.  
 **Handoff:** [HANDOFF-ADMIN-UI.md](HANDOFF-ADMIN-UI.md)  
 **Later:** Phase 7 deploy guide (only when Meat Bag asks).
 

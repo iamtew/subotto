@@ -11,7 +11,7 @@ import (
 )
 
 // FormatListenMessage fills {{name}}, {{playlist_id}}, {{channel_id}} in a template.
-// Meat Bag configures these globally in Admin — same copy everywhere, your ops desk.
+// Meat Bag configures these globally in Admin — same notices everywhere.
 func FormatListenMessage(tmpl string, listen *db.ChannelMapping) string {
 	if listen == nil {
 		return tmpl

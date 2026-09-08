@@ -40,7 +40,7 @@ Suggested opener:
 | `webroot/` | Ops desk UI |
 | `internal/web/api.go` | Listens, announce, Discord catalog |
 | `internal/db/mappings.go` | Epochs + lookback |
-| `internal/db/settings.go` | Global listen start/stop copy |
+| `internal/db/settings.go` | Global listen start/stop notices |
 | `internal/discord/announce.go` | Channel announce helper |
 | `internal/youtube/client.go` | CreatePlaylist + UpdatePlaylistTitle |
 | `internal/scheduler/` | Background resync |
@@ -49,9 +49,9 @@ Suggested opener:
 
 ## 4. Sensible next polish (ask Meat Bag)
 
-- Live Discord channel names in the listens table (not only snowflakes)
-- Confirm before START LISTENER when a listener already exists on that channel
-- Preview announce templates before save
+- ~~Live Discord channel names in the listens table (not only snowflakes)~~
+- ~~Confirm before START LISTENER when a listener already exists on that channel~~
+- Preview announce notices before save
 - Phase 7 only when Meat Bag says so
 
 ---

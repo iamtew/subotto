@@ -181,6 +181,14 @@ function fmtDetails(details) {
 }
 
 let lastResyncChannel = "";
+// Latest listens from /api/listens — used for START confirm + channel labels.
+let cachedListens = [];
+
+function channelLabel(m) {
+  if (!m) return "";
+  if (m.discord_channel_name) return "#" + m.discord_channel_name;
+  return m.discord_channel_id || "";
+}
 
 function fillResyncSelect(listens) {
   const sel = document.getElementById("resync-channel");
@@ -188,7 +196,8 @@ function fillResyncSelect(listens) {
   const options = ['<option value="">— select listener —</option>'];
   for (const m of listens || []) {
     const off = m.enabled ? "" : " (paused)";
-    const label = (m.name ? m.name + " · " : "") + m.discord_channel_id + off;
+    const ch = channelLabel(m);
+    const label = (m.name ? m.name + " · " : "") + ch + off;
     options.push(
       `<option value="${esc(m.discord_channel_id)}">${esc(label)}</option>`
     );
@@ -281,6 +290,7 @@ async function loadListens() {
   try {
     const data = await api("/api/listens");
     const rows = data.listens || data.airs || data.mappings || [];
+    cachedListens = rows;
     fillResyncSelect(rows);
     if (!rows.length) {
       tbody.innerHTML = `<tr><td colspan="6" class="empty">no listeners — start listener above</td></tr>`;
@@ -289,13 +299,16 @@ async function loadListens() {
     tbody.innerHTML = rows
       .map((m) => {
         const ch = esc(m.discord_channel_id);
+        const chLabel = m.discord_channel_name
+          ? `#${esc(m.discord_channel_name)}`
+          : ch;
         const state = m.enabled
           ? `<span class="state-on">LISTENING</span>`
           : `<span class="state-off">PAUSED</span>`;
         const since = m.active_from ? new Date(m.active_from).toLocaleString() : "—";
         return `<tr>
           <td>${esc(m.name) || "—"}</td>
-          <td class="mono">${ch}</td>
+          <td class="mono" title="${ch}">${chLabel}</td>
           <td class="mono">${esc(m.youtube_playlist_id)}</td>
           <td class="mono">${esc(since)}</td>
           <td>${state}</td>
@@ -311,6 +324,7 @@ async function loadListens() {
       })
       .join("");
   } catch (err) {
+    cachedListens = [];
     tbody.innerHTML = `<tr><td colspan="6" class="empty">failed: ${esc(err.message)}</td></tr>`;
   }
 }
@@ -373,6 +387,22 @@ document.getElementById("listen-form").addEventListener("submit", async (ev) => 
     youtube_playlist_title: fd.get("youtube_playlist_title"),
     enabled: fd.get("enabled") === "on",
   };
+
+  // Meat Bag: starting again on a live channel soft-closes the old epoch and
+  // creates a new playlist — confirm so we do not orphan by accident.
+  const existing = cachedListens.find(
+    (m) => m.discord_channel_id === body.discord_channel_id
+  );
+  if (existing) {
+    const ch = channelLabel(existing);
+    const codename = existing.name ? ` (“${existing.name}”)` : "";
+    const ok = confirm(
+      `Channel ${ch} already has a live listener${codename}. ` +
+        "Starting again closes that epoch and creates a new YouTube playlist. Continue?"
+    );
+    if (!ok) return;
+  }
+
   btn.disabled = true;
   try {
     const m = await api("/api/listens", { method: "POST", body: JSON.stringify(body) });
@@ -402,7 +432,7 @@ document.getElementById("announce-form").addEventListener("submit", async (ev) =
         stop_message: fd.get("stop_message") || "",
       }),
     });
-    toast("announce copy saved");
+    toast("notices saved");
   } catch (err) {
     toast("save failed: " + err.message, true);
   }

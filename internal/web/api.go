@@ -65,15 +65,16 @@ func readJSON(r *http.Request, dst any) error {
 // ---------- DTOs (what the browser sees) ----------
 
 type mappingDTO struct {
-	ID                int64  `json:"id"`
-	DiscordChannelID  string `json:"discord_channel_id"`
-	GuildID           string `json:"guild_id"`
-	YouTubePlaylistID string `json:"youtube_playlist_id"`
-	Name              string `json:"name"`
-	Enabled           bool   `json:"enabled"`
-	CreatedAt         string `json:"created_at"`
-	ActiveFrom        string `json:"active_from"`
-	ActiveUntil       string `json:"active_until,omitempty"`
+	ID                 int64  `json:"id"`
+	DiscordChannelID   string `json:"discord_channel_id"`
+	DiscordChannelName string `json:"discord_channel_name,omitempty"`
+	GuildID            string `json:"guild_id"`
+	YouTubePlaylistID  string `json:"youtube_playlist_id"`
+	Name               string `json:"name"`
+	Enabled            bool   `json:"enabled"`
+	CreatedAt          string `json:"created_at"`
+	ActiveFrom         string `json:"active_from"`
+	ActiveUntil        string `json:"active_until,omitempty"`
 }
 
 func toMappingDTO(m db.ChannelMapping) mappingDTO {
@@ -167,11 +168,42 @@ func (s *Server) handleListMappings(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	// Resolve live Discord channel names for the Admin table (best-effort).
+	names := s.channelNamesForMappings(list)
 	out := make([]mappingDTO, 0, len(list))
 	for _, m := range list {
-		out = append(out, toMappingDTO(m))
+		dto := toMappingDTO(m)
+		dto.DiscordChannelName = names[m.DiscordChannelID]
+		out = append(out, dto)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"listens": out, "airs": out, "mappings": out})
+}
+
+// channelNamesForMappings looks up #channel names for the guilds present in
+// the listen list. Meat Bag: if Discord is down we just leave names empty and
+// the UI falls back to the snowflake id.
+func (s *Server) channelNamesForMappings(list []db.ChannelMapping) map[string]string {
+	out := map[string]string{}
+	if s.discord == nil || len(list) == 0 {
+		return out
+	}
+	seenGuild := map[string]bool{}
+	for _, m := range list {
+		guildID := strings.TrimSpace(m.GuildID)
+		if guildID == "" || seenGuild[guildID] {
+			continue
+		}
+		seenGuild[guildID] = true
+		chs, err := s.discord.ListTextChannels(guildID)
+		if err != nil {
+			slog.Debug("channel name lookup skipped", "guild", guildID, "err", err)
+			continue
+		}
+		for _, ch := range chs {
+			out[ch.ID] = ch.Name
+		}
+	}
+	return out
 }
 
 type upsertBody struct {
@@ -433,7 +465,7 @@ func (s *Server) handleGetListenMessages(w http.ResponseWriter, r *http.Request)
 		"start_message": start,
 		"stop_message":  stop,
 		"placeholders":  []string{"{{name}}", "{{playlist_id}}", "{{channel_id}}"},
-		"note": "Global SIGINT copy for every guild/channel. One Meat Bag ops desk.",
+		"note": "Global ONLINE/OFFLINE notices for every guild/channel.",
 	})
 }
 
@@ -459,7 +491,7 @@ func (s *Server) handlePutListenMessages(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-// announceListen posts the global ONLINE / OFFLINE listener template.
+// announceListen posts the global ONLINE / OFFLINE listener notice.
 func (s *Server) announceListen(ctx context.Context, listen *db.ChannelMapping, online bool) {
 	if listen == nil || strings.TrimSpace(s.discordTok) == "" {
 		return
