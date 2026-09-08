@@ -318,6 +318,7 @@ func runAddPicture(ctx context.Context, cfg *config.Config, store *db.DB, channe
 		IntervalSeconds:  8,
 		ShowCredit:       true,
 		ShowReactions:      true,
+		ReactionsAnimated:  true,
 		ReactionMultiplier: 1,
 		CreditScale:        1.5,
 		ReactionScale:      1.5,

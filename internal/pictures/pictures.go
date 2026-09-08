@@ -93,7 +93,7 @@ func ProcessAttachments(
 	listener *db.PictureListener,
 	messageID, authorID, authorDisplayName string,
 	atts []Attachment,
-	reactions map[string]int,
+	reactions []db.ReactionCount,
 ) Result {
 	var res Result
 	if store == nil || listener == nil {

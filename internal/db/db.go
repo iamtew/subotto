@@ -138,6 +138,7 @@ CREATE TABLE IF NOT EXISTS picture_listeners (
 	shuffle INTEGER NOT NULL DEFAULT 0,
 	show_credit INTEGER NOT NULL DEFAULT 1,
 	show_reactions INTEGER NOT NULL DEFAULT 1,
+	reactions_animated INTEGER NOT NULL DEFAULT 1,
 	reaction_multiplier INTEGER NOT NULL DEFAULT 1,
 	credit_scale REAL NOT NULL DEFAULT 1.5,
 	reaction_scale REAL NOT NULL DEFAULT 1.5,
@@ -262,6 +263,14 @@ func (d *DB) migratePictureListenerColumns() error {
 			ADD COLUMN reaction_scale REAL NOT NULL DEFAULT 1.5
 		`); err != nil {
 			return fmt.Errorf("add reaction_scale: %w", err)
+		}
+	}
+	if !cols["reactions_animated"] {
+		if _, err := d.sql.Exec(`
+			ALTER TABLE picture_listeners
+			ADD COLUMN reactions_animated INTEGER NOT NULL DEFAULT 1
+		`); err != nil {
+			return fmt.Errorf("add reactions_animated: %w", err)
 		}
 	}
 	return nil

@@ -52,7 +52,7 @@ func TestProcessAttachments(t *testing.T) {
 		URL:         srv.URL + "/pic.png",
 		Filename:    "pic.png",
 		ContentType: "image/png",
-	}}, map[string]int{"👍": 1})
+	}}, []db.ReactionCount{{Emoji: "👍", Count: 1}})
 	if res.Saved != 1 || res.Failed != 0 {
 		t.Fatalf("first save: %+v", res)
 	}

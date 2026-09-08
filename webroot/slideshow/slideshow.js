@@ -4,6 +4,7 @@
   const slideEl = document.getElementById("slide");
   const creditEl = document.getElementById("credit");
   const nameEl = document.getElementById("credit-name");
+  const reactionsEl = document.getElementById("credit-reactions");
   const floaterStage = document.getElementById("floater-stage");
   const emptyEl = document.getElementById("empty");
 
@@ -22,6 +23,9 @@
   let currentId = null;
   let floaterRAF = 0;
   let floaters = [];
+  let lastTick = 0;
+
+  const STATIC_STACK_MAX = 5;
 
   function slugFromPath() {
     const parts = location.pathname.split("/").filter(Boolean);
@@ -46,6 +50,7 @@
         showEmpty(true);
         stopAdvanceTimer();
         clearFloaters();
+        clearStaticReactions();
         return;
       }
       showEmpty(false);
@@ -70,6 +75,7 @@
         emptyEl.textContent = "slideshow unavailable";
         stopAdvanceTimer();
         clearFloaters();
+        clearStaticReactions();
       }
     }
   }
@@ -106,16 +112,40 @@
     return ["tl", "tr", "bl", "br"].indexOf(c) >= 0 ? c : "br";
   }
 
-  function isTopCorner(c) {
-    return c === "tl" || c === "tr";
+  function reactionsAnimated() {
+    // Default on when the field is missing (older feeds / first deploy).
+    return feed.reactions_animated !== false;
+  }
+
+  function normalizeReactions(raw) {
+    if (!raw) return [];
+    if (Array.isArray(raw)) {
+      const out = [];
+      for (let i = 0; i < raw.length; i++) {
+        const item = raw[i];
+        if (!item) continue;
+        const emoji = String(item.emoji || "").trim();
+        const count = Number(item.count) || 0;
+        if (!emoji || count < 1) continue;
+        out.push({ emoji: emoji, count: count });
+      }
+      return out;
+    }
+    // Legacy object map — order already lost; alphabetical fallback.
+    const keys = Object.keys(raw).sort();
+    const out = [];
+    for (let i = 0; i < keys.length; i++) {
+      const count = Number(raw[keys[i]]) || 0;
+      if (count < 1) continue;
+      out.push({ emoji: keys[i], count: count });
+    }
+    return out;
   }
 
   function applyChrome() {
     const corner = cornerCode();
     creditEl.classList.remove("tl", "tr", "bl", "br");
     creditEl.classList.add(corner);
-    floaterStage.classList.remove("tl", "tr", "bl", "br");
-    floaterStage.classList.add(corner);
 
     const cs = Number(feed.credit_scale);
     const rs = Number(feed.reaction_scale);
@@ -124,40 +154,6 @@
     creditEl.style.setProperty("--credit-scale", String(creditScale));
     creditEl.style.setProperty("--reaction-scale", String(reactionScale));
     floaterStage.style.setProperty("--reaction-scale", String(reactionScale));
-
-    layoutFloaterStage();
-  }
-
-  // 1x = compact zone near credit; 25x = full viewport. Linear in between.
-  function layoutFloaterStage() {
-    const mult = Math.max(1, Math.min(25, Number(feed.reaction_multiplier) || 1));
-    const t = (mult - 1) / 24; // 0 at 1x → 1 at 25x
-    const baseW = 22; // vw at 1x
-    const baseH = 18; // vh at 1x
-    const w = baseW + (100 - baseW) * t;
-    const h = baseH + (100 - baseH) * t;
-    const corner = cornerCode();
-
-    floaterStage.style.width = w + "vw";
-    floaterStage.style.height = h + "vh";
-    floaterStage.style.top = "";
-    floaterStage.style.right = "";
-    floaterStage.style.bottom = "";
-    floaterStage.style.left = "";
-
-    if (corner === "tl") {
-      floaterStage.style.top = "0";
-      floaterStage.style.left = "0";
-    } else if (corner === "tr") {
-      floaterStage.style.top = "0";
-      floaterStage.style.right = "0";
-    } else if (corner === "bl") {
-      floaterStage.style.bottom = "0";
-      floaterStage.style.left = "0";
-    } else {
-      floaterStage.style.bottom = "0";
-      floaterStage.style.right = "0";
-    }
   }
 
   function imageById(id) {
@@ -192,22 +188,36 @@
     if (!showCredit && !showReact) {
       creditEl.hidden = true;
       clearFloaters();
+      clearStaticReactions();
       return;
     }
 
+    creditEl.hidden = false;
+
     if (showCredit) {
-      creditEl.hidden = false;
-      const author = (img.author || "").trim();
       nameEl.hidden = false;
+      const author = (img.author || "").trim();
       nameEl.textContent = author ? "Author: " + author : "Author:";
     } else {
-      creditEl.hidden = true;
+      nameEl.hidden = true;
+      nameEl.textContent = "";
     }
 
-    if (showReact) {
-      rebuildFloaters(img.reactions || {});
+    const reactions = normalizeReactions(img.reactions);
+    if (!showReact || !reactions.length) {
+      clearFloaters();
+      clearStaticReactions();
+      return;
+    }
+
+    if (reactionsAnimated()) {
+      clearStaticReactions();
+      floaterStage.hidden = false;
+      rebuildFloaters(reactions);
     } else {
       clearFloaters();
+      floaterStage.hidden = true;
+      rebuildStaticStack(reactions);
     }
   }
 
@@ -263,57 +273,86 @@
     return img;
   }
 
+  function clearStaticReactions() {
+    reactionsEl.innerHTML = "";
+    reactionsEl.hidden = true;
+  }
+
+  // Static mode: Discord-ordered stack after the author name (max 5).
+  function rebuildStaticStack(reactions) {
+    reactionsEl.innerHTML = "";
+    const limit = Math.min(STATIC_STACK_MAX, reactions.length);
+    if (limit < 1) {
+      reactionsEl.hidden = true;
+      return;
+    }
+    for (let i = 0; i < limit; i++) {
+      const item = reactions[i];
+      const wrap = document.createElement("span");
+      wrap.className = "static-react";
+      wrap.appendChild(makeEmoteImg(parseReactionKey(item.emoji)));
+      // Discord-style: no digit when there's only one of that react.
+      if (item.count > 1) {
+        const countEl = document.createElement("span");
+        countEl.className = "static-react-count";
+        countEl.textContent = String(item.count);
+        wrap.appendChild(countEl);
+      }
+      reactionsEl.appendChild(wrap);
+    }
+    reactionsEl.hidden = false;
+  }
+
   function rebuildFloaters(reactions) {
     clearFloaters(false);
-    layoutFloaterStage();
     const mult = Math.max(1, Math.min(25, Number(feed.reaction_multiplier) || 1));
-    const keys = Object.keys(reactions).sort();
     const nodes = [];
-    for (let i = 0; i < keys.length; i++) {
-      const key = keys[i];
-      const count = Number(reactions[key]) || 0;
+    for (let i = 0; i < reactions.length; i++) {
+      const count = Number(reactions[i].count) || 0;
       if (count < 1) continue;
-      // Soft cap grows with multiplier so 25x can fill the stage
-      const cap = Math.min(220, 40 + mult * 8);
+      // Soft cap grows with multiplier so 25x can flood the stage
+      const cap = Math.min(280, 48 + mult * 10);
       const copies = Math.min(cap, count * mult);
-      const parsed = parseReactionKey(key);
+      const parsed = parseReactionKey(reactions[i].emoji);
       for (let n = 0; n < copies; n++) {
         nodes.push(spawnFloater(parsed));
       }
     }
     floaters = nodes;
+    lastTick = 0;
     if (!floaterRAF && floaters.length) {
       floaterRAF = requestAnimationFrame(tickFloaters);
     }
   }
 
+  // Fountain: burst from viewport center with upward impulse, then gravity.
   function spawnFloater(parsed) {
     const el = document.createElement("div");
     el.className = "float-emote pop";
     el.appendChild(makeEmoteImg(parsed));
     floaterStage.appendChild(el);
-
-    const corner = cornerCode();
-    const top = isTopCorner(corner);
-    // Top corners: float above + below author. Bottom: mostly above (toward center).
-    const angle = Math.random() * Math.PI * 2;
-    const radius = 18 + Math.random() * (top ? 48 : 40);
-    const life = 2.8 + Math.random() * 3.4; // seconds until fade-out respawn
-
-    return {
+    return resetFountainState({
       el: el,
       parsed: parsed,
-      angle: angle,
-      radius: radius,
-      spin: (Math.random() - 0.5) * 1.4,
-      wobble: 0.35 + Math.random() * 0.9,
-      speed: 0.25 + Math.random() * 0.55,
-      phase: Math.random() * Math.PI * 2,
       rot: Math.random() * 360,
-      born: performance.now(),
-      life: life * 1000,
-      topBias: top,
-    };
+      spin: (Math.random() - 0.5) * 2.2,
+    });
+  }
+
+  function resetFountainState(f) {
+    // Percent of stage; small jitter so they don't all stack on one pixel.
+    f.x = 50 + (Math.random() - 0.5) * 6;
+    f.y = 52 + (Math.random() - 0.5) * 4;
+    // Upward launch + horizontal spray — higher mult looks wild via more particles.
+    f.vx = (Math.random() - 0.5) * 28;
+    f.vy = -(14 + Math.random() * 22);
+    f.born = performance.now();
+    f.life = (2.4 + Math.random() * 2.8) * 1000;
+    f.el.classList.remove("pop");
+    void f.el.offsetWidth;
+    f.el.classList.add("pop");
+    f.el.style.opacity = "1";
+    return f;
   }
 
   function clearFloaters(cancelRAF) {
@@ -326,56 +365,41 @@
   }
 
   function respawnFloater(f) {
-    f.born = performance.now();
-    f.life = (2.8 + Math.random() * 3.4) * 1000;
-    f.angle = Math.random() * Math.PI * 2;
-    f.radius = 18 + Math.random() * (f.topBias ? 48 : 40);
-    f.phase = Math.random() * Math.PI * 2;
-    f.rot = Math.random() * 360;
-    f.el.classList.remove("pop");
-    // Force reflow so pop animation can replay
-    void f.el.offsetWidth;
-    f.el.classList.add("pop");
-    f.el.style.opacity = "1";
+    resetFountainState(f);
   }
 
   function tickFloaters(now) {
-    const t = now * 0.001;
+    const dt = lastTick ? Math.min(0.05, (now - lastTick) / 1000) : 0.016;
+    lastTick = now;
+    const gravity = 38; // % of stage height per second²
+
     for (let i = 0; i < floaters.length; i++) {
       const f = floaters[i];
       const age = now - f.born;
-      if (age >= f.life) {
+
+      f.vy += gravity * dt;
+      f.x += f.vx * dt;
+      f.y += f.vy * dt;
+      f.rot += f.spin;
+
+      const offscreen =
+        f.y > 118 || f.y < -18 || f.x < -18 || f.x > 118 || age >= f.life;
+      if (offscreen) {
         respawnFloater(f);
       }
 
-      const a = f.angle + t * f.speed * 0.35;
-      const r = f.radius + Math.sin(t * f.wobble + f.phase) * 6;
-      let cx = 50;
-      let cy;
-      if (f.topBias) {
-        // Top corner: orbit around the credit (near top of floater stage) — above + below
-        cy = 22;
-      } else {
-        // Bottom corner: keep floaters above the author card (toward upper part of zone)
-        cy = 38;
-      }
-      const x = cx + Math.cos(a) * r * 0.55;
-      const y = cy + Math.sin(a) * r * (f.topBias ? 0.55 : 0.38);
-
-      // Fade out in the last ~35% of life; pop-in handles appear
-      const fadeStart = f.life * 0.65;
+      // Fade in the last stretch of life (respawn resets opacity).
+      const fadeStart = f.life * 0.7;
       let opacity = 1;
-      if (age > fadeStart) {
-        opacity = Math.max(0, 1 - (age - fadeStart) / (f.life - fadeStart));
+      const curAge = now - f.born;
+      if (curAge > fadeStart) {
+        opacity = Math.max(0, 1 - (curAge - fadeStart) / (f.life - fadeStart));
       }
 
-      f.rot += f.spin;
-      const scale = 0.85 + Math.sin(t * f.wobble + f.phase) * 0.12;
-      f.el.style.left = x + "%";
-      f.el.style.top = y + "%";
+      f.el.style.left = f.x + "%";
+      f.el.style.top = f.y + "%";
       f.el.style.opacity = String(opacity);
-      f.el.style.transform =
-        "translate(-50%, -50%) rotate(" + f.rot + "deg) scale(" + scale + ")";
+      f.el.style.transform = "translate(-50%, -50%) rotate(" + f.rot + "deg)";
     }
     floaterRAF = requestAnimationFrame(tickFloaters);
   }
@@ -408,10 +432,6 @@
       creditEl.hidden = true;
     }
   }
-
-  window.addEventListener("resize", function () {
-    if (feed) layoutFloaterStage();
-  });
 
   refreshFeed();
   setInterval(refreshFeed, 5000);

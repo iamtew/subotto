@@ -29,13 +29,17 @@ html, body {
   pointer-events: none;
 }
 
-/* Floater playground: JS sets width/height/position from reaction_multiplier.
-   Must sit ABOVE the author card so sprites are not buried under frost. */
+/* Full-viewport playground for animated fountain floaters (above credit). */
 .floater-stage {
   position: absolute;
+  inset: 0;
   z-index: 5;
   overflow: visible;
   pointer-events: none;
+}
+
+.floater-stage[hidden] {
+  display: none !important;
 }
 
 .credit {
@@ -56,7 +60,7 @@ html, body {
 .credit-card {
   position: relative;
   min-width: calc(6.5rem * var(--credit-scale));
-  max-width: min(48vw, calc(18rem * var(--credit-scale)));
+  max-width: min(92vw, calc(28rem * var(--credit-scale)));
   padding: calc(0.55rem * var(--credit-scale)) calc(0.75rem * var(--credit-scale));
   border-radius: calc(8px * var(--credit-scale));
   color: #fff;
@@ -74,14 +78,30 @@ html, body {
 
 .credit.tr .credit-card,
 .credit.br .credit-card {
-  text-align: right;
   margin-left: auto;
 }
 
 .credit.tl .credit-card,
 .credit.bl .credit-card {
-  text-align: left;
   margin-right: auto;
+}
+
+/* Author name + static reaction stack on one row. */
+.credit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(0.45rem * var(--credit-scale)) calc(0.55rem * var(--credit-scale));
+}
+
+.credit.tr .credit-row,
+.credit.br .credit-row {
+  justify-content: flex-end;
+}
+
+.credit.tl .credit-row,
+.credit.bl .credit-row {
+  justify-content: flex-start;
 }
 
 .credit-name {
@@ -89,6 +109,47 @@ html, body {
   font-weight: 600;
   letter-spacing: 0.02em;
   line-height: 1.25;
+  white-space: nowrap;
+}
+
+.credit-name[hidden] {
+  display: none !important;
+}
+
+.credit-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(0.35rem * var(--reaction-scale));
+}
+
+.credit-reactions[hidden] {
+  display: none !important;
+}
+
+.static-react {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(0.18rem * var(--reaction-scale));
+  line-height: 1;
+}
+
+.static-react img {
+  width: calc(1.35rem * var(--reaction-scale, 1.5));
+  height: calc(1.35rem * var(--reaction-scale, 1.5));
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.static-react-count {
+  font-size: calc(clamp(0.75rem, 1.6vw, 1rem) * var(--credit-scale));
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  opacity: 0.95;
+  min-width: 0.7em;
 }
 
 .float-emote {

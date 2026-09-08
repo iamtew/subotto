@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -24,9 +25,16 @@ const (
 const pictureSelectCols = `
 	id, discord_channel_id, guild_id, name, slug, enabled,
 	credit_corner, interval_seconds, shuffle, show_credit, show_reactions,
-	reaction_multiplier, credit_scale, reaction_scale,
+	reactions_animated, reaction_multiplier, credit_scale, reaction_scale,
 	created_at, active_from, active_until
 `
+
+// ReactionCount is one Discord reaction type with its human count.
+// Slice order matches Discord's message reaction bar (first-added → left).
+type ReactionCount struct {
+	Emoji string `json:"emoji"`
+	Count int    `json:"count"`
+}
 
 // PictureListener is one Discord channel → on-disk gallery *picture listener* epoch.
 // Meat Bag: start/cease like a content listener, but images land under data/pictures/{slug}/.
@@ -42,9 +50,10 @@ type PictureListener struct {
 	Shuffle          bool
 	ShowCredit       bool
 	ShowReactions      bool
-	ReactionMultiplier int // 1–25; copies of each reaction = count * multiplier
+	ReactionsAnimated  bool // true = fountain floaters; false = static stack by author
+	ReactionMultiplier int // 1–25; copies of each reaction = count * multiplier (animated only)
 	CreditScale        float64 // author card + font size multiplier (0.5–5)
-	ReactionScale      float64 // floating emoji size multiplier (0.5–5)
+	ReactionScale      float64 // emoji size multiplier (0.5–5)
 	CreatedAt          time.Time
 	ActiveFrom         time.Time
 	ActiveUntil        *time.Time // nil = currently active epoch
@@ -61,7 +70,7 @@ type CollectedPicture struct {
 	StoredPath           string // relative to PicturesDir(), e.g. "my-show/123_456.jpg"
 	ContentType          string
 	CollectedAt          time.Time
-	Reactions            map[string]int // emoji → count
+	Reactions            []ReactionCount // Discord order preserved
 }
 
 // PictureListenerInput is the create/update payload from Admin / CLI.
@@ -76,6 +85,7 @@ type PictureListenerInput struct {
 	Shuffle          bool
 	ShowCredit       bool
 	ShowReactions      bool
+	ReactionsAnimated  bool
 	ReactionMultiplier int
 	CreditScale        float64
 	ReactionScale      float64
@@ -259,6 +269,7 @@ func (d *DB) UpsertPictureListener(ctx context.Context, in PictureListenerInput)
 	shuffleInt := boolToInt(in.Shuffle)
 	showCreditInt := boolToInt(in.ShowCredit)
 	showReactionsInt := boolToInt(in.ShowReactions)
+	animatedInt := boolToInt(in.ReactionsAnimated)
 	mult := NormalizeReactionMultiplier(in.ReactionMultiplier)
 	creditScale := NormalizeOverlayScale(in.CreditScale)
 	reactionScale := NormalizeOverlayScale(in.ReactionScale)
@@ -275,11 +286,11 @@ func (d *DB) UpsertPictureListener(ctx context.Context, in PictureListenerInput)
 			UPDATE picture_listeners
 			SET guild_id = ?, name = ?, enabled = ?,
 			    credit_corner = ?, interval_seconds = ?, shuffle = ?,
-			    show_credit = ?, show_reactions = ?, reaction_multiplier = ?,
-			    credit_scale = ?, reaction_scale = ?
+			    show_credit = ?, show_reactions = ?, reactions_animated = ?,
+			    reaction_multiplier = ?, credit_scale = ?, reaction_scale = ?
 			WHERE id = ? AND active_until IS NULL
 		`, in.GuildID, name, enabledInt, corner, interval, shuffleInt,
-			showCreditInt, showReactionsInt, mult, creditScale, reactionScale, existing.ID)
+			showCreditInt, showReactionsInt, animatedInt, mult, creditScale, reactionScale, existing.ID)
 		if err != nil {
 			return nil, fmt.Errorf("update picture listener: %w", err)
 		}
@@ -309,11 +320,11 @@ func (d *DB) UpsertPictureListener(ctx context.Context, in PictureListenerInput)
 		INSERT INTO picture_listeners (
 			discord_channel_id, guild_id, name, slug, enabled,
 			credit_corner, interval_seconds, shuffle, show_credit, show_reactions,
-			reaction_multiplier, credit_scale, reaction_scale,
+			reactions_animated, reaction_multiplier, credit_scale, reaction_scale,
 			created_at, active_from, active_until
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
 	`, channelID, in.GuildID, name, slug, enabledInt,
-		corner, interval, shuffleInt, showCreditInt, showReactionsInt, mult,
+		corner, interval, shuffleInt, showCreditInt, showReactionsInt, animatedInt, mult,
 		creditScale, reactionScale, now, now)
 	if err != nil {
 		return nil, fmt.Errorf("insert picture listener: %w", err)
@@ -427,12 +438,12 @@ func (d *DB) UpdatePictureListenerSettings(ctx context.Context, channelID string
 		UPDATE picture_listeners
 		SET name = ?, enabled = ?,
 		    credit_corner = ?, interval_seconds = ?, shuffle = ?,
-		    show_credit = ?, show_reactions = ?, reaction_multiplier = ?,
-		    credit_scale = ?, reaction_scale = ?
+		    show_credit = ?, show_reactions = ?, reactions_animated = ?,
+		    reaction_multiplier = ?, credit_scale = ?, reaction_scale = ?
 		WHERE id = ? AND active_until IS NULL
 	`, name, boolToInt(in.Enabled), corner, interval, boolToInt(in.Shuffle),
-		boolToInt(in.ShowCredit), boolToInt(in.ShowReactions), mult,
-		creditScale, reactionScale, existing.ID)
+		boolToInt(in.ShowCredit), boolToInt(in.ShowReactions), boolToInt(in.ReactionsAnimated),
+		mult, creditScale, reactionScale, existing.ID)
 	if err != nil {
 		return nil, fmt.Errorf("update picture listener settings: %w", err)
 	}
@@ -600,13 +611,9 @@ func (d *DB) CollectedAttachmentOnChannel(ctx context.Context, channelID, attach
 
 // InsertCollectedPicture records a newly saved image. reactions may be nil.
 func (d *DB) InsertCollectedPicture(ctx context.Context, p CollectedPicture) (*CollectedPicture, error) {
-	reactions := "{}"
-	if p.Reactions != nil {
-		b, err := json.Marshal(p.Reactions)
-		if err != nil {
-			return nil, fmt.Errorf("marshal reactions: %w", err)
-		}
-		reactions = string(b)
+	reactions, err := marshalReactions(p.Reactions)
+	if err != nil {
+		return nil, err
 	}
 	now := time.Now().UTC().Format("2006-01-02 15:04:05")
 	res, err := d.sql.ExecContext(ctx, `
@@ -707,16 +714,12 @@ func (d *DB) ListCollectedPicturesByMessage(ctx context.Context, channelID, mess
 
 // UpdatePictureReactions sets reactions_json for every collected row of a message
 // under the active picture listener on that channel.
-func (d *DB) UpdatePictureReactions(ctx context.Context, channelID, messageID string, reactions map[string]int) error {
-	payload := "{}"
-	if reactions != nil {
-		b, err := json.Marshal(reactions)
-		if err != nil {
-			return fmt.Errorf("marshal reactions: %w", err)
-		}
-		payload = string(b)
+func (d *DB) UpdatePictureReactions(ctx context.Context, channelID, messageID string, reactions []ReactionCount) error {
+	payload, err := marshalReactions(reactions)
+	if err != nil {
+		return err
 	}
-	_, err := d.sql.ExecContext(ctx, `
+	_, err = d.sql.ExecContext(ctx, `
 		UPDATE collected_pictures
 		SET reactions_json = ?
 		WHERE discord_message_id = ?
@@ -728,6 +731,56 @@ func (d *DB) UpdatePictureReactions(ctx context.Context, channelID, messageID st
 	return err
 }
 
+// marshalReactions encodes the ordered reaction list (always a JSON array).
+func marshalReactions(reactions []ReactionCount) (string, error) {
+	if reactions == nil {
+		reactions = []ReactionCount{}
+	}
+	b, err := json.Marshal(reactions)
+	if err != nil {
+		return "", fmt.Errorf("marshal reactions: %w", err)
+	}
+	return string(b), nil
+}
+
+// parseReactionsJSON accepts the new ordered array form, or legacy {"emoji":count} objects.
+// Legacy object keys are sorted alphabetically (order was already lost).
+func parseReactionsJSON(raw string) []ReactionCount {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "{}" || raw == "[]" || raw == "null" {
+		return []ReactionCount{}
+	}
+	var list []ReactionCount
+	if err := json.Unmarshal([]byte(raw), &list); err == nil {
+		out := make([]ReactionCount, 0, len(list))
+		for _, r := range list {
+			if strings.TrimSpace(r.Emoji) == "" || r.Count < 1 {
+				continue
+			}
+			out = append(out, r)
+		}
+		return out
+	}
+	var legacy map[string]int
+	if err := json.Unmarshal([]byte(raw), &legacy); err != nil {
+		return []ReactionCount{}
+	}
+	keys := make([]string, 0, len(legacy))
+	for k, n := range legacy {
+		if strings.TrimSpace(k) == "" || n < 1 {
+			continue
+		}
+		keys = append(keys, k)
+	}
+	// Stable fallback when Discord order was never stored.
+	sort.Strings(keys)
+	out := make([]ReactionCount, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, ReactionCount{Emoji: k, Count: legacy[k]})
+	}
+	return out
+}
+
 func scanPictureListener(row scannable) (*PictureListener, error) {
 	var (
 		p           PictureListener
@@ -735,6 +788,7 @@ func scanPictureListener(row scannable) (*PictureListener, error) {
 		shuffle     int
 		showCredit  int
 		showReact   int
+		animated    int
 		createdAt   string
 		activeFrom  string
 		activeUntil sql.NullString
@@ -751,6 +805,7 @@ func scanPictureListener(row scannable) (*PictureListener, error) {
 		&shuffle,
 		&showCredit,
 		&showReact,
+		&animated,
 		&p.ReactionMultiplier,
 		&p.CreditScale,
 		&p.ReactionScale,
@@ -765,6 +820,7 @@ func scanPictureListener(row scannable) (*PictureListener, error) {
 	p.Shuffle = shuffle == 1
 	p.ShowCredit = showCredit == 1
 	p.ShowReactions = showReact == 1
+	p.ReactionsAnimated = animated == 1
 	p.ReactionMultiplier = NormalizeReactionMultiplier(p.ReactionMultiplier)
 	p.CreditScale = NormalizeOverlayScale(p.CreditScale)
 	p.ReactionScale = NormalizeOverlayScale(p.ReactionScale)
@@ -799,10 +855,7 @@ func scanCollectedPicture(row scannable) (*CollectedPicture, error) {
 		return nil, err
 	}
 	p.CollectedAt = parseSQLiteTime(collectedAt)
-	p.Reactions = map[string]int{}
-	if strings.TrimSpace(reactionsRaw) != "" && reactionsRaw != "{}" {
-		_ = json.Unmarshal([]byte(reactionsRaw), &p.Reactions)
-	}
+	p.Reactions = parseReactionsJSON(reactionsRaw)
 	return &p, nil
 }
 

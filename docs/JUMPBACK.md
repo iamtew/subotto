@@ -18,7 +18,7 @@
 4. One live content listener **and** one live picture listener may share the same channel
 5. Content / picture resync stop at previous epoch boundaries; they also stamp missing status chrome (💾 / DUPE / OLD / ❌)
 6. ONLINE/OFFLINE Discord **notices** are global templates (content listeners) in Admin
-7. Public OBS overlay: `/slideshow/latest` or `/slideshow/{slug}` (no Basic Auth). Credit: `Author: NAME` on frosted glass; reaction **floaters** (Twemoji + Discord CDN). Settings: corner, advance, scales, **reaction render 1x–25x** (floater stage grows with it)
+7. Public OBS overlay: `/slideshow/latest` or `/slideshow/{slug}` (no Basic Auth). Credit: `Author: NAME` on frosted glass. Reactions: **animated mode** (center fountain floaters + render 1x–25x) or **static** Discord-ordered stack after the name (max 5, with counts). Settings: corner, advance, scales, animated checkbox, multiplier (animated only)
 8. Port default **50770**; scheduler optional via `RESYNC_INTERVAL_HOURS` (usually `0`)
 9. PROD is headless: copy `.env` + `data/` (DB + `pictures/`). Same Discord bot token → do not run DEV + PROD together
 

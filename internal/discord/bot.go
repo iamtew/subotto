@@ -376,14 +376,15 @@ func (b *Bot) refreshMessageReactions(channelID, messageID string) {
 	}
 }
 
-// reactionsFromMessage builds emoji→count for the slideshow floaters.
+// reactionsFromMessage builds an ordered emoji→count list for the slideshow.
+// Order matches Discord's reaction bar (first reaction added → leftmost).
 // Counts exclude Subotto's own reacts (Discord's Me flag) so status chrome
 // like 💾 / DUPE / OLD / ❌ never become floaters — only other users' reacts.
-func reactionsFromMessage(m *discordgo.Message) map[string]int {
-	out := map[string]int{}
+func reactionsFromMessage(m *discordgo.Message) []db.ReactionCount {
 	if m == nil {
-		return out
+		return []db.ReactionCount{}
 	}
+	out := make([]db.ReactionCount, 0, len(m.Reactions))
 	for _, r := range m.Reactions {
 		if r == nil || r.Emoji == nil || r.Emoji.Name == "" {
 			continue
@@ -404,7 +405,7 @@ func reactionsFromMessage(m *discordgo.Message) map[string]int {
 				key = r.Emoji.Name + ":" + r.Emoji.ID
 			}
 		}
-		out[key] = count
+		out = append(out, db.ReactionCount{Emoji: key, Count: count})
 	}
 	return out
 }

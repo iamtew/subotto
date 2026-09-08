@@ -50,6 +50,15 @@ function reactionMultiplierOptionsHTML(selected) {
   return parts.join("");
 }
 
+function syncAnimatedMultiplierVisibility() {
+  const animated = document.getElementById("picture-settings-animated");
+  const wrap = document.getElementById("picture-settings-multiplier-wrap");
+  if (!animated || !wrap) return;
+  wrap.hidden = !animated.checked;
+}
+
+document.getElementById("picture-settings-animated").addEventListener("change", syncAnimatedMultiplierVisibility);
+
 function initTabs() {
   const bar = document.getElementById("tab-bar");
   const saved = localStorage.getItem("subotto_admin_tab") || "content";
@@ -760,8 +769,10 @@ function openPictureSettings(channelID) {
   document.getElementById("picture-settings-shuffle").checked = !!p.shuffle;
   document.getElementById("picture-settings-credit").checked = p.show_credit !== false;
   document.getElementById("picture-settings-reactions").checked = p.show_reactions !== false;
+  document.getElementById("picture-settings-animated").checked = p.reactions_animated !== false;
   document.getElementById("picture-settings-multiplier").innerHTML =
     reactionMultiplierOptionsHTML(p.reaction_multiplier || 1);
+  syncAnimatedMultiplierVisibility();
   const creditScale = Number(p.credit_scale) > 0 ? Number(p.credit_scale) : 1.5;
   const reactionScale = Number(p.reaction_scale) > 0 ? Number(p.reaction_scale) : 1.5;
   document.getElementById("picture-settings-credit-scale").innerHTML =
@@ -803,6 +814,7 @@ document.getElementById("picture-settings-form").addEventListener("submit", asyn
         shuffle: fd.get("shuffle") === "on",
         show_credit: fd.get("show_credit") === "on",
         show_reactions: fd.get("show_reactions") === "on",
+        reactions_animated: fd.get("reactions_animated") === "on",
         reaction_multiplier: Number(fd.get("reaction_multiplier") || 1),
         credit_scale: Number(fd.get("credit_scale") || 1.5),
         reaction_scale: Number(fd.get("reaction_scale") || 1.5),

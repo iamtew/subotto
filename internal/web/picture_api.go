@@ -30,6 +30,7 @@ type pictureListenerDTO struct {
 	Shuffle            bool   `json:"shuffle"`
 	ShowCredit         bool   `json:"show_credit"`
 	ShowReactions      bool   `json:"show_reactions"`
+	ReactionsAnimated  bool   `json:"reactions_animated"`
 	ReactionMultiplier int     `json:"reaction_multiplier"`
 	CreditScale        float64 `json:"credit_scale"`
 	ReactionScale      float64 `json:"reaction_scale"`
@@ -53,6 +54,7 @@ func toPictureListenerDTO(p db.PictureListener, count int) pictureListenerDTO {
 		Shuffle:            p.Shuffle,
 		ShowCredit:         p.ShowCredit,
 		ShowReactions:      p.ShowReactions,
+		ReactionsAnimated:  p.ReactionsAnimated,
 		ReactionMultiplier: p.ReactionMultiplier,
 		CreditScale:        p.CreditScale,
 		ReactionScale:      p.ReactionScale,
@@ -107,6 +109,7 @@ type pictureUpsertBody struct {
 	Shuffle          *bool  `json:"shuffle"`
 	ShowCredit       *bool  `json:"show_credit"`
 	ShowReactions    *bool  `json:"show_reactions"`
+	ReactionsAnimated  *bool    `json:"reactions_animated"`
 	ReactionMultiplier *int     `json:"reaction_multiplier"`
 	CreditScale        *float64 `json:"credit_scale"`
 	ReactionScale      *float64 `json:"reaction_scale"`
@@ -133,6 +136,10 @@ func (s *Server) pictureInputFromBody(body pictureUpsertBody) db.PictureListener
 	if body.ShowReactions != nil {
 		showReactions = *body.ShowReactions
 	}
+	animated := true
+	if body.ReactionsAnimated != nil {
+		animated = *body.ReactionsAnimated
+	}
 	mult := 1
 	if body.ReactionMultiplier != nil {
 		mult = *body.ReactionMultiplier
@@ -156,6 +163,7 @@ func (s *Server) pictureInputFromBody(body pictureUpsertBody) db.PictureListener
 		Shuffle:            shuffle,
 		ShowCredit:         showCredit,
 		ShowReactions:      showReactions,
+		ReactionsAnimated:  animated,
 		ReactionMultiplier: mult,
 		CreditScale:        creditScale,
 		ReactionScale:      reactionScale,
@@ -220,6 +228,7 @@ func (s *Server) handlePatchPictureListener(w http.ResponseWriter, r *http.Reque
 		body.Name == "" && body.Slug == "" && body.CreditCorner == "" &&
 		body.IntervalSeconds == nil && body.Shuffle == nil &&
 		body.ShowCredit == nil && body.ShowReactions == nil &&
+		body.ReactionsAnimated == nil &&
 		body.ReactionMultiplier == nil && body.CreditScale == nil && body.ReactionScale == nil {
 		p, err := s.store.SetPictureListenerEnabled(r.Context(), channelID, *body.Enabled)
 		if err != nil {
@@ -242,6 +251,7 @@ func (s *Server) handlePatchPictureListener(w http.ResponseWriter, r *http.Reque
 		Shuffle:            existing.Shuffle,
 		ShowCredit:         existing.ShowCredit,
 		ShowReactions:      existing.ShowReactions,
+		ReactionsAnimated:  existing.ReactionsAnimated,
 		ReactionMultiplier: existing.ReactionMultiplier,
 		CreditScale:        existing.CreditScale,
 		ReactionScale:      existing.ReactionScale,
@@ -269,6 +279,9 @@ func (s *Server) handlePatchPictureListener(w http.ResponseWriter, r *http.Reque
 	}
 	if body.ShowReactions != nil {
 		in.ShowReactions = *body.ShowReactions
+	}
+	if body.ReactionsAnimated != nil {
+		in.ReactionsAnimated = *body.ReactionsAnimated
 	}
 	if body.ReactionMultiplier != nil {
 		in.ReactionMultiplier = *body.ReactionMultiplier

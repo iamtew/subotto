@@ -66,6 +66,7 @@ type slideshowFeedDTO struct {
 	Shuffle         bool               `json:"shuffle"`
 	ShowCredit      bool               `json:"show_credit"`
 	ShowReactions   bool               `json:"show_reactions"`
+	ReactionsAnimated  bool              `json:"reactions_animated"`
 	ReactionMultiplier int               `json:"reaction_multiplier"`
 	CreditScale        float64           `json:"credit_scale"`
 	ReactionScale      float64           `json:"reaction_scale"`
@@ -73,11 +74,11 @@ type slideshowFeedDTO struct {
 }
 
 type slideshowImageDTO struct {
-	ID        int64          `json:"id"`
-	URL       string         `json:"url"`
-	Author    string         `json:"author"`
-	Reactions map[string]int `json:"reactions"`
-	Collected string         `json:"collected_at"`
+	ID        int64              `json:"id"`
+	URL       string             `json:"url"`
+	Author    string             `json:"author"`
+	Reactions []db.ReactionCount `json:"reactions"`
+	Collected string             `json:"collected_at"`
 }
 
 func (s *Server) handleSlideshowFeed(w http.ResponseWriter, r *http.Request) {
@@ -100,11 +101,15 @@ func (s *Server) handleSlideshowFeed(w http.ResponseWriter, r *http.Request) {
 
 	images := make([]slideshowImageDTO, 0, len(pics))
 	for _, p := range pics {
+		reactions := p.Reactions
+		if reactions == nil {
+			reactions = []db.ReactionCount{}
+		}
 		images = append(images, slideshowImageDTO{
 			ID:        p.ID,
 			URL:       "/media/pictures/" + filepath.ToSlash(p.StoredPath),
 			Author:    p.AuthorDisplayName,
-			Reactions: p.Reactions,
+			Reactions: reactions,
 			Collected: p.CollectedAt.UTC().Format(time.RFC3339),
 		})
 	}
@@ -117,6 +122,7 @@ func (s *Server) handleSlideshowFeed(w http.ResponseWriter, r *http.Request) {
 		Shuffle:         pl.Shuffle,
 		ShowCredit:         pl.ShowCredit,
 		ShowReactions:      pl.ShowReactions,
+		ReactionsAnimated:  pl.ReactionsAnimated,
 		ReactionMultiplier: pl.ReactionMultiplier,
 		CreditScale:        pl.CreditScale,
 		ReactionScale:      pl.ReactionScale,

@@ -7,20 +7,69 @@ import (
 	"testing"
 )
 
-func TestSlugify(t *testing.T) {
-	cases := map[string]string{
-		"Hello World":     "hello_world",
-		"Show #42!":       "show_42",
-		"  already_slug ": "already_slug",
-		"latest":          "latest",
-		"":                "",
+func TestParseReactionsJSON(t *testing.T) {
+	ordered := parseReactionsJSON(`[{"emoji":"❤️","count":2},{"emoji":"🔥","count":1}]`)
+	if len(ordered) != 2 || ordered[0].Emoji != "❤️" || ordered[1].Emoji != "🔥" {
+		t.Fatalf("array parse: %+v", ordered)
 	}
-	for in, want := range cases {
-		if got := Slugify(in); got != want {
-			t.Fatalf("Slugify(%q)=%q want %q", in, got, want)
-		}
+
+	legacy := parseReactionsJSON(`{"🔥":3,"❤️":1}`)
+	if len(legacy) != 2 {
+		t.Fatalf("legacy len: %+v", legacy)
+	}
+	// Alphabetical fallback for old object maps.
+	if legacy[0].Emoji != "❤️" || legacy[0].Count != 1 || legacy[1].Emoji != "🔥" || legacy[1].Count != 3 {
+		t.Fatalf("legacy alphabetical: %+v", legacy)
+	}
+
+	if len(parseReactionsJSON(`{}`)) != 0 || len(parseReactionsJSON(`[]`)) != 0 {
+		t.Fatal("empty payloads should yield empty list")
 	}
 }
+
+func TestReactionsAnimatedSetting(t *testing.T) {
+	ctx := context.Background()
+	store := openTestDB(t)
+
+	p, err := store.UpsertPictureListener(ctx, PictureListenerInput{
+		DiscordChannelID:  "chan-anim",
+		Name:              "Anim Pics",
+		Enabled:           true,
+		IntervalSeconds:   8,
+		ShowCredit:        true,
+		ShowReactions:     true,
+		ReactionsAnimated: true,
+	})
+	if err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	if !p.ReactionsAnimated {
+		t.Fatalf("want animated on: %+v", p)
+	}
+
+	p2, err := store.UpdatePictureListenerSettings(ctx, "chan-anim", PictureListenerInput{
+		Name:               p.Name,
+		Enabled:            true,
+		CreditCorner:       p.CreditCorner,
+		IntervalSeconds:    p.IntervalSeconds,
+		ShowCredit:         true,
+		ShowReactions:      true,
+		ReactionsAnimated:  false,
+		ReactionMultiplier: 3,
+		CreditScale:        1.5,
+		ReactionScale:      1.5,
+	})
+	if err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if p2.ReactionsAnimated {
+		t.Fatalf("want animated off: %+v", p2)
+	}
+	if p2.ReactionMultiplier != 3 {
+		t.Fatalf("want multiplier 3: %+v", p2)
+	}
+}
+
 
 func TestPictureListenerCRUD(t *testing.T) {
 	ctx := context.Background()
@@ -160,12 +209,12 @@ func TestCollectedPictures(t *testing.T) {
 		AuthorDisplayName:   "MeatBag",
 		StoredPath:          pl.Slug + "/msg-1_att-1.jpg",
 		ContentType:         "image/jpeg",
-		Reactions:           map[string]int{"🔥": 2},
+		Reactions: []ReactionCount{{Emoji: "🔥", Count: 2}},
 	})
 	if err != nil {
 		t.Fatalf("insert: %v", err)
 	}
-	if pic.ID == 0 || pic.Reactions["🔥"] != 2 {
+	if pic.ID == 0 || len(pic.Reactions) != 1 || pic.Reactions[0].Emoji != "🔥" || pic.Reactions[0].Count != 2 {
 		t.Fatalf("bad insert: %+v", pic)
 	}
 
@@ -183,15 +232,20 @@ func TestCollectedPictures(t *testing.T) {
 		t.Fatalf("missing attachment should be absent: found=%v err=%v", found, err)
 	}
 
-	if err := store.UpdatePictureReactions(ctx, "chan-c", "msg-1", map[string]int{"🔥": 3, "❤️": 1}); err != nil {
+	if err := store.UpdatePictureReactions(ctx, "chan-c", "msg-1", []ReactionCount{
+		{Emoji: "🔥", Count: 3},
+		{Emoji: "❤️", Count: 1},
+	}); err != nil {
 		t.Fatalf("update reactions: %v", err)
 	}
 	list, err := store.ListCollectedPicturesForListener(ctx, pl.ID)
 	if err != nil || len(list) != 1 {
 		t.Fatalf("list: %v len=%d", err, len(list))
 	}
-	if list[0].Reactions["🔥"] != 3 || list[0].Reactions["❤️"] != 1 {
-		t.Fatalf("reactions not updated: %+v", list[0].Reactions)
+	if len(list[0].Reactions) != 2 ||
+		list[0].Reactions[0].Emoji != "🔥" || list[0].Reactions[0].Count != 3 ||
+		list[0].Reactions[1].Emoji != "❤️" || list[0].Reactions[1].Count != 1 {
+		t.Fatalf("reactions not updated in Discord order: %+v", list[0].Reactions)
 	}
 
 	abs, err := store.AbsolutePicturePath(list[0].StoredPath)

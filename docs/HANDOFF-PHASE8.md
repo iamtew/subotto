@@ -59,16 +59,15 @@ data/pictures/{slug}/            saved images (next to DATABASE_PATH)
 ### Admin UX
 - Expandable tabs via `TAB_REGISTRY` in `webroot/js/admin.js`
 - Picture **start form** is bare minimum: name, server, channel, enabled
-- **Settings** panel (per live picture listener): corner, advance, shuffle, author credit, reactions, reaction render 1–25x, author size, emoji size
+- **Settings** panel (per live picture listener): corner, advance, shuffle, author credit, reactions, **animated mode**, reaction render 1–25x (animated only), author size, emoji size
 - Picture **resync** (REST history; stamps missing 💾 / DUPE / OLD / ❌) — Admin + `just resync-pictures`
 
 ### Slideshow behavior (current)
 - Transparent bg; image `object-fit: contain`
 - Frosted Author card: `Author: NAME`
-- Floaters = reaction sprites (Twemoji unicode/flags; Discord CDN for custom `name:id` / `a:name:id`)
-- Pop-in + fade-out lifecycle; stage z-index **above** author card
-- Floater playground size scales with reaction multiplier (1x local zone → 25x full viewport)
-- Top corners: floaters above + below author; bottom corners: mostly above
+- Reactions stored as Discord-ordered `[{emoji,count},…]` (legacy object maps still read)
+- **Animated mode (default):** fountain floaters from viewport center (up then gravity); Twemoji + Discord CDN; multiplier copies
+- **Static mode:** up to 5 emoji+count after the author name, Discord left-to-right order
 - Default author/emoji size multipliers: **1.5**
 - Feed poll every 5s; advance timer must **not** reset on poll (`ensureAdvanceTimer`)
 
