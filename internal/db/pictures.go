@@ -24,6 +24,7 @@ const (
 const pictureSelectCols = `
 	id, discord_channel_id, guild_id, name, slug, enabled,
 	credit_corner, interval_seconds, shuffle, show_credit, show_reactions,
+	reaction_multiplier, credit_scale, reaction_scale,
 	created_at, active_from, active_until
 `
 
@@ -40,10 +41,13 @@ type PictureListener struct {
 	IntervalSeconds  int
 	Shuffle          bool
 	ShowCredit       bool
-	ShowReactions    bool
-	CreatedAt        time.Time
-	ActiveFrom       time.Time
-	ActiveUntil      *time.Time // nil = currently active epoch
+	ShowReactions      bool
+	ReactionMultiplier int // 1–25; copies of each reaction = count * multiplier
+	CreditScale        float64 // author card + font size multiplier (0.5–5)
+	ReactionScale      float64 // floating emoji size multiplier (0.5–5)
+	CreatedAt          time.Time
+	ActiveFrom         time.Time
+	ActiveUntil        *time.Time // nil = currently active epoch
 }
 
 // CollectedPicture is one saved Discord image attachment.
@@ -71,7 +75,10 @@ type PictureListenerInput struct {
 	IntervalSeconds  int
 	Shuffle          bool
 	ShowCredit       bool
-	ShowReactions    bool
+	ShowReactions      bool
+	ReactionMultiplier int
+	CreditScale        float64
+	ReactionScale      float64
 }
 
 var slugSanitizer = regexp.MustCompile(`[^a-z0-9_-]+`)
@@ -118,6 +125,34 @@ func NormalizeCreditCorner(c string) string {
 	default:
 		return CreditCornerBR
 	}
+}
+
+// NormalizeReactionMultiplier clamps to 1–25 (copies of each reaction on the overlay).
+func NormalizeReactionMultiplier(n int) int {
+	if n < 1 {
+		return 1
+	}
+	if n > 25 {
+		return 25
+	}
+	return n
+}
+
+// NormalizeOverlayScale clamps credit/reaction size multipliers to 0.5–5 in 0.25 steps.
+// Empty/zero input becomes the default 1.5.
+func NormalizeOverlayScale(v float64) float64 {
+	if v <= 0 {
+		return 1.5
+	}
+	// Snap to nearest 0.25
+	snapped := float64(int(v*4+0.5)) / 4
+	if snapped < 0.5 {
+		return 0.5
+	}
+	if snapped > 5 {
+		return 5
+	}
+	return snapped
 }
 
 // GetEnabledPictureListenerByChannel returns the active+enabled picture listener, or nil.
@@ -224,6 +259,9 @@ func (d *DB) UpsertPictureListener(ctx context.Context, in PictureListenerInput)
 	shuffleInt := boolToInt(in.Shuffle)
 	showCreditInt := boolToInt(in.ShowCredit)
 	showReactionsInt := boolToInt(in.ShowReactions)
+	mult := NormalizeReactionMultiplier(in.ReactionMultiplier)
+	creditScale := NormalizeOverlayScale(in.CreditScale)
+	reactionScale := NormalizeOverlayScale(in.ReactionScale)
 	now := time.Now().UTC().Format("2006-01-02 15:04:05")
 
 	existing, err := d.GetPictureListenerByChannel(ctx, channelID)
@@ -237,10 +275,11 @@ func (d *DB) UpsertPictureListener(ctx context.Context, in PictureListenerInput)
 			UPDATE picture_listeners
 			SET guild_id = ?, name = ?, enabled = ?,
 			    credit_corner = ?, interval_seconds = ?, shuffle = ?,
-			    show_credit = ?, show_reactions = ?
+			    show_credit = ?, show_reactions = ?, reaction_multiplier = ?,
+			    credit_scale = ?, reaction_scale = ?
 			WHERE id = ? AND active_until IS NULL
 		`, in.GuildID, name, enabledInt, corner, interval, shuffleInt,
-			showCreditInt, showReactionsInt, existing.ID)
+			showCreditInt, showReactionsInt, mult, creditScale, reactionScale, existing.ID)
 		if err != nil {
 			return nil, fmt.Errorf("update picture listener: %w", err)
 		}
@@ -270,10 +309,12 @@ func (d *DB) UpsertPictureListener(ctx context.Context, in PictureListenerInput)
 		INSERT INTO picture_listeners (
 			discord_channel_id, guild_id, name, slug, enabled,
 			credit_corner, interval_seconds, shuffle, show_credit, show_reactions,
+			reaction_multiplier, credit_scale, reaction_scale,
 			created_at, active_from, active_until
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
 	`, channelID, in.GuildID, name, slug, enabledInt,
-		corner, interval, shuffleInt, showCreditInt, showReactionsInt, now, now)
+		corner, interval, shuffleInt, showCreditInt, showReactionsInt, mult,
+		creditScale, reactionScale, now, now)
 	if err != nil {
 		return nil, fmt.Errorf("insert picture listener: %w", err)
 	}
@@ -364,15 +405,34 @@ func (d *DB) UpdatePictureListenerSettings(ctx context.Context, channelID string
 	if interval > 600 {
 		interval = 600
 	}
+	mult := in.ReactionMultiplier
+	if mult < 1 {
+		mult = existing.ReactionMultiplier
+	}
+	mult = NormalizeReactionMultiplier(mult)
+
+	creditScale := in.CreditScale
+	if creditScale <= 0 {
+		creditScale = existing.CreditScale
+	}
+	creditScale = NormalizeOverlayScale(creditScale)
+
+	reactionScale := in.ReactionScale
+	if reactionScale <= 0 {
+		reactionScale = existing.ReactionScale
+	}
+	reactionScale = NormalizeOverlayScale(reactionScale)
 
 	_, err = d.sql.ExecContext(ctx, `
 		UPDATE picture_listeners
 		SET name = ?, enabled = ?,
 		    credit_corner = ?, interval_seconds = ?, shuffle = ?,
-		    show_credit = ?, show_reactions = ?
+		    show_credit = ?, show_reactions = ?, reaction_multiplier = ?,
+		    credit_scale = ?, reaction_scale = ?
 		WHERE id = ? AND active_until IS NULL
 	`, name, boolToInt(in.Enabled), corner, interval, boolToInt(in.Shuffle),
-		boolToInt(in.ShowCredit), boolToInt(in.ShowReactions), existing.ID)
+		boolToInt(in.ShowCredit), boolToInt(in.ShowReactions), mult,
+		creditScale, reactionScale, existing.ID)
 	if err != nil {
 		return nil, fmt.Errorf("update picture listener settings: %w", err)
 	}
@@ -662,6 +722,9 @@ func scanPictureListener(row scannable) (*PictureListener, error) {
 		&shuffle,
 		&showCredit,
 		&showReact,
+		&p.ReactionMultiplier,
+		&p.CreditScale,
+		&p.ReactionScale,
 		&createdAt,
 		&activeFrom,
 		&activeUntil,
@@ -673,6 +736,9 @@ func scanPictureListener(row scannable) (*PictureListener, error) {
 	p.Shuffle = shuffle == 1
 	p.ShowCredit = showCredit == 1
 	p.ShowReactions = showReact == 1
+	p.ReactionMultiplier = NormalizeReactionMultiplier(p.ReactionMultiplier)
+	p.CreditScale = NormalizeOverlayScale(p.CreditScale)
+	p.ReactionScale = NormalizeOverlayScale(p.ReactionScale)
 	p.CreatedAt = parseSQLiteTime(createdAt)
 	p.ActiveFrom = parseSQLiteTime(activeFrom)
 	if activeUntil.Valid && strings.TrimSpace(activeUntil.String) != "" {

@@ -222,8 +222,12 @@ func reactionsFromMessage(m *discordgo.Message) map[string]int {
 		}
 		key := r.Emoji.Name
 		if r.Emoji.ID != "" {
-			// Custom emoji: name:id so slideshow can show a stable key.
-			key = r.Emoji.Name + ":" + r.Emoji.ID
+			// Custom emoji for slideshow CDN: name:id or a:name:id (animated).
+			if r.Emoji.Animated {
+				key = "a:" + r.Emoji.Name + ":" + r.Emoji.ID
+			} else {
+				key = r.Emoji.Name + ":" + r.Emoji.ID
+			}
 		}
 		out[key] = r.Count
 	}

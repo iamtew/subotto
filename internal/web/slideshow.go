@@ -66,7 +66,10 @@ type slideshowFeedDTO struct {
 	Shuffle         bool               `json:"shuffle"`
 	ShowCredit      bool               `json:"show_credit"`
 	ShowReactions   bool               `json:"show_reactions"`
-	Images          []slideshowImageDTO `json:"images"`
+	ReactionMultiplier int               `json:"reaction_multiplier"`
+	CreditScale        float64           `json:"credit_scale"`
+	ReactionScale      float64           `json:"reaction_scale"`
+	Images             []slideshowImageDTO `json:"images"`
 }
 
 type slideshowImageDTO struct {
@@ -112,9 +115,12 @@ func (s *Server) handleSlideshowFeed(w http.ResponseWriter, r *http.Request) {
 		CreditCorner:    pl.CreditCorner,
 		IntervalSeconds: pl.IntervalSeconds,
 		Shuffle:         pl.Shuffle,
-		ShowCredit:      pl.ShowCredit,
-		ShowReactions:   pl.ShowReactions,
-		Images:          images,
+		ShowCredit:         pl.ShowCredit,
+		ShowReactions:      pl.ShowReactions,
+		ReactionMultiplier: pl.ReactionMultiplier,
+		CreditScale:        pl.CreditScale,
+		ReactionScale:      pl.ReactionScale,
+		Images:             images,
 	})
 }
 

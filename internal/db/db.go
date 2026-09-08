@@ -138,6 +138,9 @@ CREATE TABLE IF NOT EXISTS picture_listeners (
 	shuffle INTEGER NOT NULL DEFAULT 0,
 	show_credit INTEGER NOT NULL DEFAULT 1,
 	show_reactions INTEGER NOT NULL DEFAULT 1,
+	reaction_multiplier INTEGER NOT NULL DEFAULT 1,
+	credit_scale REAL NOT NULL DEFAULT 1.5,
+	reaction_scale REAL NOT NULL DEFAULT 1.5,
 	created_at TEXT NOT NULL DEFAULT (datetime('now')),
 	active_from TEXT NOT NULL DEFAULT (datetime('now')),
 	active_until TEXT
@@ -227,6 +230,39 @@ func (d *DB) migratePictureListenerIndexes() error {
 		ON collected_pictures (listener_id, id)
 	`); err != nil {
 		return fmt.Errorf("create collected_pictures listener index: %w", err)
+	}
+	return d.migratePictureListenerColumns()
+}
+
+// migratePictureListenerColumns adds Phase 8+ slideshow columns on older DBs.
+func (d *DB) migratePictureListenerColumns() error {
+	cols, err := d.tableColumns("picture_listeners")
+	if err != nil {
+		return err
+	}
+	if !cols["reaction_multiplier"] {
+		if _, err := d.sql.Exec(`
+			ALTER TABLE picture_listeners
+			ADD COLUMN reaction_multiplier INTEGER NOT NULL DEFAULT 1
+		`); err != nil {
+			return fmt.Errorf("add reaction_multiplier: %w", err)
+		}
+	}
+	if !cols["credit_scale"] {
+		if _, err := d.sql.Exec(`
+			ALTER TABLE picture_listeners
+			ADD COLUMN credit_scale REAL NOT NULL DEFAULT 1.5
+		`); err != nil {
+			return fmt.Errorf("add credit_scale: %w", err)
+		}
+	}
+	if !cols["reaction_scale"] {
+		if _, err := d.sql.Exec(`
+			ALTER TABLE picture_listeners
+			ADD COLUMN reaction_scale REAL NOT NULL DEFAULT 1.5
+		`); err != nil {
+			return fmt.Errorf("add reaction_scale: %w", err)
+		}
 	}
 	return nil
 }

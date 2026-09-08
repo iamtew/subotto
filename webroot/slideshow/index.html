@@ -10,9 +10,12 @@
   <!-- OBS Browser Source: transparent page, image fills viewport, credit in a corner. -->
   <div id="stage">
     <img id="slide" alt="" hidden>
-    <div id="credit" class="credit br" hidden>
-      <div id="credit-name" class="credit-name"></div>
-      <div id="credit-reactions" class="credit-reactions"></div>
+    <!-- Floater playground — size grows with reaction_multiplier (1x local → 25x full stage) -->
+    <div id="floater-stage" class="floater-stage br" aria-hidden="true"></div>
+    <div id="credit" class="credit br" hidden style="--credit-scale: 1.5; --reaction-scale: 1.5;">
+      <div class="credit-card">
+        <div id="credit-name" class="credit-name"></div>
+      </div>
     </div>
     <div id="empty" class="empty" hidden>waiting for pictures…</div>
   </div>

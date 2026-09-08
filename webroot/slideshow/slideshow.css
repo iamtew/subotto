@@ -1,4 +1,5 @@
-/* Subotto OBS slideshow — transparent background, max image, corner credit. */
+/* Subotto OBS slideshow — transparent background, max image, corner credit.
+   --credit-scale / --reaction-scale come from Admin (default 1.5). */
 
 html, body {
   margin: 0;
@@ -28,45 +29,97 @@ html, body {
   pointer-events: none;
 }
 
-.credit {
+/* Floater playground: JS sets width/height/position from reaction_multiplier.
+   Must sit ABOVE the author card so sprites are not buried under frost. */
+.floater-stage {
   position: absolute;
-  z-index: 2;
-  max-width: min(48vw, 28rem);
-  padding: 0.55rem 0.75rem;
-  color: #fff;
-  text-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.9),
-    0 0 8px rgba(0, 0, 0, 0.65);
+  z-index: 5;
+  overflow: visible;
   pointer-events: none;
 }
 
-.credit.tl { top: 1.1rem; left: 1.1rem; text-align: left; }
-.credit.tr { top: 1.1rem; right: 1.1rem; text-align: right; }
-.credit.bl { bottom: 1.1rem; left: 1.1rem; text-align: left; }
-.credit.br { bottom: 1.1rem; right: 1.1rem; text-align: right; }
+.credit {
+  --credit-scale: 1.5;
+  --reaction-scale: 1.5;
+  position: absolute;
+  z-index: 4;
+  /* Tight to the corner — no big padding that shoves the card inward */
+  margin: 0.35rem;
+  pointer-events: none;
+}
+
+.credit.tl { top: 0; left: 0; }
+.credit.tr { top: 0; right: 0; }
+.credit.bl { bottom: 0; left: 0; }
+.credit.br { bottom: 0; right: 0; }
+
+.credit-card {
+  position: relative;
+  min-width: calc(6.5rem * var(--credit-scale));
+  max-width: min(48vw, calc(18rem * var(--credit-scale)));
+  padding: calc(0.55rem * var(--credit-scale)) calc(0.75rem * var(--credit-scale));
+  border-radius: calc(8px * var(--credit-scale));
+  color: #fff;
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.75),
+    0 0 6px rgba(0, 0, 0, 0.45);
+  background: rgba(12, 14, 18, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow:
+    0 8px 28px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(14px) saturate(1.25);
+  -webkit-backdrop-filter: blur(14px) saturate(1.25);
+}
+
+.credit.tr .credit-card,
+.credit.br .credit-card {
+  text-align: right;
+  margin-left: auto;
+}
+
+.credit.tl .credit-card,
+.credit.bl .credit-card {
+  text-align: left;
+  margin-right: auto;
+}
 
 .credit-name {
-  font-size: clamp(0.95rem, 2.2vw, 1.35rem);
+  font-size: calc(clamp(0.95rem, 2.2vw, 1.35rem) * var(--credit-scale));
   font-weight: 600;
   letter-spacing: 0.02em;
+  line-height: 1.25;
 }
 
-.credit-reactions {
-  margin-top: 0.35rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem 0.55rem;
-  font-size: clamp(0.85rem, 1.8vw, 1.1rem);
-  justify-content: inherit;
+.float-emote {
+  position: absolute;
+  width: calc(1.55rem * var(--reaction-scale, 1.5));
+  height: calc(1.55rem * var(--reaction-scale, 1.5));
+  left: 50%;
+  top: 50%;
+  margin: 0;
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(0.2);
+  will-change: transform, opacity;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.55));
 }
 
-.credit.tr .credit-reactions,
-.credit.br .credit-reactions {
-  justify-content: flex-end;
+.float-emote.pop {
+  animation: floater-pop 0.28s ease-out forwards;
 }
 
-.react-chip {
-  white-space: nowrap;
+@keyframes floater-pop {
+  from { transform: translate(-50%, -50%) scale(0.15); opacity: 1; }
+  to   { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+
+.float-emote img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .empty {
@@ -78,4 +131,8 @@ html, body {
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
   font-size: 1.1rem;
   letter-spacing: 0.04em;
+}
+
+.empty[hidden] {
+  display: none !important;
 }

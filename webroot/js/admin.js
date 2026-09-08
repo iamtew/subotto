@@ -10,6 +10,46 @@ const TAB_REGISTRY = [
   { id: "pictures", label: "Picture listeners" },
 ];
 
+/** Overlay size steps: 0.5x … 5x in 0.25 increments (default 1.5). */
+function overlayScaleOptionsHTML(selected) {
+  const sel = Number(selected) > 0 ? Number(selected) : 1.5;
+  const parts = [];
+  for (let v = 0.5; v <= 5.001; v += 0.25) {
+    const rounded = Math.round(v * 100) / 100;
+    const label = Number.isInteger(rounded) ? rounded + "x" : rounded.toFixed(2).replace(/0$/, "") + "x";
+    const isSel = Math.abs(rounded - sel) < 0.001;
+    parts.push(
+      `<option value="${rounded}"${isSel ? " selected" : ""}>${label}</option>`
+    );
+  }
+  return parts.join("");
+}
+
+function fillOverlayScaleSelects() {
+  const ids = ["picture-settings-credit-scale", "picture-settings-reaction-scale"];
+  for (const id of ids) {
+    const el = document.getElementById(id);
+    if (el && !el.options.length) {
+      el.innerHTML = overlayScaleOptionsHTML(1.5);
+    }
+  }
+  const multEl = document.getElementById("picture-settings-multiplier");
+  if (multEl && !multEl.options.length) {
+    multEl.innerHTML = reactionMultiplierOptionsHTML(1);
+  }
+}
+
+function reactionMultiplierOptionsHTML(selected) {
+  const sel = Math.max(1, Math.min(25, Number(selected) || 1));
+  const parts = [];
+  for (let v = 1; v <= 25; v++) {
+    parts.push(
+      `<option value="${v}"${v === sel ? " selected" : ""}>${v}x</option>`
+    );
+  }
+  return parts.join("");
+}
+
 function initTabs() {
   const bar = document.getElementById("tab-bar");
   const saved = localStorage.getItem("subotto_admin_tab") || "content";
@@ -419,9 +459,7 @@ async function loadPictureListens() {
           <td class="mono">${esc(since)}</td>
           <td>${state}</td>
           <td class="actions">
-            <button type="button" class="secondary" data-pact="settings" data-channel="${ch}"
-              data-corner="${esc(p.credit_corner)}" data-interval="${esc(p.interval_seconds)}"
-              data-shuffle="${p.shuffle}" data-credit="${p.show_credit}" data-reactions="${p.show_reactions}">Settings</button>
+            <button type="button" class="secondary" data-pact="settings" data-channel="${ch}">Settings</button>
             <button type="button" class="secondary" data-pact="toggle" data-channel="${ch}" data-enabled="${p.enabled}">
               ${p.enabled ? "Pause" : "Resume"}
             </button>
@@ -539,11 +577,6 @@ document.getElementById("picture-form").addEventListener("submit", async (ev) =>
     name: fd.get("name") || "",
     guild_id: fd.get("guild_id") || "",
     discord_channel_id: fd.get("discord_channel_id"),
-    credit_corner: fd.get("credit_corner") || "br",
-    interval_seconds: Number(fd.get("interval_seconds") || 8),
-    shuffle: fd.get("shuffle") === "on",
-    show_credit: fd.get("show_credit") === "on",
-    show_reactions: fd.get("show_reactions") === "on",
     enabled: fd.get("enabled") === "on",
   };
 
@@ -568,9 +601,6 @@ document.getElementById("picture-form").addEventListener("submit", async (ev) =>
     const p = data.picture_listen || {};
     ev.target.reset();
     ev.target.querySelector('[name="enabled"]').checked = true;
-    ev.target.querySelector('[name="show_credit"]').checked = true;
-    ev.target.querySelector('[name="show_reactions"]').checked = true;
-    ev.target.querySelector('[name="interval_seconds"]').value = "8";
     document.getElementById("pic-channel-select").disabled = true;
     document.getElementById("pic-channel-select").innerHTML =
       `<option value="">— pick a server first —</option>`;
@@ -683,28 +713,83 @@ document.getElementById("picture-listens-table").addEventListener("click", async
       document.getElementById("picture-resync-section").scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     } else if (act === "settings") {
-      const corner = prompt("Credit corner (tl/tr/bl/br):", btn.getAttribute("data-corner") || "br");
-      if (corner === null) return;
-      const intervalRaw = prompt("Advance seconds:", btn.getAttribute("data-interval") || "8");
-      if (intervalRaw === null) return;
-      const shuffle = confirm("Shuffle images? OK = yes, Cancel = no");
-      const showCredit = confirm("Show submitter name? OK = yes, Cancel = no");
-      const showReactions = confirm("Show reactions? OK = yes, Cancel = no");
-      await api("/api/picture-listens/" + encodeURIComponent(channel), {
-        method: "PATCH",
-        body: JSON.stringify({
-          credit_corner: corner.trim() || "br",
-          interval_seconds: Number(intervalRaw) || 8,
-          shuffle,
-          show_credit: showCredit,
-          show_reactions: showReactions,
-        }),
-      });
-      toast("slideshow settings saved");
+      openPictureSettings(channel);
+      return;
     }
     await refreshAll();
   } catch (err) {
     toast(err.message, true);
+  }
+});
+
+function openPictureSettings(channelID) {
+  const p = cachedPictureListens.find((row) => row.discord_channel_id === channelID);
+  if (!p) {
+    toast("picture listener not found — refresh and try again", true);
+    return;
+  }
+  const panel = document.getElementById("picture-settings-panel");
+  document.getElementById("picture-settings-channel").value = p.discord_channel_id;
+  document.getElementById("picture-settings-corner").value = p.credit_corner || "br";
+  document.getElementById("picture-settings-interval").value = String(p.interval_seconds || 8);
+  document.getElementById("picture-settings-shuffle").checked = !!p.shuffle;
+  document.getElementById("picture-settings-credit").checked = p.show_credit !== false;
+  document.getElementById("picture-settings-reactions").checked = p.show_reactions !== false;
+  document.getElementById("picture-settings-multiplier").innerHTML =
+    reactionMultiplierOptionsHTML(p.reaction_multiplier || 1);
+  const creditScale = Number(p.credit_scale) > 0 ? Number(p.credit_scale) : 1.5;
+  const reactionScale = Number(p.reaction_scale) > 0 ? Number(p.reaction_scale) : 1.5;
+  document.getElementById("picture-settings-credit-scale").innerHTML =
+    overlayScaleOptionsHTML(creditScale);
+  document.getElementById("picture-settings-reaction-scale").innerHTML =
+    overlayScaleOptionsHTML(reactionScale);
+  const ch = channelLabel(p);
+  document.getElementById("picture-settings-target").textContent =
+    (p.name || "unnamed") + " · " + (p.slug || "") + " · " + ch;
+  panel.hidden = false;
+  panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function closePictureSettings() {
+  document.getElementById("picture-settings-panel").hidden = true;
+  document.getElementById("picture-settings-channel").value = "";
+}
+
+document.getElementById("picture-settings-cancel").addEventListener("click", () => {
+  closePictureSettings();
+});
+
+document.getElementById("picture-settings-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const fd = new FormData(ev.target);
+  const channel = String(fd.get("discord_channel_id") || "").trim();
+  if (!channel) {
+    toast("no picture listener selected", true);
+    return;
+  }
+  const btn = ev.target.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  try {
+    await api("/api/picture-listens/" + encodeURIComponent(channel), {
+      method: "PATCH",
+      body: JSON.stringify({
+        credit_corner: fd.get("credit_corner") || "br",
+        interval_seconds: Number(fd.get("interval_seconds") || 8),
+        shuffle: fd.get("shuffle") === "on",
+        show_credit: fd.get("show_credit") === "on",
+        show_reactions: fd.get("show_reactions") === "on",
+        reaction_multiplier: Number(fd.get("reaction_multiplier") || 1),
+        credit_scale: Number(fd.get("credit_scale") || 1.5),
+        reaction_scale: Number(fd.get("reaction_scale") || 1.5),
+      }),
+    });
+    toast("slideshow settings saved");
+    closePictureSettings();
+    await refreshAll();
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    btn.disabled = false;
   }
 });
 
@@ -787,6 +872,7 @@ document.getElementById("picture-resync-channel").addEventListener("change", (ev
 });
 
 initTabs();
+fillOverlayScaleSelects();
 loadGuilds();
 loadAnnounce();
 refreshAll();

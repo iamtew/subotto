@@ -223,6 +223,30 @@ footer,
   grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
 }
 
+.picture-form-start {
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  grid-column: 1 / -1;
+}
+
+.settings-target {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+}
+
+#picture-settings-panel[hidden] {
+  display: none !important;
+}
+
 main {
   max-width: 72rem;
   margin: 0 auto;

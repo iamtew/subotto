@@ -152,7 +152,7 @@
           <p>Discord image attachments → host disk · public OBS slideshow · can run beside a content listener on the same channel</p>
         </div>
 
-        <form id="picture-form" class="mapping-form picture-form">
+        <form id="picture-form" class="mapping-form picture-form picture-form-start">
           <label>
             Listener Name
             <input name="name" type="text" required placeholder="becomes /slideshow/slug" autocomplete="off" spellcheck="false">
@@ -168,31 +168,6 @@
             <select name="discord_channel_id" id="pic-channel-select" required disabled>
               <option value="">— pick a server first —</option>
             </select>
-          </label>
-          <label>
-            Credit corner
-            <select name="credit_corner">
-              <option value="br">bottom right</option>
-              <option value="bl">bottom left</option>
-              <option value="tr">top right</option>
-              <option value="tl">top left</option>
-            </select>
-          </label>
-          <label>
-            Advance (seconds)
-            <input name="interval_seconds" type="number" min="1" max="600" value="8">
-          </label>
-          <label class="check">
-            <input name="shuffle" type="checkbox">
-            <span>shuffle</span>
-          </label>
-          <label class="check">
-            <input name="show_credit" type="checkbox" checked>
-            <span>show submitter</span>
-          </label>
-          <label class="check">
-            <input name="show_reactions" type="checkbox" checked>
-            <span>show reactions</span>
           </label>
           <label class="check">
             <input name="enabled" type="checkbox" checked>
@@ -221,6 +196,57 @@
         </div>
       </section>
 
+      <section class="panel" id="picture-settings-panel" hidden>
+        <div class="panel-head">
+          <h2>SLIDESHOW SETTINGS</h2>
+          <p id="picture-settings-target" class="settings-target">—</p>
+        </div>
+        <form id="picture-settings-form" class="mapping-form picture-form">
+          <input type="hidden" name="discord_channel_id" id="picture-settings-channel" value="">
+          <label>
+            Credit corner
+            <select name="credit_corner" id="picture-settings-corner">
+              <option value="br">bottom right</option>
+              <option value="bl">bottom left</option>
+              <option value="tr">top right</option>
+              <option value="tl">top left</option>
+            </select>
+          </label>
+          <label>
+            Advance (seconds)
+            <input name="interval_seconds" id="picture-settings-interval" type="number" min="1" max="600" value="8">
+          </label>
+          <label class="check">
+            <input name="shuffle" id="picture-settings-shuffle" type="checkbox">
+            <span>shuffle</span>
+          </label>
+          <label class="check">
+            <input name="show_credit" id="picture-settings-credit" type="checkbox" checked>
+            <span>show author credit</span>
+          </label>
+          <label class="check">
+            <input name="show_reactions" id="picture-settings-reactions" type="checkbox" checked>
+            <span>show reactions</span>
+          </label>
+          <label>
+            Reaction render
+            <select name="reaction_multiplier" id="picture-settings-multiplier"></select>
+          </label>
+          <label>
+            Author size
+            <select name="credit_scale" id="picture-settings-credit-scale"></select>
+          </label>
+          <label>
+            Emoji size
+            <select name="reaction_scale" id="picture-settings-reaction-scale"></select>
+          </label>
+          <div class="form-actions">
+            <button type="submit">SAVE SETTINGS</button>
+            <button type="button" class="secondary" id="picture-settings-cancel">Cancel</button>
+          </div>
+        </form>
+      </section>
+
       <div class="ops-row">
         <section class="panel" id="picture-resync-section">
           <div class="panel-head">
@@ -246,7 +272,7 @@
         <section class="panel" id="picture-help-section">
           <div class="panel-head">
             <h2>OBS OVERLAY</h2>
-            <p>Add a Browser Source pointing at <code>/slideshow/latest</code> or <code>/slideshow/{slug}</code>. Transparent background · image fills viewport · credit corner configurable above. No Admin password on these URLs.</p>
+            <p>Browser Source → <code>/slideshow/latest</code> or <code>/slideshow/{slug}</code>. Transparent bg · image fills viewport · corner credit shows <code>Author: NAME</code> + reactions. Configure via <strong>Settings</strong> on a picture listener row. No Admin password on these URLs.</p>
           </div>
         </section>
       </div>

@@ -317,7 +317,10 @@ func runAddPicture(ctx context.Context, cfg *config.Config, store *db.DB, channe
 		CreditCorner:     db.CreditCornerBR,
 		IntervalSeconds:  8,
 		ShowCredit:       true,
-		ShowReactions:    true,
+		ShowReactions:      true,
+		ReactionMultiplier: 1,
+		CreditScale:        1.5,
+		ReactionScale:      1.5,
 	})
 	if err != nil {
 		return err

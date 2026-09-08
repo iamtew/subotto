@@ -16,7 +16,7 @@
 4. One live content listener **and** one live picture listener may share the same channel
 5. Content resync stops at the previous content-listener epoch boundary
 6. ONLINE/OFFLINE Discord **notices** are global templates (content listeners) in Admin
-7. Public OBS overlay: `/slideshow/latest` or `/slideshow/{slug}` (no Basic Auth). Admin stays behind `admin` / `ADMIN_PASSWORD`
+7. Public OBS overlay: `/slideshow/latest` or `/slideshow/{slug}` (no Basic Auth). Credit shows `Author: NAME` on frosted glass; reactions float nearby (Twemoji + Discord CDN custom emotes). **Reaction render** 1x–10x multiplies how many emote sprites appear. Configure via picture listener **Settings**.
 8. Port default **50770**; scheduler optional via `RESYNC_INTERVAL_HOURS` (usually `0`)
 9. PROD is headless: copy `.env` + `data/` (DB + `pictures/`). Re-auth without a desktop = SSH tunnel cookbook in DEPLOY.md
 
@@ -26,7 +26,6 @@ just run
 just auth-youtube
 just start-listen / list-listens / cease-listen
 just start-picture-listen / list-picture-listens / cease-picture-listen / resync-pictures
-just start-listen / list-listens / cease-listen
 just test / just build / just build-linux / just package-linux
 ```
 

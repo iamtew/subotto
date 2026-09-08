@@ -30,30 +30,36 @@ type pictureListenerDTO struct {
 	Shuffle            bool   `json:"shuffle"`
 	ShowCredit         bool   `json:"show_credit"`
 	ShowReactions      bool   `json:"show_reactions"`
-	PictureCount       int    `json:"picture_count"`
-	SlideshowURL       string `json:"slideshow_url"`
-	CreatedAt          string `json:"created_at"`
-	ActiveFrom         string `json:"active_from"`
-	ActiveUntil        string `json:"active_until,omitempty"`
+	ReactionMultiplier int     `json:"reaction_multiplier"`
+	CreditScale        float64 `json:"credit_scale"`
+	ReactionScale      float64 `json:"reaction_scale"`
+	PictureCount       int     `json:"picture_count"`
+	SlideshowURL       string  `json:"slideshow_url"`
+	CreatedAt          string  `json:"created_at"`
+	ActiveFrom         string  `json:"active_from"`
+	ActiveUntil        string  `json:"active_until,omitempty"`
 }
 
 func toPictureListenerDTO(p db.PictureListener, count int) pictureListenerDTO {
 	dto := pictureListenerDTO{
-		ID:               p.ID,
-		DiscordChannelID: p.DiscordChannelID,
-		GuildID:          p.GuildID,
-		Name:             p.Name,
-		Slug:             p.Slug,
-		Enabled:          p.Enabled,
-		CreditCorner:     p.CreditCorner,
-		IntervalSeconds:  p.IntervalSeconds,
-		Shuffle:          p.Shuffle,
-		ShowCredit:       p.ShowCredit,
-		ShowReactions:    p.ShowReactions,
-		PictureCount:     count,
-		SlideshowURL:     "/slideshow/" + p.Slug,
-		CreatedAt:        p.CreatedAt.UTC().Format(time.RFC3339),
-		ActiveFrom:       p.ActiveFrom.UTC().Format(time.RFC3339),
+		ID:                 p.ID,
+		DiscordChannelID:   p.DiscordChannelID,
+		GuildID:            p.GuildID,
+		Name:               p.Name,
+		Slug:               p.Slug,
+		Enabled:            p.Enabled,
+		CreditCorner:       p.CreditCorner,
+		IntervalSeconds:    p.IntervalSeconds,
+		Shuffle:            p.Shuffle,
+		ShowCredit:         p.ShowCredit,
+		ShowReactions:      p.ShowReactions,
+		ReactionMultiplier: p.ReactionMultiplier,
+		CreditScale:        p.CreditScale,
+		ReactionScale:      p.ReactionScale,
+		PictureCount:       count,
+		SlideshowURL:       "/slideshow/" + p.Slug,
+		CreatedAt:          p.CreatedAt.UTC().Format(time.RFC3339),
+		ActiveFrom:         p.ActiveFrom.UTC().Format(time.RFC3339),
 	}
 	if p.ActiveUntil != nil {
 		dto.ActiveUntil = p.ActiveUntil.UTC().Format(time.RFC3339)
@@ -101,6 +107,9 @@ type pictureUpsertBody struct {
 	Shuffle          *bool  `json:"shuffle"`
 	ShowCredit       *bool  `json:"show_credit"`
 	ShowReactions    *bool  `json:"show_reactions"`
+	ReactionMultiplier *int     `json:"reaction_multiplier"`
+	CreditScale        *float64 `json:"credit_scale"`
+	ReactionScale      *float64 `json:"reaction_scale"`
 }
 
 func (s *Server) pictureInputFromBody(body pictureUpsertBody) db.PictureListenerInput {
@@ -124,17 +133,32 @@ func (s *Server) pictureInputFromBody(body pictureUpsertBody) db.PictureListener
 	if body.ShowReactions != nil {
 		showReactions = *body.ShowReactions
 	}
+	mult := 1
+	if body.ReactionMultiplier != nil {
+		mult = *body.ReactionMultiplier
+	}
+	creditScale := 1.5
+	if body.CreditScale != nil {
+		creditScale = *body.CreditScale
+	}
+	reactionScale := 1.5
+	if body.ReactionScale != nil {
+		reactionScale = *body.ReactionScale
+	}
 	return db.PictureListenerInput{
-		DiscordChannelID: body.DiscordChannelID,
-		GuildID:          body.GuildID,
-		Name:             body.Name,
-		Slug:             body.Slug,
-		Enabled:          enabled,
-		CreditCorner:     body.CreditCorner,
-		IntervalSeconds:  interval,
-		Shuffle:          shuffle,
-		ShowCredit:       showCredit,
-		ShowReactions:    showReactions,
+		DiscordChannelID:   body.DiscordChannelID,
+		GuildID:            body.GuildID,
+		Name:               body.Name,
+		Slug:               body.Slug,
+		Enabled:            enabled,
+		CreditCorner:       body.CreditCorner,
+		IntervalSeconds:    interval,
+		Shuffle:            shuffle,
+		ShowCredit:         showCredit,
+		ShowReactions:      showReactions,
+		ReactionMultiplier: mult,
+		CreditScale:        creditScale,
+		ReactionScale:      reactionScale,
 	}
 }
 
@@ -195,7 +219,8 @@ func (s *Server) handlePatchPictureListener(w http.ResponseWriter, r *http.Reque
 	if body.Enabled != nil &&
 		body.Name == "" && body.Slug == "" && body.CreditCorner == "" &&
 		body.IntervalSeconds == nil && body.Shuffle == nil &&
-		body.ShowCredit == nil && body.ShowReactions == nil {
+		body.ShowCredit == nil && body.ShowReactions == nil &&
+		body.ReactionMultiplier == nil && body.CreditScale == nil && body.ReactionScale == nil {
 		p, err := s.store.SetPictureListenerEnabled(r.Context(), channelID, *body.Enabled)
 		if err != nil {
 			writeErr(w, http.StatusBadRequest, err.Error())
@@ -207,16 +232,19 @@ func (s *Server) handlePatchPictureListener(w http.ResponseWriter, r *http.Reque
 	}
 
 	in := db.PictureListenerInput{
-		DiscordChannelID: channelID,
-		GuildID:          existing.GuildID,
-		Name:             existing.Name,
-		Slug:             existing.Slug,
-		Enabled:          existing.Enabled,
-		CreditCorner:     existing.CreditCorner,
-		IntervalSeconds:  existing.IntervalSeconds,
-		Shuffle:          existing.Shuffle,
-		ShowCredit:       existing.ShowCredit,
-		ShowReactions:    existing.ShowReactions,
+		DiscordChannelID:   channelID,
+		GuildID:            existing.GuildID,
+		Name:               existing.Name,
+		Slug:               existing.Slug,
+		Enabled:            existing.Enabled,
+		CreditCorner:       existing.CreditCorner,
+		IntervalSeconds:    existing.IntervalSeconds,
+		Shuffle:            existing.Shuffle,
+		ShowCredit:         existing.ShowCredit,
+		ShowReactions:      existing.ShowReactions,
+		ReactionMultiplier: existing.ReactionMultiplier,
+		CreditScale:        existing.CreditScale,
+		ReactionScale:      existing.ReactionScale,
 	}
 	if body.GuildID != "" {
 		in.GuildID = body.GuildID
@@ -241,6 +269,15 @@ func (s *Server) handlePatchPictureListener(w http.ResponseWriter, r *http.Reque
 	}
 	if body.ShowReactions != nil {
 		in.ShowReactions = *body.ShowReactions
+	}
+	if body.ReactionMultiplier != nil {
+		in.ReactionMultiplier = *body.ReactionMultiplier
+	}
+	if body.CreditScale != nil {
+		in.CreditScale = *body.CreditScale
+	}
+	if body.ReactionScale != nil {
+		in.ReactionScale = *body.ReactionScale
 	}
 
 	p, err := s.store.UpdatePictureListenerSettings(r.Context(), channelID, in)
