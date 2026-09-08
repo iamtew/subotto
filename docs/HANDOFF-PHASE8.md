@@ -60,7 +60,7 @@ data/pictures/{slug}/            saved images (next to DATABASE_PATH)
 - Expandable tabs via `TAB_REGISTRY` in `webroot/js/admin.js`
 - Picture **start form** is bare minimum: name, server, channel, enabled
 - **Settings** panel (per live picture listener): corner, advance, shuffle, author credit, reactions, reaction render 1–25x, author size, emoji size
-- Picture **resync** (REST history, no emoji spam) — Admin + `just resync-pictures`
+- Picture **resync** (REST history; stamps missing 💾 / DUPE / OLD / ❌) — Admin + `just resync-pictures`
 
 ### Slideshow behavior (current)
 - Transparent bg; image `object-fit: contain`
@@ -74,6 +74,7 @@ data/pictures/{slug}/            saved images (next to DATABASE_PATH)
 
 ### Discord reacts
 - Content + Picture (same chrome): 💾 / ♻️ DUPE / 🛑 OLD / ❌  
+- **Stamping is fundamental** — live ingest **and** content/picture resync share one policy. Resync fills in missing chrome (original saved post → 💾, not DUPE).  
 - Floaters (slideshow): other users’ reacts only — Subotto’s status chrome is excluded via Discord `Me`  
 - Intents: Guilds + GuildMessages + MessageContent + **GuildMessageReactions**
 
@@ -99,7 +100,7 @@ Pick up with Meat Bag — do not invent a huge redesign:
 
 - Floater orbit feel / density / corner bias still may need tweaks after live OBS eyeballing
 - Animated custom emoji keys need fresh reacts after `a:name:id` storage change (old rows may be `name:id` only — still works as static CDN)
-- Picture history resync of reactions is snapshot-at-scan, not live gateway
+- Picture history resync of **floater** reactions is snapshot-at-scan, not live gateway (status chrome is stamped)
 - Package/deploy docs already mention `data/pictures/` — verify on next PROD cutover
 - **Parked (not this arc):** **shows** (bi-weekly schedules, richer Discord announce / show-runner)
 

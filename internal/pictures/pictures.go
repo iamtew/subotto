@@ -23,12 +23,14 @@ import (
 // Skipped = SkippedSame + SkippedOld (kept for resync summaries / String()).
 // SkippedSame = already saved for this listener epoch (DUPE react).
 // SkippedOld  = already filed under a previous picture-listener epoch (OLD react).
+// OriginHits  = this Discord message is the one already on file (💾 chrome on resync).
 type Result struct {
 	Saved       int
 	Skipped     int
 	SkippedSame int
 	SkippedOld  int
 	Failed      int
+	OriginHits  int
 }
 
 // Merge adds another Result into r (used by picture resync to accumulate totals).
@@ -38,6 +40,7 @@ func (r *Result) Merge(other Result) {
 	r.SkippedSame += other.SkippedSame
 	r.SkippedOld += other.SkippedOld
 	r.Failed += other.Failed
+	r.OriginHits += other.OriginHits
 }
 
 func (r Result) String() string {
@@ -118,15 +121,23 @@ func ProcessAttachments(
 			}
 		}
 
-		prevListenerID, already, err := store.CollectedAttachmentOnChannel(ctx, listener.DiscordChannelID, att.ID)
+		prev, already, err := store.CollectedAttachmentOnChannel(ctx, listener.DiscordChannelID, att.ID)
 		if err != nil {
 			slog.Error("picture dedupe lookup failed", "err", err)
 			res.Failed++
 			continue
 		}
 		if already {
+			sameListener := prev.ListenerID == listener.ID
+			origin := sameListener && prev.MessageID != "" && prev.MessageID == messageID
+			if origin {
+				res.OriginHits++
+			}
 			reason := "duplicate"
-			if prevListenerID == listener.ID {
+			if origin {
+				reason = "already_this_message"
+				res.SkippedSame++
+			} else if sameListener {
 				res.SkippedSame++
 			} else {
 				res.SkippedOld++
@@ -137,16 +148,17 @@ func ProcessAttachments(
 				"attachment", att.ID,
 				"channel", listener.DiscordChannelID,
 				"listener", listener.ID,
-				"prev_listener", prevListenerID,
+				"prev_listener", prev.ListenerID,
+				"prev_message", prev.MessageID,
 				"reason", reason,
 			)
 			_ = store.LogActivity(ctx, "picture_skipped", map[string]any{
-				"reason":          reason,
-				"attachment_id":   att.ID,
-				"listener_id":     listener.ID,
-				"prev_listener_id": prevListenerID,
-				"channel_id":      listener.DiscordChannelID,
-				"message_id":      messageID,
+				"reason":           reason,
+				"attachment_id":    att.ID,
+				"listener_id":      listener.ID,
+				"prev_listener_id": prev.ListenerID,
+				"channel_id":       listener.DiscordChannelID,
+				"message_id":       messageID,
 			}, true)
 			continue
 		}

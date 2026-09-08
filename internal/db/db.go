@@ -475,22 +475,36 @@ func (d *DB) WasVideoProcessedOnChannel(ctx context.Context, videoID, channelID 
 	return ok, err
 }
 
+// ProcessedOnChannel is the first filing of a video on one Discord channel.
+type ProcessedOnChannel struct {
+	PlaylistID string
+	MessageID  string // Discord message that first saved it (may be empty on very old rows)
+}
+
+// LookupProcessedOnChannel returns the first filing of this video on this channel.
+// ok=false means never processed here.
+func (d *DB) LookupProcessedOnChannel(ctx context.Context, videoID, channelID string) (ProcessedOnChannel, bool, error) {
+	var rec ProcessedOnChannel
+	err := d.sql.QueryRowContext(ctx, `
+		SELECT playlist_id, discord_message_id FROM processed_videos
+		WHERE video_id = ? AND discord_channel_id = ?
+	`, videoID, channelID).Scan(&rec.PlaylistID, &rec.MessageID)
+	if err == sql.ErrNoRows {
+		return ProcessedOnChannel{}, false, nil
+	}
+	if err != nil {
+		return ProcessedOnChannel{}, false, err
+	}
+	return rec, true, nil
+}
+
 // ProcessedPlaylistOnChannel returns the playlist_id recorded when this video
 // was first marked on the channel. ok=false means never processed here.
 // Meat Bag: comparing that id to the current listener's playlist tells us
 // whether a skip is a same-listener DUPE or a previous-listener OLD.
 func (d *DB) ProcessedPlaylistOnChannel(ctx context.Context, videoID, channelID string) (playlistID string, ok bool, err error) {
-	err = d.sql.QueryRowContext(ctx, `
-		SELECT playlist_id FROM processed_videos
-		WHERE video_id = ? AND discord_channel_id = ?
-	`, videoID, channelID).Scan(&playlistID)
-	if err == sql.ErrNoRows {
-		return "", false, nil
-	}
-	if err != nil {
-		return "", false, err
-	}
-	return playlistID, true, nil
+	rec, ok, err := d.LookupProcessedOnChannel(ctx, videoID, channelID)
+	return rec.PlaylistID, ok, err
 }
 
 // MarkVideoProcessed records a successful add for channel-scoped dedup.

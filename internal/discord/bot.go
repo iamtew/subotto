@@ -304,20 +304,7 @@ func (b *Bot) handleContentListener(ctx context.Context, s *discordgo.Session, m
 	}
 
 	res := ingest.ProcessContent(ctx, b.store, b.yt, mapping, m.ChannelID, m.ID, m.Content)
-	if res.Added == 0 && res.Skipped == 0 && res.Failed == 0 {
-		return // no YouTube links in this message
-	}
-
-	switch {
-	case res.Failed > 0 && res.Added == 0:
-		b.react(s, m.ChannelID, m.ID, "❌")
-	case res.Added > 0:
-		b.react(s, m.ChannelID, m.ID, "💾") // saved to playlist
-	case res.SkippedOld > 0:
-		b.reactAll(s, m.ChannelID, m.ID, "🛑", "🇴", "🇱", "🇩")
-	case res.SkippedSame > 0 || res.Skipped > 0:
-		b.reactAll(s, m.ChannelID, m.ID, "♻️", "🇩", "🇺", "🇵", "🇪")
-	}
+	ensureStatusChrome(ctx, s, m.ChannelID, m.ID, m.Message, contentStatusChrome(res))
 }
 
 func (b *Bot) handlePictureListener(ctx context.Context, s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -346,24 +333,11 @@ func (b *Bot) handlePictureListener(ctx context.Context, s *discordgo.Session, m
 	res := pictures.ProcessAttachments(
 		ctx, b.store, pl, m.ID, m.Author.ID, displayNameFromMessage(m.Message), atts, reactions,
 	)
-	if res.Saved == 0 && res.Skipped == 0 && res.Failed == 0 {
-		return // no image attachments
-	}
-
-	switch {
-	case res.Failed > 0 && res.Saved == 0:
-		b.react(s, m.ChannelID, m.ID, "❌")
-	case res.Saved > 0:
-		b.react(s, m.ChannelID, m.ID, "💾") // saved to disk / slideshow
-	case res.SkippedOld > 0:
-		b.reactAll(s, m.ChannelID, m.ID, "🛑", "🇴", "🇱", "🇩")
-	case res.SkippedSame > 0 || res.Skipped > 0:
-		b.reactAll(s, m.ChannelID, m.ID, "♻️", "🇩", "🇺", "🇵", "🇪")
-	}
+	ensureStatusChrome(ctx, s, m.ChannelID, m.ID, m.Message, pictureStatusChrome(res))
 }
 
 func (b *Bot) onMessageReactionAdd(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
-	if r.UserID == s.State.User.ID {
+	if s.State.User != nil && r.UserID == s.State.User.ID {
 		return // ignore our own reacts
 	}
 	b.refreshMessageReactions(r.ChannelID, r.MessageID)
@@ -435,21 +409,3 @@ func reactionsFromMessage(m *discordgo.Message) map[string]int {
 	return out
 }
 
-func (b *Bot) react(s *discordgo.Session, channelID, messageID, emoji string) {
-	b.reactAll(s, channelID, messageID, emoji)
-}
-
-// reactAll adds one or more reactions in order (lead emoji, then letter spells).
-func (b *Bot) reactAll(s *discordgo.Session, channelID, messageID string, emojis ...string) {
-	for _, emoji := range emojis {
-		if err := s.MessageReactionAdd(channelID, messageID, emoji); err != nil {
-			slog.Warn("could not add reaction",
-				"emoji", emoji,
-				"channel", channelID,
-				"message", messageID,
-				"err", err,
-			)
-			return
-		}
-	}
-}

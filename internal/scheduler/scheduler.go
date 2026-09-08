@@ -2,7 +2,7 @@
 //
 // Meat Bag: set RESYNC_INTERVAL_HOURS in .env to a positive number (e.g. 6)
 // and Subotto will periodically walk recent messages in every *enabled*
-// mapping — same path as Admin "Resync" / `just resync`, no emoji spam.
+// mapping — same path as Admin "Resync" / `just resync`, including status chrome.
 // Leave it at 0 and this package does nothing (live Discord posts still work).
 package scheduler
 

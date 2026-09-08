@@ -68,8 +68,8 @@ func TestProcessAttachments(t *testing.T) {
 		Filename:    "pic.png",
 		ContentType: "image/png",
 	}}, nil)
-	if res2.Skipped != 1 || res2.SkippedSame != 1 || res2.SkippedOld != 0 {
-		t.Fatalf("want same-listener DUPE: %+v", res2)
+	if res2.Skipped != 1 || res2.SkippedSame != 1 || res2.SkippedOld != 0 || res2.OriginHits != 1 {
+		t.Fatalf("want origin hit on same message (💾 backfill), got %+v", res2)
 	}
 }
 
@@ -132,7 +132,7 @@ func TestProcessAttachmentsSkippedOld(t *testing.T) {
 		Filename:    "pic.png",
 		ContentType: "image/png",
 	}}, nil)
-	if res2.Skipped != 1 || res2.SkippedOld != 1 || res2.SkippedSame != 0 || res2.Saved != 0 {
+	if res2.Skipped != 1 || res2.SkippedOld != 1 || res2.SkippedSame != 0 || res2.Saved != 0 || res2.OriginHits != 0 {
 		t.Fatalf("want previous-epoch OLD: %+v", res2)
 	}
 }

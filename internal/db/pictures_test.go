@@ -174,9 +174,9 @@ func TestCollectedPictures(t *testing.T) {
 		t.Fatalf("has attachment: ok=%v err=%v", ok, err)
 	}
 
-	prevID, found, err := store.CollectedAttachmentOnChannel(ctx, "chan-c", "att-1")
-	if err != nil || !found || prevID != pl.ID {
-		t.Fatalf("channel lookup: id=%d found=%v err=%v", prevID, found, err)
+	prev, found, err := store.CollectedAttachmentOnChannel(ctx, "chan-c", "att-1")
+	if err != nil || !found || prev.ListenerID != pl.ID || prev.MessageID != "msg-1" {
+		t.Fatalf("channel lookup: %+v found=%v err=%v", prev, found, err)
 	}
 	_, found, err = store.CollectedAttachmentOnChannel(ctx, "chan-c", "missing")
 	if err != nil || found {

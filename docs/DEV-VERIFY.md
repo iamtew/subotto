@@ -271,7 +271,7 @@ Only **enabled** mappings are watched. Disable = pause; delete = **close the epo
 
 ### Resync history
 
-Backfills recent messages (no emoji spam on old posts):
+Backfills recent messages and stamps missing status chrome (💾 / DUPE / OLD / ❌):
 
 - Admin UI → Resync form, or
 - `just resync DISCORD_CHANNEL_ID` (default 100 messages, max 500)

@@ -22,8 +22,9 @@ type PictureResyncSummary struct {
 // ResyncPictureChannel walks recent messages in a Discord channel (REST only)
 // and saves image attachments through pictures.ProcessAttachments.
 //
-// Meat Bag: same idea as content resync — no emoji spam on old posts. Stops at
-// the previous picture-listener epoch boundary when one exists.
+// Status chrome is stamped the same way as live ingest (missing 💾 / DUPE /
+// OLD / ❌ get filled in). Stops at the previous picture-listener epoch
+// boundary when one exists.
 func ResyncPictureChannel(
 	ctx context.Context,
 	token string,
@@ -153,6 +154,7 @@ func ResyncPictureChannel(
 				atts, reactionsFromMessage(m),
 			)
 			summary.Result.Merge(r)
+			ensureStatusChrome(ctx, session, channelID, m.ID, m, pictureStatusChrome(r))
 		}
 
 		if hitEpochFloor {

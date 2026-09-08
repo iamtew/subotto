@@ -16,7 +16,7 @@
 2. **Picture listener** = Discord channel → images on disk under `data/pictures/{slug}/` + public slideshow
 3. **START** content listener creates a **public** playlist; **CEASE** closes the epoch
 4. One live content listener **and** one live picture listener may share the same channel
-5. Content / picture resync stop at previous epoch boundaries for that listener type
+5. Content / picture resync stop at previous epoch boundaries; they also stamp missing status chrome (💾 / DUPE / OLD / ❌)
 6. ONLINE/OFFLINE Discord **notices** are global templates (content listeners) in Admin
 7. Public OBS overlay: `/slideshow/latest` or `/slideshow/{slug}` (no Basic Auth). Credit: `Author: NAME` on frosted glass; reaction **floaters** (Twemoji + Discord CDN). Settings: corner, advance, scales, **reaction render 1x–25x** (floater stage grows with it)
 8. Port default **50770**; scheduler optional via `RESYNC_INTERVAL_HOURS` (usually `0`)

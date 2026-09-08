@@ -25,12 +25,14 @@ type PlaylistAdder interface {
 // Skipped = SkippedSame + SkippedOld (kept for resync summaries / String()).
 // SkippedSame = already on this listener's playlist (DUPE react).
 // SkippedOld  = already filed under a previous listener epoch (OLD react).
+// OriginHits  = this Discord message is the one already on file (💾 chrome on resync).
 type Result struct {
 	Added       int
 	Skipped     int
 	SkippedSame int
 	SkippedOld  int
 	Failed      int
+	OriginHits  int
 }
 
 // ProcessContent extracts YouTube video IDs from text and adds each one to the
@@ -61,7 +63,7 @@ func ProcessContent(
 	}
 
 	for _, videoID := range ids {
-		prevPlaylist, already, err := store.ProcessedPlaylistOnChannel(ctx, videoID, channelID)
+		prev, already, err := store.LookupProcessedOnChannel(ctx, videoID, channelID)
 		if err != nil {
 			slog.Error("dedup check failed", "video", videoID, "err", err)
 			res.Failed++
@@ -70,9 +72,16 @@ func ProcessContent(
 		if already {
 			// Same playlist id → same listener epoch. Anything else (including
 			// empty legacy rows) counts as a previous-listener hit.
-			sameListener := prevPlaylist != "" && prevPlaylist == mapping.YouTubePlaylistID
+			sameListener := prev.PlaylistID != "" && prev.PlaylistID == mapping.YouTubePlaylistID
+			origin := sameListener && prev.MessageID != "" && prev.MessageID == messageID
+			if origin {
+				res.OriginHits++
+			}
 			reason := "duplicate"
-			if sameListener {
+			if origin {
+				reason = "already_this_message"
+				res.SkippedSame++
+			} else if sameListener {
 				res.SkippedSame++
 			} else {
 				res.SkippedOld++
@@ -83,14 +92,15 @@ func ProcessContent(
 				"video", videoID,
 				"channel", channelID,
 				"playlist", mapping.YouTubePlaylistID,
-				"prev_playlist", prevPlaylist,
+				"prev_playlist", prev.PlaylistID,
+				"prev_message", prev.MessageID,
 				"reason", reason,
 			)
 			_ = store.LogActivity(ctx, "video_skipped", map[string]any{
 				"reason":        reason,
 				"video_id":      videoID,
 				"playlist":      mapping.YouTubePlaylistID,
-				"prev_playlist": prevPlaylist,
+				"prev_playlist": prev.PlaylistID,
 				"channel_id":    channelID,
 				"message_id":    messageID,
 			}, true)
@@ -142,6 +152,7 @@ func (r *Result) Merge(other Result) {
 	r.SkippedSame += other.SkippedSame
 	r.SkippedOld += other.SkippedOld
 	r.Failed += other.Failed
+	r.OriginHits += other.OriginHits
 }
 
 // String is a short human-readable summary.

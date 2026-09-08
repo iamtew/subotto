@@ -569,26 +569,33 @@ func (d *DB) HasCollectedAttachment(ctx context.Context, listenerID int64, attac
 	return n > 0, nil
 }
 
+// CollectedOnChannel is the first filing of an attachment on one Discord channel.
+type CollectedOnChannel struct {
+	ListenerID int64
+	MessageID  string
+}
+
 // CollectedAttachmentOnChannel looks up an attachment already filed under any
 // picture listener on this Discord channel (current or previous epoch).
-// Returns the listener_id that owns the row, or ok=false if never collected.
-// Used to distinguish same-listener DUPE vs previous-listener OLD skips.
-func (d *DB) CollectedAttachmentOnChannel(ctx context.Context, channelID, attachmentID string) (listenerID int64, ok bool, err error) {
-	err = d.sql.QueryRowContext(ctx, `
-		SELECT c.listener_id
+// ok=false means never collected.
+// Used to distinguish origin-message 💾 vs same-listener DUPE vs previous-listener OLD.
+func (d *DB) CollectedAttachmentOnChannel(ctx context.Context, channelID, attachmentID string) (CollectedOnChannel, bool, error) {
+	var rec CollectedOnChannel
+	err := d.sql.QueryRowContext(ctx, `
+		SELECT c.listener_id, c.discord_message_id
 		FROM collected_pictures c
 		JOIN picture_listeners p ON p.id = c.listener_id
 		WHERE p.discord_channel_id = ? AND c.discord_attachment_id = ?
 		ORDER BY c.id ASC
 		LIMIT 1
-	`, channelID, attachmentID).Scan(&listenerID)
+	`, channelID, attachmentID).Scan(&rec.ListenerID, &rec.MessageID)
 	if err == sql.ErrNoRows {
-		return 0, false, nil
+		return CollectedOnChannel{}, false, nil
 	}
 	if err != nil {
-		return 0, false, err
+		return CollectedOnChannel{}, false, err
 	}
-	return listenerID, true, nil
+	return rec, true, nil
 }
 
 // InsertCollectedPicture records a newly saved image. reactions may be nil.

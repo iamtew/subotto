@@ -33,8 +33,8 @@ type ResyncSummary struct {
 // ResyncChannel walks recent messages in a Discord channel (REST only — no
 // gateway) and feeds each one through ingest.ProcessContent.
 //
-// Meat Bag: this does NOT put emoji reactions on old messages. That would be
-// spammy. Live posts still get 💾 / ♻️ / ❌.
+// Status chrome (💾 / DUPE / OLD / ❌) is part of the contract: resync stamps
+// any missing reacts so Meat Bag can see the bot working on history too.
 func ResyncChannel(
 	ctx context.Context,
 	token string,
@@ -145,6 +145,7 @@ func ResyncChannel(
 			}
 			r := ingest.ProcessContent(ctx, store, yt, mapping, channelID, m.ID, m.Content)
 			summary.Result.Merge(r)
+			ensureStatusChrome(ctx, session, channelID, m.ID, m, contentStatusChrome(r))
 		}
 
 		if hitEpochFloor {

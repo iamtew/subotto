@@ -54,8 +54,13 @@ func TestProcessContentAddAndDuplicate(t *testing.T) {
 	}
 
 	r2 := ProcessContent(ctx, store, yt, mapping, "c1", "msg-2", content)
-	if r2.Added != 0 || r2.Skipped != 1 || r2.SkippedSame != 1 || r2.SkippedOld != 0 || r2.Failed != 0 {
-		t.Fatalf("second pass: want skipped_same=1, got %+v", r2)
+	if r2.Added != 0 || r2.Skipped != 1 || r2.SkippedSame != 1 || r2.SkippedOld != 0 || r2.Failed != 0 || r2.OriginHits != 0 {
+		t.Fatalf("second pass: want skipped_same=1 (different message), got %+v", r2)
+	}
+
+	rOrigin := ProcessContent(ctx, store, yt, mapping, "c1", "msg-1", content)
+	if rOrigin.OriginHits != 1 || rOrigin.SkippedSame != 1 || rOrigin.Added != 0 {
+		t.Fatalf("same message again: want origin hit for 💾 backfill, got %+v", rOrigin)
 	}
 	if len(yt.calls) != 1 {
 		t.Fatalf("duplicate must not call YouTube again, calls=%v", yt.calls)
