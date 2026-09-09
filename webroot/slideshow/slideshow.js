@@ -1,4 +1,6 @@
-/* Subotto public OBS slideshow — polls /api/slideshow/{slug}. */
+/* Subotto public OBS slideshow — polls /api/slideshow/{slug}.
+   Third-pass potato build: atomic slide+overlay commits, floater DOM pool,
+   quantized style writes, no rebuild unless slide/reactions/settings change. */
 
 (function () {
   const slideEl = document.getElementById("slide");
@@ -24,8 +26,16 @@
   let floaterRAF = 0;
   let floaters = [];
   let lastTick = 0;
+  let paintedKey = "";
+  let pendingKey = "";
+  let paintGen = 0;
+  const emoteTemplates = {};
+  const preloaded = {};
 
   const STATIC_STACK_MAX = 5;
+  const FLOATER_HARD_CAP = 56;
+  const FRAME_BUDGET_MS = 20;
+  let skipNextFrame = false;
 
   function slugFromPath() {
     const parts = location.pathname.split("/").filter(Boolean);
@@ -49,8 +59,10 @@
       if (!order.length) {
         showEmpty(true);
         stopAdvanceTimer();
-        clearFloaters();
+        clearFloaters(true);
         clearStaticReactions();
+        paintedKey = "";
+        pendingKey = "";
         return;
       }
       showEmpty(false);
@@ -68,14 +80,17 @@
         }
       }
       ensureAdvanceTimer();
+      preloadNearby();
     } catch (err) {
       console.warn("slideshow feed error", err);
       if (!feed || !feed.images || !feed.images.length) {
         showEmpty(true);
         emptyEl.textContent = "slideshow unavailable";
         stopAdvanceTimer();
-        clearFloaters();
+        clearFloaters(true);
         clearStaticReactions();
+        paintedKey = "";
+        pendingKey = "";
       }
     }
   }
@@ -113,7 +128,6 @@
   }
 
   function reactionsAnimated() {
-    // Default on when the field is missing (older feeds / first deploy).
     return feed.reactions_animated !== false;
   }
 
@@ -131,7 +145,6 @@
       }
       return out;
     }
-    // Legacy object map — order already lost; alphabetical fallback.
     const keys = Object.keys(raw).sort();
     const out = [];
     for (let i = 0; i < keys.length; i++) {
@@ -140,6 +153,15 @@
       out.push({ emoji: keys[i], count: count });
     }
     return out;
+  }
+
+  function reactionsKey(reactions) {
+    let s = "";
+    for (let i = 0; i < reactions.length; i++) {
+      if (i) s += ",";
+      s += reactions[i].emoji + ":" + reactions[i].count;
+    }
+    return s;
   }
 
   function applyChrome() {
@@ -169,56 +191,141 @@
     index = ((i % order.length) + order.length) % order.length;
     currentId = order[index];
     paintCurrent();
+    preloadNearby();
+  }
+
+  function preloadUrl(url) {
+    if (!url || preloaded[url]) return;
+    const img = new Image();
+    img.decoding = "async";
+    img.onload = function () {
+      preloaded[url] = true;
+    };
+    img.onerror = function () {
+      preloaded[url] = true;
+    };
+    img.src = url;
+  }
+
+  function preloadNearby() {
+    if (!feed || !order.length) return;
+    const cur = imageById(order[index]);
+    if (cur) preloadUrl(cur.url);
+    if (order.length > 1) {
+      const nxt = imageById(order[(index + 1) % order.length]);
+      if (nxt) preloadUrl(nxt.url);
+    }
+  }
+
+  function paintKeyFor(img, reactions, showCredit, showReact, animated, mult) {
+    return (
+      String(img.id) +
+      "|" +
+      img.url +
+      "|" +
+      (showCredit ? "1" : "0") +
+      "|" +
+      (showReact ? "1" : "0") +
+      "|" +
+      (animated ? "a" : "s") +
+      "|" +
+      mult +
+      "|" +
+      reactionsKey(reactions) +
+      "|" +
+      ((img.author || "").trim())
+    );
   }
 
   function paintCurrent() {
     const img = imageById(currentId);
     if (!img) return;
-    if (slideEl.getAttribute("src") !== img.url) {
-      slideEl.onload = function () {
-        slideEl.hidden = false;
-      };
-      slideEl.src = img.url;
-    } else {
-      slideEl.hidden = false;
-    }
 
     const showCredit = !!feed.show_credit;
     const showReact = !!feed.show_reactions;
-    if (!showCredit && !showReact) {
-      creditEl.hidden = true;
-      clearFloaters();
-      clearStaticReactions();
+    const reactions = showReact ? normalizeReactions(img.reactions) : [];
+    const animated = reactionsAnimated();
+    const mult = Math.max(1, Math.min(25, Number(feed.reaction_multiplier) || 1));
+    const key = paintKeyFor(img, reactions, showCredit, showReact, animated, mult);
+
+    if (key === paintedKey) {
+      if (slideEl.getAttribute("src") === img.url) slideEl.hidden = false;
+      return;
+    }
+    // Already loading this exact paint — don't stack duplicate preloads.
+    if (key === pendingKey) return;
+
+    const gen = ++paintGen;
+    pendingKey = key;
+    const url = img.url;
+    const sameSrc = slideEl.getAttribute("src") === url;
+
+    function commit() {
+      if (gen !== paintGen) return;
+      paintedKey = key;
+      pendingKey = "";
+
+      if (slideEl.getAttribute("src") !== url) {
+        slideEl.src = url;
+      }
+      slideEl.hidden = false;
+
+      if (!showCredit && !showReact) {
+        creditEl.hidden = true;
+        clearFloaters(false);
+        clearStaticReactions();
+        return;
+      }
+
+      creditEl.hidden = false;
+
+      if (showCredit) {
+        nameEl.hidden = false;
+        const author = (img.author || "").trim();
+        nameEl.textContent = author ? "Author: " + author : "Author:";
+      } else {
+        nameEl.hidden = true;
+        nameEl.textContent = "";
+      }
+
+      if (!showReact || !reactions.length) {
+        clearFloaters(false);
+        clearStaticReactions();
+        return;
+      }
+
+      if (animated) {
+        clearStaticReactions();
+        floaterStage.hidden = false;
+        rebuildFloaters(reactions, mult);
+      } else {
+        clearFloaters(false);
+        floaterStage.hidden = true;
+        rebuildStaticStack(reactions);
+      }
+    }
+
+    // Image + credit + floaters commit together once the bitmap is ready.
+    if (sameSrc && (slideEl.complete || slideEl.naturalWidth > 0)) {
+      commit();
+      return;
+    }
+    if (preloaded[url]) {
+      commit();
       return;
     }
 
-    creditEl.hidden = false;
-
-    if (showCredit) {
-      nameEl.hidden = false;
-      const author = (img.author || "").trim();
-      nameEl.textContent = author ? "Author: " + author : "Author:";
-    } else {
-      nameEl.hidden = true;
-      nameEl.textContent = "";
-    }
-
-    const reactions = normalizeReactions(img.reactions);
-    if (!showReact || !reactions.length) {
-      clearFloaters();
-      clearStaticReactions();
-      return;
-    }
-
-    if (reactionsAnimated()) {
-      clearStaticReactions();
-      floaterStage.hidden = false;
-      rebuildFloaters(reactions);
-    } else {
-      clearFloaters();
-      floaterStage.hidden = true;
-      rebuildStaticStack(reactions);
-    }
+    const pre = new Image();
+    pre.decoding = "async";
+    pre.onload = function () {
+      preloaded[url] = true;
+      commit();
+    };
+    pre.onerror = function () {
+      preloaded[url] = true;
+      commit();
+    };
+    pre.src = url;
   }
 
   function parseReactionKey(key) {
@@ -233,11 +340,8 @@
     return { kind: "unicode", emoji: key };
   }
 
-  function discordEmojiUrl(id, animated) {
-    if (animated) {
-      return "https://cdn.discordapp.com/emojis/" + id + ".gif?size=64&quality=lossless";
-    }
-    return "https://cdn.discordapp.com/emojis/" + id + ".webp?size=64&quality=lossless";
+  function discordEmojiUrl(id) {
+    return "https://cdn.discordapp.com/emojis/" + id + ".webp?size=32";
   }
 
   function twemojiUrl(emoji) {
@@ -254,22 +358,39 @@
     );
   }
 
-  function makeEmoteImg(parsed) {
-    const img = document.createElement("img");
-    img.alt = "";
-    img.draggable = false;
+  function bindEmoteError(img, parsed) {
     if (parsed.kind === "discord") {
-      img.src = discordEmojiUrl(parsed.id, parsed.animated);
       img.onerror = function () {
         img.onerror = null;
-        img.src = "https://cdn.discordapp.com/emojis/" + parsed.id + ".png?size=64";
+        img.src = "https://cdn.discordapp.com/emojis/" + parsed.id + ".png?size=32";
       };
     } else {
-      img.src = twemojiUrl(parsed.emoji);
       img.onerror = function () {
         img.style.opacity = "0";
       };
     }
+  }
+
+  function emoteTemplate(key, parsed) {
+    if (emoteTemplates[key]) return emoteTemplates[key];
+    const img = document.createElement("img");
+    img.alt = "";
+    img.draggable = false;
+    img.decoding = "async";
+    img.loading = "eager";
+    if (parsed.kind === "discord") {
+      img.src = discordEmojiUrl(parsed.id);
+    } else {
+      img.src = twemojiUrl(parsed.emoji);
+    }
+    bindEmoteError(img, parsed);
+    emoteTemplates[key] = img;
+    return img;
+  }
+
+  function makeEmoteImg(key, parsed) {
+    const img = emoteTemplate(key, parsed).cloneNode(true);
+    bindEmoteError(img, parsed);
     return img;
   }
 
@@ -278,7 +399,6 @@
     reactionsEl.hidden = true;
   }
 
-  // Static mode: Discord-ordered stack after the author name (max 5).
   function rebuildStaticStack(reactions) {
     reactionsEl.innerHTML = "";
     const limit = Math.min(STATIC_STACK_MAX, reactions.length);
@@ -286,72 +406,139 @@
       reactionsEl.hidden = true;
       return;
     }
+    const frag = document.createDocumentFragment();
     for (let i = 0; i < limit; i++) {
       const item = reactions[i];
       const wrap = document.createElement("span");
       wrap.className = "static-react";
-      wrap.appendChild(makeEmoteImg(parseReactionKey(item.emoji)));
-      // Discord-style: no digit when there's only one of that react.
+      const parsed = parseReactionKey(item.emoji);
+      wrap.appendChild(makeEmoteImg(item.emoji, parsed));
       if (item.count > 1) {
         const countEl = document.createElement("span");
         countEl.className = "static-react-count";
         countEl.textContent = String(item.count);
         wrap.appendChild(countEl);
       }
-      reactionsEl.appendChild(wrap);
+      frag.appendChild(wrap);
     }
+    reactionsEl.appendChild(frag);
     reactionsEl.hidden = false;
   }
 
-  function rebuildFloaters(reactions) {
-    clearFloaters(false);
-    const mult = Math.max(1, Math.min(25, Number(feed.reaction_multiplier) || 1));
-    const nodes = [];
+  function planFloaterKeys(reactions, mult) {
+    const weights = [];
+    let weightSum = 0;
     for (let i = 0; i < reactions.length; i++) {
       const count = Number(reactions[i].count) || 0;
       if (count < 1) continue;
-      // Soft cap grows with multiplier so 25x can flood the stage
-      const cap = Math.min(280, 48 + mult * 10);
-      const copies = Math.min(cap, count * mult);
-      const parsed = parseReactionKey(reactions[i].emoji);
-      for (let n = 0; n < copies; n++) {
-        nodes.push(spawnFloater(parsed));
+      const w = count * mult;
+      weights.push({ emoji: reactions[i].emoji, weight: w });
+      weightSum += w;
+    }
+    if (!weightSum) return [];
+
+    const total = Math.min(FLOATER_HARD_CAP, Math.max(1, Math.round(weightSum)));
+    const keys = [];
+    let spawned = 0;
+    for (let i = 0; i < weights.length; i++) {
+      let n;
+      if (i === weights.length - 1) {
+        n = total - spawned;
+      } else {
+        n = Math.round((weights[i].weight / weightSum) * total);
+        if (n < 1 && weights[i].weight > 0 && spawned < total) n = 1;
+        if (spawned + n > total) n = total - spawned;
+      }
+      for (let c = 0; c < n; c++) keys.push(weights[i].emoji);
+      spawned += n;
+      if (spawned >= total) break;
+    }
+    return keys;
+  }
+
+  // Reuse floater DOM nodes across slides — potato PCs hate createElement storms.
+  function rebuildFloaters(reactions, mult) {
+    const keys = planFloaterKeys(reactions, mult);
+    const now = performance.now();
+    const next = [];
+    const frag = document.createDocumentFragment();
+
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i];
+      const parsed = parseReactionKey(key);
+      let f = floaters[i];
+      if (f) {
+        if (f.key !== key) {
+          f.el.textContent = "";
+          f.el.appendChild(makeEmoteImg(key, parsed));
+          f.key = key;
+        }
+        resetFountainState(f, now);
+        f.born = now + (i % 4) * 12;
+        f.el.style.opacity = "0";
+        f.opacity = 0;
+        f.waiting = true;
+        f.tx = -1;
+        f.ty = -1;
+        f.tr = -9999;
+        next.push(f);
+      } else {
+        next.push(spawnFloater(key, parsed, frag, now, i));
       }
     }
-    floaters = nodes;
+
+    for (let i = keys.length; i < floaters.length; i++) {
+      const el = floaters[i].el;
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+    }
+
+    if (frag.childNodes.length) {
+      floaterStage.appendChild(frag);
+    }
+
+    floaters = next;
     lastTick = 0;
-    if (!floaterRAF && floaters.length) {
+    skipNextFrame = false;
+    if (floaters.length && !floaterRAF) {
       floaterRAF = requestAnimationFrame(tickFloaters);
+    }
+    if (!floaters.length && floaterRAF) {
+      cancelAnimationFrame(floaterRAF);
+      floaterRAF = 0;
     }
   }
 
-  // Fountain: burst from viewport center with upward impulse, then gravity.
-  function spawnFloater(parsed) {
+  function spawnFloater(key, parsed, parent, now, i) {
     const el = document.createElement("div");
-    el.className = "float-emote pop";
-    el.appendChild(makeEmoteImg(parsed));
-    floaterStage.appendChild(el);
-    return resetFountainState({
+    el.className = "float-emote";
+    el.appendChild(makeEmoteImg(key, parsed));
+    parent.appendChild(el);
+    const f = resetFountainState({
       el: el,
-      parsed: parsed,
+      key: key,
       rot: Math.random() * 360,
-      spin: (Math.random() - 0.5) * 2.2,
-    });
+      spin: (Math.random() - 0.5) * 1.4,
+      tx: -1,
+      ty: -1,
+      tr: -9999,
+    }, now);
+    f.born = now + (i % 4) * 12;
+    f.el.style.opacity = "0";
+    f.opacity = 0;
+    f.waiting = true;
+    return f;
   }
 
-  function resetFountainState(f) {
-    // Percent of stage; small jitter so they don't all stack on one pixel.
+  function resetFountainState(f, now) {
+    const t = now || performance.now();
     f.x = 50 + (Math.random() - 0.5) * 6;
     f.y = 52 + (Math.random() - 0.5) * 4;
-    // Upward launch + horizontal spray — higher mult looks wild via more particles.
-    f.vx = (Math.random() - 0.5) * 28;
-    f.vy = -(14 + Math.random() * 22);
-    f.born = performance.now();
-    f.life = (2.4 + Math.random() * 2.8) * 1000;
-    f.el.classList.remove("pop");
-    void f.el.offsetWidth;
-    f.el.classList.add("pop");
-    f.el.style.opacity = "1";
+    f.vx = (Math.random() - 0.5) * 24;
+    f.vy = -(11 + Math.random() * 18);
+    f.born = t;
+    f.life = (2.0 + Math.random() * 2.2) * 1000;
+    f.opacity = 1;
+    f.waiting = false;
     return f;
   }
 
@@ -364,42 +551,78 @@
     floaterStage.innerHTML = "";
   }
 
-  function respawnFloater(f) {
-    resetFountainState(f);
-  }
-
   function tickFloaters(now) {
-    const dt = lastTick ? Math.min(0.05, (now - lastTick) / 1000) : 0.016;
-    lastTick = now;
-    const gravity = 38; // % of stage height per second²
+    if (!floaters.length) {
+      floaterRAF = 0;
+      return;
+    }
 
-    for (let i = 0; i < floaters.length; i++) {
-      const f = floaters[i];
-      const age = now - f.born;
+    if (skipNextFrame) {
+      skipNextFrame = false;
+      lastTick = now;
+      floaterRAF = requestAnimationFrame(tickFloaters);
+      return;
+    }
+
+    const frameStart = now;
+    const dt = lastTick ? Math.min(0.033, (now - lastTick) / 1000) : 0.016;
+    lastTick = now;
+    const gravity = 34;
+    const list = floaters;
+    const n = list.length;
+
+    for (let i = 0; i < n; i++) {
+      const f = list[i];
+      if (now < f.born) {
+        if (!f.waiting) {
+          f.waiting = true;
+          f.opacity = 0;
+          f.el.style.opacity = "0";
+        }
+        continue;
+      }
+      f.waiting = false;
 
       f.vy += gravity * dt;
       f.x += f.vx * dt;
       f.y += f.vy * dt;
       f.rot += f.spin;
 
-      const offscreen =
-        f.y > 118 || f.y < -18 || f.x < -18 || f.x > 118 || age >= f.life;
-      if (offscreen) {
-        respawnFloater(f);
+      const age = now - f.born;
+      if (f.y > 112 || f.y < -16 || f.x < -16 || f.x > 116 || age >= f.life) {
+        resetFountainState(f, now);
       }
 
-      // Fade in the last stretch of life (respawn resets opacity).
-      const fadeStart = f.life * 0.7;
-      let opacity = 1;
       const curAge = now - f.born;
+      const fadeStart = f.life * 0.75;
+      let opacity = 1;
       if (curAge > fadeStart) {
         opacity = Math.max(0, 1 - (curAge - fadeStart) / (f.life - fadeStart));
       }
+      // Quantize opacity to cut style thrash.
+      opacity = ((opacity * 20) | 0) / 20;
 
-      f.el.style.left = f.x + "%";
-      f.el.style.top = f.y + "%";
-      f.el.style.opacity = String(opacity);
-      f.el.style.transform = "translate(-50%, -50%) rotate(" + f.rot + "deg)";
+      // Quantize position (~0.1 unit) / rotation (1°) before touching the DOM.
+      const qx = (f.x * 10 + 0.5) | 0;
+      const qy = (f.y * 10 + 0.5) | 0;
+      const qr = f.rot | 0;
+      if (qx !== f.tx || qy !== f.ty || qr !== f.tr) {
+        f.tx = qx;
+        f.ty = qy;
+        f.tr = qr;
+        f.el.style.transform =
+          "translate3d(" + qx / 10 + "vw," + qy / 10 + "vh,0) translate(-50%,-50%) rotate(" +
+          qr +
+          "deg)";
+      }
+      if (opacity !== f.opacity) {
+        f.opacity = opacity;
+        f.el.style.opacity = opacity === 1 ? "1" : String(opacity);
+      }
+    }
+
+    if (performance.now() - frameStart > FRAME_BUDGET_MS) {
+      skipNextFrame = true;
     }
     floaterRAF = requestAnimationFrame(tickFloaters);
   }
@@ -430,8 +653,11 @@
     if (on) {
       slideEl.hidden = true;
       creditEl.hidden = true;
+      floaterStage.hidden = true;
     }
   }
+
+  slideEl.decoding = "async";
 
   refreshFeed();
   setInterval(refreshFeed, 5000);
