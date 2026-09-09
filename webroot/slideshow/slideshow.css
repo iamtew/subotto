@@ -15,9 +15,11 @@ html, body {
   width: 100vw;
   height: 100vh;
   background: transparent;
+  overflow: hidden;
 }
 
-#slide {
+/* Dual buffers — one shows the current slide, the other receives the next. */
+.slide-layer {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -27,6 +29,162 @@ html, body {
   background: transparent;
   user-select: none;
   pointer-events: none;
+  opacity: 0;
+  z-index: 1;
+  visibility: hidden;
+  transform: none;
+  filter: none;
+  clip-path: none;
+  backface-visibility: hidden;
+}
+
+.slide-layer.is-active {
+  opacity: 1;
+  z-index: 2;
+  visibility: visible;
+}
+
+.slide-layer.is-leaving {
+  z-index: 2;
+  visibility: visible;
+}
+
+.slide-layer.is-entering {
+  z-index: 3;
+  visibility: visible;
+}
+
+.slide-layer[hidden] {
+  display: none !important;
+}
+
+/* --- Transition animations (~0.75s) --- */
+#stage.tx-flip {
+  perspective: 1400px;
+}
+
+@keyframes tx-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes tx-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+#stage.tx-fade .slide-layer.is-leaving {
+  animation: tx-fade-out 0.75s ease forwards;
+}
+#stage.tx-fade .slide-layer.is-entering {
+  opacity: 0;
+  animation: tx-fade-in 0.75s ease forwards;
+}
+
+@keyframes tx-swipe-in {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+#stage.tx-swipe .slide-layer.is-leaving {
+  opacity: 1;
+}
+#stage.tx-swipe .slide-layer.is-entering {
+  opacity: 1;
+  animation: tx-swipe-in 0.75s ease forwards;
+}
+
+@keyframes tx-slide-out {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+@keyframes tx-slide-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+#stage.tx-slide .slide-layer.is-leaving {
+  opacity: 1;
+  animation: tx-slide-out 0.75s ease forwards;
+}
+#stage.tx-slide .slide-layer.is-entering {
+  opacity: 1;
+  animation: tx-slide-in 0.75s ease forwards;
+}
+
+@keyframes tx-rise-out {
+  from { transform: translateY(0); }
+  to { transform: translateY(-100%); }
+}
+@keyframes tx-rise-in {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+#stage.tx-rise .slide-layer.is-leaving {
+  opacity: 1;
+  animation: tx-rise-out 0.75s ease forwards;
+}
+#stage.tx-rise .slide-layer.is-entering {
+  opacity: 1;
+  animation: tx-rise-in 0.75s ease forwards;
+}
+
+@keyframes tx-zoom-out {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(1.12); }
+}
+@keyframes tx-zoom-in {
+  from { opacity: 0; transform: scale(1.12); }
+  to { opacity: 1; transform: scale(1); }
+}
+#stage.tx-zoom .slide-layer.is-leaving {
+  animation: tx-zoom-out 0.75s ease forwards;
+}
+#stage.tx-zoom .slide-layer.is-entering {
+  opacity: 0;
+  animation: tx-zoom-in 0.75s ease forwards;
+}
+
+@keyframes tx-blur-out {
+  from { opacity: 1; filter: blur(0); }
+  to { opacity: 0; filter: blur(14px); }
+}
+@keyframes tx-blur-in {
+  from { opacity: 0; filter: blur(14px); }
+  to { opacity: 1; filter: blur(0); }
+}
+#stage.tx-blur .slide-layer.is-leaving {
+  animation: tx-blur-out 0.75s ease forwards;
+}
+#stage.tx-blur .slide-layer.is-entering {
+  opacity: 0;
+  animation: tx-blur-in 0.75s ease forwards;
+}
+
+@keyframes tx-flip-out {
+  from { transform: rotateY(0deg); opacity: 1; }
+  to { transform: rotateY(-90deg); opacity: 0.35; }
+}
+@keyframes tx-flip-in {
+  from { transform: rotateY(90deg); opacity: 0.35; }
+  to { transform: rotateY(0deg); opacity: 1; }
+}
+#stage.tx-flip .slide-layer.is-leaving {
+  transform-origin: center center;
+  animation: tx-flip-out 0.75s ease forwards;
+}
+#stage.tx-flip .slide-layer.is-entering {
+  transform-origin: center center;
+  opacity: 0.35;
+  animation: tx-flip-in 0.75s ease forwards;
+}
+
+@keyframes tx-iris-in {
+  from { clip-path: circle(0% at 50% 50%); }
+  to { clip-path: circle(80% at 50% 50%); }
+}
+#stage.tx-iris .slide-layer.is-leaving {
+  opacity: 1;
+}
+#stage.tx-iris .slide-layer.is-entering {
+  opacity: 1;
+  animation: tx-iris-in 0.75s ease forwards;
 }
 
 /* Full-viewport playground for animated fountain floaters (above credit). */

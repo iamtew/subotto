@@ -234,6 +234,20 @@
             Advance (seconds)
             <input name="interval_seconds" id="picture-settings-interval" type="number" min="1" max="600" value="8">
           </label>
+          <label>
+            Transition
+            <select name="transition" id="picture-settings-transition">
+              <option value="cut">cut</option>
+              <option value="fade" selected>fade</option>
+              <option value="swipe">swipe</option>
+              <option value="slide">slide</option>
+              <option value="rise">rise</option>
+              <option value="zoom">zoom</option>
+              <option value="blur">blur</option>
+              <option value="flip">flip</option>
+              <option value="iris">iris</option>
+            </select>
+          </label>
           <label class="check">
             <input name="shuffle" id="picture-settings-shuffle" type="checkbox">
             <span>shuffle</span>

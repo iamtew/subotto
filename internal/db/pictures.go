@@ -22,10 +22,24 @@ const (
 	CreditCornerBR = "br"
 )
 
+// Slideshow image transition types (OBS overlay dual-layer animations).
+const (
+	TransitionCut   = "cut"
+	TransitionFade  = "fade"
+	TransitionSwipe = "swipe"
+	TransitionSlide = "slide"
+	TransitionRise  = "rise"
+	TransitionZoom  = "zoom"
+	TransitionBlur  = "blur"
+	TransitionFlip  = "flip"
+	TransitionIris  = "iris"
+)
+
 const pictureSelectCols = `
 	id, discord_channel_id, guild_id, name, slug, enabled,
 	credit_corner, interval_seconds, shuffle, show_credit, show_reactions,
 	reactions_animated, reaction_multiplier, credit_scale, reaction_scale,
+	transition,
 	created_at, active_from, active_until
 `
 
@@ -54,6 +68,7 @@ type PictureListener struct {
 	ReactionMultiplier int // 1–25; copies of each reaction = count * multiplier (animated only)
 	CreditScale        float64 // author card + font size multiplier (0.5–5)
 	ReactionScale      float64 // emoji size multiplier (0.5–5)
+	Transition         string  // cut, fade, swipe, slide, rise, zoom, blur, flip, iris
 	CreatedAt          time.Time
 	ActiveFrom         time.Time
 	ActiveUntil        *time.Time // nil = currently active epoch
@@ -89,6 +104,7 @@ type PictureListenerInput struct {
 	ReactionMultiplier int
 	CreditScale        float64
 	ReactionScale      float64
+	Transition         string
 }
 
 var slugSanitizer = regexp.MustCompile(`[^a-z0-9_-]+`)
@@ -134,6 +150,17 @@ func NormalizeCreditCorner(c string) string {
 		return strings.ToLower(strings.TrimSpace(c))
 	default:
 		return CreditCornerBR
+	}
+}
+
+// NormalizeTransition returns a known slideshow transition or "fade".
+func NormalizeTransition(t string) string {
+	switch strings.ToLower(strings.TrimSpace(t)) {
+	case TransitionCut, TransitionFade, TransitionSwipe, TransitionSlide,
+		TransitionRise, TransitionZoom, TransitionBlur, TransitionFlip, TransitionIris:
+		return strings.ToLower(strings.TrimSpace(t))
+	default:
+		return TransitionFade
 	}
 }
 
@@ -273,6 +300,7 @@ func (d *DB) UpsertPictureListener(ctx context.Context, in PictureListenerInput)
 	mult := NormalizeReactionMultiplier(in.ReactionMultiplier)
 	creditScale := NormalizeOverlayScale(in.CreditScale)
 	reactionScale := NormalizeOverlayScale(in.ReactionScale)
+	transition := NormalizeTransition(in.Transition)
 	now := time.Now().UTC().Format("2006-01-02 15:04:05")
 
 	existing, err := d.GetPictureListenerByChannel(ctx, channelID)
@@ -287,10 +315,12 @@ func (d *DB) UpsertPictureListener(ctx context.Context, in PictureListenerInput)
 			SET guild_id = ?, name = ?, enabled = ?,
 			    credit_corner = ?, interval_seconds = ?, shuffle = ?,
 			    show_credit = ?, show_reactions = ?, reactions_animated = ?,
-			    reaction_multiplier = ?, credit_scale = ?, reaction_scale = ?
+			    reaction_multiplier = ?, credit_scale = ?, reaction_scale = ?,
+			    transition = ?
 			WHERE id = ? AND active_until IS NULL
 		`, in.GuildID, name, enabledInt, corner, interval, shuffleInt,
-			showCreditInt, showReactionsInt, animatedInt, mult, creditScale, reactionScale, existing.ID)
+			showCreditInt, showReactionsInt, animatedInt, mult, creditScale, reactionScale,
+			transition, existing.ID)
 		if err != nil {
 			return nil, fmt.Errorf("update picture listener: %w", err)
 		}
@@ -321,11 +351,12 @@ func (d *DB) UpsertPictureListener(ctx context.Context, in PictureListenerInput)
 			discord_channel_id, guild_id, name, slug, enabled,
 			credit_corner, interval_seconds, shuffle, show_credit, show_reactions,
 			reactions_animated, reaction_multiplier, credit_scale, reaction_scale,
+			transition,
 			created_at, active_from, active_until
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
 	`, channelID, in.GuildID, name, slug, enabledInt,
 		corner, interval, shuffleInt, showCreditInt, showReactionsInt, animatedInt, mult,
-		creditScale, reactionScale, now, now)
+		creditScale, reactionScale, transition, now, now)
 	if err != nil {
 		return nil, fmt.Errorf("insert picture listener: %w", err)
 	}
@@ -434,16 +465,25 @@ func (d *DB) UpdatePictureListenerSettings(ctx context.Context, channelID string
 	}
 	reactionScale = NormalizeOverlayScale(reactionScale)
 
+	transition := NormalizeTransition(in.Transition)
+	if strings.TrimSpace(in.Transition) == "" {
+		transition = existing.Transition
+		if transition == "" {
+			transition = TransitionFade
+		}
+	}
+
 	_, err = d.sql.ExecContext(ctx, `
 		UPDATE picture_listeners
 		SET name = ?, enabled = ?,
 		    credit_corner = ?, interval_seconds = ?, shuffle = ?,
 		    show_credit = ?, show_reactions = ?, reactions_animated = ?,
-		    reaction_multiplier = ?, credit_scale = ?, reaction_scale = ?
+		    reaction_multiplier = ?, credit_scale = ?, reaction_scale = ?,
+		    transition = ?
 		WHERE id = ? AND active_until IS NULL
 	`, name, boolToInt(in.Enabled), corner, interval, boolToInt(in.Shuffle),
 		boolToInt(in.ShowCredit), boolToInt(in.ShowReactions), boolToInt(in.ReactionsAnimated),
-		mult, creditScale, reactionScale, existing.ID)
+		mult, creditScale, reactionScale, transition, existing.ID)
 	if err != nil {
 		return nil, fmt.Errorf("update picture listener settings: %w", err)
 	}
@@ -809,6 +849,7 @@ func scanPictureListener(row scannable) (*PictureListener, error) {
 		&p.ReactionMultiplier,
 		&p.CreditScale,
 		&p.ReactionScale,
+		&p.Transition,
 		&createdAt,
 		&activeFrom,
 		&activeUntil,
@@ -824,6 +865,7 @@ func scanPictureListener(row scannable) (*PictureListener, error) {
 	p.ReactionMultiplier = NormalizeReactionMultiplier(p.ReactionMultiplier)
 	p.CreditScale = NormalizeOverlayScale(p.CreditScale)
 	p.ReactionScale = NormalizeOverlayScale(p.ReactionScale)
+	p.Transition = NormalizeTransition(p.Transition)
 	p.CreatedAt = parseSQLiteTime(createdAt)
 	p.ActiveFrom = parseSQLiteTime(activeFrom)
 	if activeUntil.Valid && strings.TrimSpace(activeUntil.String) != "" {

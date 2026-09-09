@@ -814,6 +814,7 @@ function openPictureSettings(channelID) {
   document.getElementById("picture-settings-channel").value = p.discord_channel_id;
   document.getElementById("picture-settings-corner").value = p.credit_corner || "br";
   document.getElementById("picture-settings-interval").value = String(p.interval_seconds || 8);
+  document.getElementById("picture-settings-transition").value = p.transition || "fade";
   document.getElementById("picture-settings-shuffle").checked = !!p.shuffle;
   document.getElementById("picture-settings-credit").checked = p.show_credit !== false;
   document.getElementById("picture-settings-reactions").checked = p.show_reactions !== false;
@@ -859,6 +860,7 @@ document.getElementById("picture-settings-form").addEventListener("submit", asyn
       body: JSON.stringify({
         credit_corner: fd.get("credit_corner") || "br",
         interval_seconds: Number(fd.get("interval_seconds") || 8),
+        transition: fd.get("transition") || "fade",
         shuffle: fd.get("shuffle") === "on",
         show_credit: fd.get("show_credit") === "on",
         show_reactions: fd.get("show_reactions") === "on",

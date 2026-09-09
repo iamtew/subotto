@@ -1,9 +1,11 @@
 /* Subotto public OBS slideshow — polls /api/slideshow/{slug}.
-   Third-pass potato build: atomic slide+overlay commits, floater DOM pool,
+   Dual-layer image transitions + atomic slide+overlay commits, floater DOM pool,
    quantized style writes, no rebuild unless slide/reactions/settings change. */
 
 (function () {
-  const slideEl = document.getElementById("slide");
+  const stageEl = document.getElementById("stage");
+  const slideA = document.getElementById("slide-a");
+  const slideB = document.getElementById("slide-b");
   const creditEl = document.getElementById("credit");
   const nameEl = document.getElementById("credit-name");
   const reactionsEl = document.getElementById("credit-reactions");
@@ -29,12 +31,29 @@
   let paintedKey = "";
   let pendingKey = "";
   let paintGen = 0;
+  let paintedUrl = "";
+  let activeEl = slideA;
+  let inactiveEl = slideB;
+  let transitioning = false;
+  let transitionTimer = null;
   const emoteTemplates = {};
   const preloaded = {};
 
   const STATIC_STACK_MAX = 5;
   const FLOATER_HARD_CAP = 56;
   const FRAME_BUDGET_MS = 20;
+  const TRANSITION_MS = 750;
+  const TX_TYPES = {
+    cut: true,
+    fade: true,
+    swipe: true,
+    slide: true,
+    rise: true,
+    zoom: true,
+    blur: true,
+    flip: true,
+    iris: true,
+  };
   let skipNextFrame = false;
 
   function slugFromPath() {
@@ -237,6 +256,113 @@
     );
   }
 
+  function transitionType() {
+    const t = (feed && feed.transition ? String(feed.transition) : "fade").toLowerCase();
+    return TX_TYPES[t] ? t : "fade";
+  }
+
+  function clearTxClasses() {
+    stageEl.classList.remove(
+      "tx-cut",
+      "tx-fade",
+      "tx-swipe",
+      "tx-slide",
+      "tx-rise",
+      "tx-zoom",
+      "tx-blur",
+      "tx-flip",
+      "tx-iris"
+    );
+  }
+
+  function resetLayerStyles(el) {
+    el.style.animation = "none";
+    // Force the browser to drop the previous animation before clearing.
+    void el.offsetWidth;
+    el.style.animation = "";
+    el.classList.remove("is-leaving", "is-entering");
+  }
+
+  function finishTransition() {
+    if (!transitioning) return;
+    transitioning = false;
+    if (transitionTimer) {
+      clearTimeout(transitionTimer);
+      transitionTimer = null;
+    }
+    clearTxClasses();
+
+    resetLayerStyles(activeEl);
+    resetLayerStyles(inactiveEl);
+
+    activeEl.classList.remove("is-active");
+    activeEl.hidden = true;
+
+    inactiveEl.classList.add("is-active");
+    inactiveEl.hidden = false;
+
+    const tmp = activeEl;
+    activeEl = inactiveEl;
+    inactiveEl = tmp;
+  }
+
+  function snapFinishTransition() {
+    if (!transitioning) return;
+    finishTransition();
+  }
+
+  function startTransition(tx) {
+    transitioning = true;
+    clearTxClasses();
+    stageEl.classList.add("tx-" + tx);
+
+    activeEl.classList.remove("is-active");
+    activeEl.classList.add("is-leaving");
+    activeEl.hidden = false;
+
+    inactiveEl.classList.add("is-entering");
+    inactiveEl.hidden = false;
+
+    if (transitionTimer) clearTimeout(transitionTimer);
+    transitionTimer = setTimeout(finishTransition, TRANSITION_MS + 40);
+  }
+
+  function applyOverlay(img, reactions, showCredit, showReact, animated, mult) {
+    if (!showCredit && !showReact) {
+      creditEl.hidden = true;
+      clearFloaters(false);
+      clearStaticReactions();
+      return;
+    }
+
+    creditEl.hidden = false;
+
+    if (showCredit) {
+      nameEl.hidden = false;
+      const author = (img.author || "").trim();
+      nameEl.textContent = author ? "Author: " + author : "Author:";
+    } else {
+      nameEl.hidden = true;
+      nameEl.textContent = "";
+    }
+
+    if (!showReact || !reactions.length) {
+      clearFloaters(false);
+      clearStaticReactions();
+      return;
+    }
+
+    if (animated) {
+      clearStaticReactions();
+      floaterStage.hidden = false;
+      rebuildFloaters(reactions, mult);
+    } else {
+      clearFloaters(false);
+      floaterStage.hidden = true;
+      rebuildStaticStack(reactions);
+    }
+  }
+
   function paintCurrent() {
     const img = imageById(currentId);
     if (!img) return;
@@ -249,7 +375,7 @@
     const key = paintKeyFor(img, reactions, showCredit, showReact, animated, mult);
 
     if (key === paintedKey) {
-      if (slideEl.getAttribute("src") === img.url) slideEl.hidden = false;
+      if (activeEl.getAttribute("src") === img.url) activeEl.hidden = false;
       return;
     }
     // Already loading this exact paint — don't stack duplicate preloads.
@@ -258,55 +384,43 @@
     const gen = ++paintGen;
     pendingKey = key;
     const url = img.url;
-    const sameSrc = slideEl.getAttribute("src") === url;
+    const urlChanged = paintedUrl !== url;
 
     function commit() {
       if (gen !== paintGen) return;
       paintedKey = key;
       pendingKey = "";
 
-      if (slideEl.getAttribute("src") !== url) {
-        slideEl.src = url;
-      }
-      slideEl.hidden = false;
-
-      if (!showCredit && !showReact) {
-        creditEl.hidden = true;
-        clearFloaters(false);
-        clearStaticReactions();
+      if (!urlChanged) {
+        applyOverlay(img, reactions, showCredit, showReact, animated, mult);
         return;
       }
 
-      creditEl.hidden = false;
+      // Mid-flight advance: snap the previous handoff, then start the next.
+      if (transitioning) snapFinishTransition();
 
-      if (showCredit) {
-        nameEl.hidden = false;
-        const author = (img.author || "").trim();
-        nameEl.textContent = author ? "Author: " + author : "Author:";
-      } else {
-        nameEl.hidden = true;
-        nameEl.textContent = "";
-      }
+      paintedUrl = url;
+      applyOverlay(img, reactions, showCredit, showReact, animated, mult);
 
-      if (!showReact || !reactions.length) {
-        clearFloaters(false);
-        clearStaticReactions();
+      const tx = transitionType();
+      const firstPaint = !activeEl.getAttribute("src");
+
+      if (tx === "cut" || firstPaint) {
+        activeEl.src = url;
+        activeEl.hidden = false;
+        activeEl.classList.add("is-active");
+        inactiveEl.hidden = true;
+        inactiveEl.classList.remove("is-active", "is-entering", "is-leaving");
         return;
       }
 
-      if (animated) {
-        clearStaticReactions();
-        floaterStage.hidden = false;
-        rebuildFloaters(reactions, mult);
-      } else {
-        clearFloaters(false);
-        floaterStage.hidden = true;
-        rebuildStaticStack(reactions);
-      }
+      inactiveEl.src = url;
+      startTransition(tx);
     }
 
     // Image + credit + floaters commit together once the bitmap is ready.
-    if (sameSrc && (slideEl.complete || slideEl.naturalWidth > 0)) {
+    if (!urlChanged && activeEl.getAttribute("src") === url &&
+        (activeEl.complete || activeEl.naturalWidth > 0)) {
       commit();
       return;
     }
@@ -651,13 +765,18 @@
   function showEmpty(on) {
     emptyEl.hidden = !on;
     if (on) {
-      slideEl.hidden = true;
+      if (transitioning) snapFinishTransition();
+      clearTxClasses();
+      activeEl.hidden = true;
+      inactiveEl.hidden = true;
       creditEl.hidden = true;
       floaterStage.hidden = true;
+      paintedUrl = "";
     }
   }
 
-  slideEl.decoding = "async";
+  slideA.decoding = "async";
+  slideB.decoding = "async";
 
   refreshFeed();
   setInterval(refreshFeed, 5000);

@@ -59,17 +59,18 @@ func (s *Server) handleSlideshowPage(w http.ResponseWriter, r *http.Request) {
 }
 
 type slideshowFeedDTO struct {
-	Slug            string             `json:"slug"`
-	Name            string             `json:"name"`
-	CreditCorner    string             `json:"credit_corner"`
-	IntervalSeconds int                `json:"interval_seconds"`
-	Shuffle         bool               `json:"shuffle"`
-	ShowCredit      bool               `json:"show_credit"`
-	ShowReactions   bool               `json:"show_reactions"`
-	ReactionsAnimated  bool              `json:"reactions_animated"`
-	ReactionMultiplier int               `json:"reaction_multiplier"`
-	CreditScale        float64           `json:"credit_scale"`
-	ReactionScale      float64           `json:"reaction_scale"`
+	Slug               string              `json:"slug"`
+	Name               string              `json:"name"`
+	CreditCorner       string              `json:"credit_corner"`
+	IntervalSeconds    int                 `json:"interval_seconds"`
+	Shuffle            bool                `json:"shuffle"`
+	ShowCredit         bool                `json:"show_credit"`
+	ShowReactions      bool                `json:"show_reactions"`
+	ReactionsAnimated  bool                `json:"reactions_animated"`
+	ReactionMultiplier int                 `json:"reaction_multiplier"`
+	CreditScale        float64             `json:"credit_scale"`
+	ReactionScale      float64             `json:"reaction_scale"`
+	Transition         string              `json:"transition"`
 	Images             []slideshowImageDTO `json:"images"`
 }
 
@@ -115,17 +116,18 @@ func (s *Server) handleSlideshowFeed(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, slideshowFeedDTO{
-		Slug:            pl.Slug,
-		Name:            pl.Name,
-		CreditCorner:    pl.CreditCorner,
-		IntervalSeconds: pl.IntervalSeconds,
-		Shuffle:         pl.Shuffle,
+		Slug:               pl.Slug,
+		Name:               pl.Name,
+		CreditCorner:       pl.CreditCorner,
+		IntervalSeconds:    pl.IntervalSeconds,
+		Shuffle:            pl.Shuffle,
 		ShowCredit:         pl.ShowCredit,
 		ShowReactions:      pl.ShowReactions,
 		ReactionsAnimated:  pl.ReactionsAnimated,
 		ReactionMultiplier: pl.ReactionMultiplier,
 		CreditScale:        pl.CreditScale,
 		ReactionScale:      pl.ReactionScale,
+		Transition:         pl.Transition,
 		Images:             images,
 	})
 }

@@ -70,6 +70,69 @@ func TestReactionsAnimatedSetting(t *testing.T) {
 	}
 }
 
+func TestNormalizeTransition(t *testing.T) {
+	cases := map[string]string{
+		"cut":   TransitionCut,
+		"FADE":  TransitionFade,
+		"swipe": TransitionSwipe,
+		"slide": TransitionSlide,
+		"rise":  TransitionRise,
+		"zoom":  TransitionZoom,
+		"blur":  TransitionBlur,
+		"flip":  TransitionFlip,
+		"iris":  TransitionIris,
+		"":      TransitionFade,
+		"nope":  TransitionFade,
+		"  ":    TransitionFade,
+	}
+	for in, want := range cases {
+		if got := NormalizeTransition(in); got != want {
+			t.Fatalf("NormalizeTransition(%q)=%q want %q", in, got, want)
+		}
+	}
+}
+
+func TestTransitionSetting(t *testing.T) {
+	ctx := context.Background()
+	store := openTestDB(t)
+
+	p, err := store.UpsertPictureListener(ctx, PictureListenerInput{
+		DiscordChannelID: "chan-tx",
+		Name:             "Tx Pics",
+		Enabled:          true,
+		IntervalSeconds:  8,
+		ShowCredit:       true,
+		ShowReactions:    true,
+		Transition:       TransitionZoom,
+	})
+	if err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	if p.Transition != TransitionZoom {
+		t.Fatalf("want zoom after upsert: %+v", p)
+	}
+
+	p2, err := store.UpdatePictureListenerSettings(ctx, "chan-tx", PictureListenerInput{
+		Name:               p.Name,
+		Enabled:            true,
+		CreditCorner:       p.CreditCorner,
+		IntervalSeconds:    p.IntervalSeconds,
+		ShowCredit:         true,
+		ShowReactions:      true,
+		ReactionsAnimated:  true,
+		ReactionMultiplier: 1,
+		CreditScale:        1.5,
+		ReactionScale:      1.5,
+		Transition:         TransitionIris,
+	})
+	if err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if p2.Transition != TransitionIris {
+		t.Fatalf("want iris after update: %+v", p2)
+	}
+}
+
 
 func TestPictureListenerCRUD(t *testing.T) {
 	ctx := context.Background()

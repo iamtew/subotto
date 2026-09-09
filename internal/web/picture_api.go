@@ -34,6 +34,7 @@ type pictureListenerDTO struct {
 	ReactionMultiplier int     `json:"reaction_multiplier"`
 	CreditScale        float64 `json:"credit_scale"`
 	ReactionScale      float64 `json:"reaction_scale"`
+	Transition         string  `json:"transition"`
 	PictureCount       int     `json:"picture_count"`
 	SlideshowURL       string  `json:"slideshow_url"`
 	CreatedAt          string  `json:"created_at"`
@@ -58,6 +59,7 @@ func toPictureListenerDTO(p db.PictureListener, count int) pictureListenerDTO {
 		ReactionMultiplier: p.ReactionMultiplier,
 		CreditScale:        p.CreditScale,
 		ReactionScale:      p.ReactionScale,
+		Transition:         p.Transition,
 		PictureCount:       count,
 		SlideshowURL:       "/slideshow/" + p.Slug,
 		CreatedAt:          p.CreatedAt.UTC().Format(time.RFC3339),
@@ -113,6 +115,7 @@ type pictureUpsertBody struct {
 	ReactionMultiplier *int     `json:"reaction_multiplier"`
 	CreditScale        *float64 `json:"credit_scale"`
 	ReactionScale      *float64 `json:"reaction_scale"`
+	Transition         string   `json:"transition"`
 }
 
 func (s *Server) pictureInputFromBody(body pictureUpsertBody) db.PictureListenerInput {
@@ -167,6 +170,7 @@ func (s *Server) pictureInputFromBody(body pictureUpsertBody) db.PictureListener
 		ReactionMultiplier: mult,
 		CreditScale:        creditScale,
 		ReactionScale:      reactionScale,
+		Transition:         body.Transition,
 	}
 }
 
@@ -247,7 +251,8 @@ func (s *Server) handlePatchPictureListener(w http.ResponseWriter, r *http.Reque
 		body.IntervalSeconds == nil && body.Shuffle == nil &&
 		body.ShowCredit == nil && body.ShowReactions == nil &&
 		body.ReactionsAnimated == nil &&
-		body.ReactionMultiplier == nil && body.CreditScale == nil && body.ReactionScale == nil {
+		body.ReactionMultiplier == nil && body.CreditScale == nil && body.ReactionScale == nil &&
+		body.Transition == "" {
 		p, err := s.store.SetPictureListenerEnabled(r.Context(), channelID, *body.Enabled)
 		if err != nil {
 			writeErr(w, http.StatusBadRequest, err.Error())
@@ -273,6 +278,7 @@ func (s *Server) handlePatchPictureListener(w http.ResponseWriter, r *http.Reque
 		ReactionMultiplier: existing.ReactionMultiplier,
 		CreditScale:        existing.CreditScale,
 		ReactionScale:      existing.ReactionScale,
+		Transition:         existing.Transition,
 	}
 	if body.GuildID != "" {
 		in.GuildID = body.GuildID
@@ -309,6 +315,9 @@ func (s *Server) handlePatchPictureListener(w http.ResponseWriter, r *http.Reque
 	}
 	if body.ReactionScale != nil {
 		in.ReactionScale = *body.ReactionScale
+	}
+	if body.Transition != "" {
+		in.Transition = body.Transition
 	}
 
 	p, err := s.store.UpdatePictureListenerSettings(r.Context(), channelID, in)
