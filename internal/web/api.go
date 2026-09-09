@@ -40,6 +40,8 @@ func (s *Server) registerAPI(mux *http.ServeMux) {
 	mux.Handle("PUT /api/settings/listen-messages", s.basicAuth(http.HandlerFunc(s.handlePutListenMessages)))
 	mux.Handle("GET /api/settings/air-messages", s.basicAuth(http.HandlerFunc(s.handleGetListenMessages)))
 	mux.Handle("PUT /api/settings/air-messages", s.basicAuth(http.HandlerFunc(s.handlePutListenMessages)))
+	mux.Handle("GET /api/settings/picture-listen-messages", s.basicAuth(http.HandlerFunc(s.handleGetPictureListenMessages)))
+	mux.Handle("PUT /api/settings/picture-listen-messages", s.basicAuth(http.HandlerFunc(s.handlePutPictureListenMessages)))
 }
 
 // ---------- JSON helpers ----------
@@ -281,10 +283,9 @@ func (s *Server) handleUpsertMapping(w http.ResponseWriter, r *http.Request) {
 
 	openedListen := before == nil || before.YouTubePlaylistID != m.YouTubePlaylistID
 	if before != nil && before.YouTubePlaylistID != m.YouTubePlaylistID {
-		s.announceListen(r.Context(), before, false)
-	}
-	if openedListen {
-		s.announceListen(r.Context(), m, true)
+		s.announceListenTransition(before, m)
+	} else if openedListen {
+		s.announceListenTransition(nil, m)
 	}
 
 	_ = s.store.LogActivity(r.Context(), "listen_upserted", map[string]any{
@@ -464,7 +465,7 @@ func (s *Server) handleDeleteMapping(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if existing != nil {
-		s.announceListen(ctx, existing, false)
+		s.announceListenTransition(existing, nil)
 	}
 	details := map[string]any{"channel_id": channelID, "source": "admin_ui"}
 	if existing != nil {
@@ -490,7 +491,8 @@ func (s *Server) handleGetListenMessages(w http.ResponseWriter, r *http.Request)
 		"start_message": start,
 		"stop_message":  stop,
 		"placeholders":  []string{"{{name}}", "{{playlist_id}}", "{{channel_id}}"},
-		"note": "Global ONLINE/OFFLINE notices for every guild/channel.",
+		"note":          "Global ONLINE/OFFLINE notices for every guild/channel. Clear a box and save to silence that notice.",
+		"max_chars":     db.MaxAnnounceTemplateLength,
 	})
 }
 
@@ -500,20 +502,54 @@ func (s *Server) handlePutListenMessages(w http.ResponseWriter, r *http.Request)
 		writeErr(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
-	if err := s.store.SetSetting(r.Context(), db.SettingListenStartMessage, body.StartMessage); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+	start := db.NormalizeAnnounceTemplate(body.StartMessage)
+	stop := db.NormalizeAnnounceTemplate(body.StopMessage)
+	if err := db.ValidateAnnounceTemplate("ONLINE notice", start); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := s.store.SetSetting(r.Context(), db.SettingListenStopMessage, body.StopMessage); err != nil {
+	if err := db.ValidateAnnounceTemplate("OFFLINE notice", stop); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := s.store.SetSettings(r.Context(), map[string]string{
+		db.SettingListenStartMessage: start,
+		db.SettingListenStopMessage:  stop,
+	}); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	_ = s.store.LogActivity(r.Context(), "listen_messages_updated", map[string]any{"source": "admin_ui"}, true)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":            true,
-		"start_message": body.StartMessage,
-		"stop_message":  body.StopMessage,
+		"start_message": start,
+		"stop_message":  stop,
 	})
+}
+
+const announceDiscordTimeout = 20 * time.Second
+
+// announceListenTransition posts OFFLINE then ONLINE in order without blocking Admin HTTP.
+func (s *Server) announceListenTransition(offline *db.ChannelMapping, online *db.ChannelMapping) {
+	var offCopy, onCopy *db.ChannelMapping
+	if offline != nil {
+		c := *offline
+		offCopy = &c
+	}
+	if online != nil {
+		c := *online
+		onCopy = &c
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), announceDiscordTimeout)
+		defer cancel()
+		if offCopy != nil {
+			s.announceListen(ctx, offCopy, false)
+		}
+		if onCopy != nil {
+			s.announceListen(ctx, onCopy, true)
+		}
+	}()
 }
 
 // announceListen posts the global ONLINE / OFFLINE listener notice.
@@ -532,8 +568,17 @@ func (s *Server) announceListen(ctx context.Context, listen *db.ChannelMapping, 
 		tmpl = start
 		event = "listen_start_announced"
 	}
-	msg := discord.FormatListenMessage(tmpl, listen)
-	if err := discord.Announce(s.discordTok, listen.DiscordChannelID, msg); err != nil {
+	msg := strings.TrimSpace(discord.FormatListenMessage(tmpl, listen))
+	if msg == "" {
+		_ = s.store.LogActivity(ctx, event, map[string]any{
+			"channel_id": listen.DiscordChannelID,
+			"name":       listen.Name,
+			"listening":  online,
+			"skipped":    "empty_notice",
+		}, true)
+		return
+	}
+	if err := discord.Announce(ctx, s.discordTok, listen.DiscordChannelID, msg); err != nil {
 		slog.Warn("listen announce failed", "channel", listen.DiscordChannelID, "online", online, "err", err)
 		_ = s.store.LogActivity(ctx, event, map[string]any{
 			"channel_id": listen.DiscordChannelID,
@@ -544,6 +589,118 @@ func (s *Server) announceListen(ctx context.Context, listen *db.ChannelMapping, 
 	_ = s.store.LogActivity(ctx, event, map[string]any{
 		"channel_id": listen.DiscordChannelID,
 		"name":       listen.Name,
+		"listening":  online,
+	}, true)
+}
+
+func (s *Server) handleGetPictureListenMessages(w http.ResponseWriter, r *http.Request) {
+	start, stop, err := s.store.PictureListenAnnounceMessages(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"start_message": start,
+		"stop_message":  stop,
+		"placeholders":  []string{"{{name}}", "{{slug}}", "{{channel_id}}"},
+		"note":          "Global ONLINE/OFFLINE notices for every picture listener. Clear a box and save to silence that notice.",
+		"max_chars":     db.MaxAnnounceTemplateLength,
+	})
+}
+
+func (s *Server) handlePutPictureListenMessages(w http.ResponseWriter, r *http.Request) {
+	var body listenMessagesBody
+	if err := readJSON(r, &body); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	start := db.NormalizeAnnounceTemplate(body.StartMessage)
+	stop := db.NormalizeAnnounceTemplate(body.StopMessage)
+	if err := db.ValidateAnnounceTemplate("ONLINE notice", start); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := db.ValidateAnnounceTemplate("OFFLINE notice", stop); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := s.store.SetSettings(r.Context(), map[string]string{
+		db.SettingPictureListenStartMessage: start,
+		db.SettingPictureListenStopMessage:  stop,
+	}); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	_ = s.store.LogActivity(r.Context(), "picture_listen_messages_updated", map[string]any{"source": "admin_ui"}, true)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":            true,
+		"start_message": start,
+		"stop_message":  stop,
+	})
+}
+
+// announcePictureTransition posts OFFLINE then ONLINE in order without blocking Admin HTTP.
+func (s *Server) announcePictureTransition(offline *db.PictureListener, online *db.PictureListener) {
+	var offCopy, onCopy *db.PictureListener
+	if offline != nil {
+		c := *offline
+		offCopy = &c
+	}
+	if online != nil {
+		c := *online
+		onCopy = &c
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), announceDiscordTimeout)
+		defer cancel()
+		if offCopy != nil {
+			s.announcePicture(ctx, offCopy, false)
+		}
+		if onCopy != nil {
+			s.announcePicture(ctx, onCopy, true)
+		}
+	}()
+}
+
+// announcePicture posts the global ONLINE / OFFLINE picture-listener notice.
+func (s *Server) announcePicture(ctx context.Context, listen *db.PictureListener, online bool) {
+	if listen == nil || strings.TrimSpace(s.discordTok) == "" {
+		return
+	}
+	start, stop, err := s.store.PictureListenAnnounceMessages(ctx)
+	if err != nil {
+		slog.Warn("could not load picture listen announce templates", "err", err)
+		return
+	}
+	tmpl := stop
+	event := "picture_listen_stop_announced"
+	if online {
+		tmpl = start
+		event = "picture_listen_start_announced"
+	}
+	msg := strings.TrimSpace(discord.FormatPictureListenMessage(tmpl, listen))
+	if msg == "" {
+		_ = s.store.LogActivity(ctx, event, map[string]any{
+			"channel_id": listen.DiscordChannelID,
+			"name":       listen.Name,
+			"slug":       listen.Slug,
+			"listening":  online,
+			"skipped":    "empty_notice",
+		}, true)
+		return
+	}
+	if err := discord.Announce(ctx, s.discordTok, listen.DiscordChannelID, msg); err != nil {
+		slog.Warn("picture listen announce failed", "channel", listen.DiscordChannelID, "online", online, "err", err)
+		_ = s.store.LogActivity(ctx, event, map[string]any{
+			"channel_id": listen.DiscordChannelID,
+			"error":      err.Error(),
+		}, false)
+		return
+	}
+	_ = s.store.LogActivity(ctx, event, map[string]any{
+		"channel_id": listen.DiscordChannelID,
+		"name":       listen.Name,
+		"slug":       listen.Slug,
 		"listening":  online,
 	}, true)
 }

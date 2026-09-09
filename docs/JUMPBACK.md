@@ -17,7 +17,7 @@
 3. **START** content listener creates a **public** playlist; **CEASE** closes the epoch
 4. One live content listener **and** one live picture listener may share the same channel
 5. Content / picture resync stop at previous epoch boundaries; they also stamp missing status chrome (💾 / DUPE / OLD / ❌)
-6. ONLINE/OFFLINE Discord **notices** are global templates (content listeners) in Admin
+6. ONLINE/OFFLINE Discord **notices** are global templates in Admin — **Content** tab for content listeners (`{{name}}` / `{{playlist_id}}` / `{{channel_id}}`), **Picture** tab for picture listeners (`{{name}}` / `{{slug}}` / `{{channel_id}}`). Clear a box + save to silence. Max 2000 Discord chars. Notices post async after Admin start/cease (ordered OFFLINE→ONLINE on replace).
 7. Public OBS overlay: `/slideshow/latest` or `/slideshow/{slug}` (no Basic Auth). Credit: `Author: NAME` on frosted glass. Reactions: **animated mode** (center fountain floaters + render 1x–25x) or **static** Discord-ordered stack after the name (max 5, with counts). Settings: corner, advance, scales, animated checkbox, multiplier (animated only)
 8. Port default **50770**; scheduler optional via `RESYNC_INTERVAL_HOURS` (usually `0`)
 9. PROD is headless: copy `.env` + `data/` (DB + `pictures/`). Same Discord bot token → do not run DEV + PROD together

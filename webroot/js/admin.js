@@ -549,6 +549,16 @@ async function loadAnnounce() {
   }
 }
 
+async function loadPictureAnnounce() {
+  try {
+    const data = await api("/api/settings/picture-listen-messages");
+    document.getElementById("picture-start-message").value = data.start_message || "";
+    document.getElementById("picture-stop-message").value = data.stop_message || "";
+  } catch (err) {
+    toast("picture notices load failed: " + err.message, true);
+  }
+}
+
 async function refreshAll() {
   await Promise.all([loadStatus(), loadListens(), loadPictureListens(), loadActivity()]);
 }
@@ -650,7 +660,10 @@ document.getElementById("picture-form").addEventListener("submit", async (ev) =>
 
 document.getElementById("announce-form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
-  const fd = new FormData(ev.target);
+  const form = ev.target;
+  const btn = form.querySelector('button[type="submit"]');
+  const fd = new FormData(form);
+  btn.disabled = true;
   try {
     await api("/api/settings/listen-messages", {
       method: "PUT",
@@ -662,14 +675,39 @@ document.getElementById("announce-form").addEventListener("submit", async (ev) =
     toast("notices saved");
   } catch (err) {
     toast("save failed: " + err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("picture-announce-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const form = ev.target;
+  const btn = form.querySelector('button[type="submit"]');
+  const fd = new FormData(form);
+  btn.disabled = true;
+  try {
+    await api("/api/settings/picture-listen-messages", {
+      method: "PUT",
+      body: JSON.stringify({
+        start_message: fd.get("start_message") || "",
+        stop_message: fd.get("stop_message") || "",
+      }),
+    });
+    toast("picture notices saved");
+  } catch (err) {
+    toast("save failed: " + err.message, true);
+  } finally {
+    btn.disabled = false;
   }
 });
 
 document.getElementById("listens-table").addEventListener("click", async (ev) => {
   const btn = ev.target.closest("button[data-act]");
-  if (!btn) return;
+  if (!btn || btn.disabled) return;
   const channel = btn.getAttribute("data-channel");
   const act = btn.getAttribute("data-act");
+  btn.disabled = true;
   try {
     if (act === "rename") {
       const current = btn.getAttribute("data-name") || "";
@@ -712,14 +750,22 @@ document.getElementById("listens-table").addEventListener("click", async (ev) =>
     await refreshAll();
   } catch (err) {
     toast(err.message, true);
+  } finally {
+    // refreshAll rebuilds the table; if the button still exists, re-enable it.
+    if (btn.isConnected) btn.disabled = false;
   }
 });
 
 document.getElementById("picture-listens-table").addEventListener("click", async (ev) => {
   const btn = ev.target.closest("button[data-pact]");
-  if (!btn) return;
+  if (!btn || btn.disabled) return;
   const channel = btn.getAttribute("data-channel");
   const act = btn.getAttribute("data-pact");
+  if (act === "settings" || act === "resync") {
+    // Navigation-only — no network mutate yet.
+  } else {
+    btn.disabled = true;
+  }
   try {
     if (act === "toggle") {
       const enabled = btn.getAttribute("data-enabled") === "true";
@@ -753,6 +799,8 @@ document.getElementById("picture-listens-table").addEventListener("click", async
     await refreshAll();
   } catch (err) {
     toast(err.message, true);
+  } finally {
+    if (btn.isConnected) btn.disabled = false;
   }
 });
 
@@ -912,5 +960,6 @@ initTabs();
 fillOverlayScaleSelects();
 loadGuilds();
 loadAnnounce();
+loadPictureAnnounce();
 refreshAll();
 setInterval(refreshAll, 15000);

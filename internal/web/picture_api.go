@@ -185,18 +185,36 @@ func (s *Server) handleUpsertPictureListener(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	before, err := s.store.GetPictureListenerByChannel(r.Context(), strings.TrimSpace(body.DiscordChannelID))
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	in := s.pictureInputFromBody(body)
 	p, err := s.store.UpsertPictureListener(r.Context(), in)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+
+	// New epoch (first start or slug change) → notices; same-slug upsert stays quiet.
+	openedListen := before == nil || before.Slug != p.Slug
+	if before != nil && before.Slug != p.Slug {
+		s.announcePictureTransition(before, p)
+	} else if openedListen {
+		s.announcePictureTransition(nil, p)
+	}
+	if openedListen {
+		_ = s.store.LogActivity(r.Context(), "picture_listen_started", map[string]any{
+			"channel_id": p.DiscordChannelID,
+			"slug":       p.Slug,
+			"name":       p.Name,
+			"source":     "admin_ui",
+		}, true)
+	}
+
 	n, _ := s.store.CountCollectedPictures(r.Context(), p.ID)
-	_ = s.store.LogActivity(r.Context(), "picture_listen_started", map[string]any{
-		"channel_id": p.DiscordChannelID,
-		"slug":       p.Slug,
-		"name":       p.Name,
-	}, true)
 	writeJSON(w, http.StatusOK, map[string]any{"picture_listen": toPictureListenerDTO(*p, n)})
 }
 
@@ -308,12 +326,19 @@ func (s *Server) handleDeletePictureListener(w http.ResponseWriter, r *http.Requ
 		writeErr(w, http.StatusBadRequest, "channel id required")
 		return
 	}
-	existing, _ := s.store.GetPictureListenerByChannel(r.Context(), channelID)
+	existing, err := s.store.GetPictureListenerByChannel(r.Context(), channelID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	if err := s.store.DeletePictureListener(r.Context(), channelID); err != nil {
 		writeErr(w, http.StatusNotFound, err.Error())
 		return
 	}
-	details := map[string]any{"channel_id": channelID}
+	if existing != nil {
+		s.announcePictureTransition(existing, nil)
+	}
+	details := map[string]any{"channel_id": channelID, "source": "admin_ui"}
 	if existing != nil {
 		details["slug"] = existing.Slug
 		details["name"] = existing.Name

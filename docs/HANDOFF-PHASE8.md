@@ -60,6 +60,7 @@ data/pictures/{slug}/            saved images (next to DATABASE_PATH)
 - Expandable tabs via `TAB_REGISTRY` in `webroot/js/admin.js`
 - Picture **start form** is bare minimum: name, server, channel, enabled
 - **Settings** panel (per live picture listener): corner, advance, shuffle, author credit, reactions, **animated mode**, reaction render 1–25x (animated only), author size, emoji size
+- Picture **ONLINE/OFFLINE notices** (global templates, Pictures tab) — same spirit as content notices; placeholders `{{name}}` `{{slug}}` `{{channel_id}}`; API `/api/settings/picture-listen-messages`
 - Picture **resync** (REST history; stamps missing 💾 / DUPE / OLD / ❌) — Admin + `just resync-pictures`
 
 ### Slideshow behavior (current)
@@ -115,10 +116,11 @@ just run   # stop PROD first if same bot token
 
 Live checklist:
 1. Admin tabs: Content | Picture  
-2. Start picture listener → post image → 💾 → file under `data/pictures/{slug}/`  
-3. `/slideshow/{slug}` in browser/OBS — advance, Author credit, floaters on top (no bot status chrome)  
-4. Settings save → feed picks up scales / multiplier without full restart (hard-refresh overlay)  
-5. Optional: `just resync-pictures CHANNEL`
+2. Start picture listener → Discord ONLINE notice → post image → 💾 → file under `data/pictures/{slug}/`  
+3. Cease picture listener → Discord OFFLINE notice  
+4. `/slideshow/{slug}` in browser/OBS — advance, Author credit, floaters on top (no bot status chrome)  
+5. Settings save → feed picks up scales / multiplier without full restart (hard-refresh overlay)  
+6. Optional: `just resync-pictures CHANNEL`
 
 ---
 
