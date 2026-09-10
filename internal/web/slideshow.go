@@ -16,6 +16,7 @@ func (s *Server) registerPublic(mux *http.ServeMux) {
 	mux.HandleFunc("GET /slideshow/{slug}", s.handleSlideshowPage)
 	mux.HandleFunc("GET /api/slideshow/{slug}", s.handleSlideshowFeed)
 	mux.HandleFunc("GET /media/pictures/{slug}/{file}", s.handlePictureMedia)
+	mux.HandleFunc("GET /api/get/episode/{show}", s.handlePublicGetEpisode)
 	mux.HandleFunc("GET /api/get/{kind}/{channel}", s.handlePublicGetListener)
 
 	// OBS page assets (no auth).

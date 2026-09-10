@@ -20,7 +20,7 @@
   - **Picture listener** — Discord channel → on-disk images + public OBS slideshow. One live picture listener per channel.
   - Both types may be live on the **same channel at once**.
   - Collection-window length is the operator’s choice — SIGINT vibe, not broadcast.
-- Future (parked): **shows** (bi-weekly schedules), richer Discord announce automation, show-runner features — pick up outside Phase 8.
+- **Show episodes** (medium): templates + start/cease + absorb existing live listeners (link only, after deploy/restart) + public `/api/get/episode/{show}`. Still parked: bi-weekly schedules, richer show-runner announce.
 - Priorities:
   1. Working, simple, maintainable code over cleverness
   2. Clear configuration and flexibility (content + picture listeners)

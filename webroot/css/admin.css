@@ -374,6 +374,122 @@ label .optional {
   margin-left: 0.35rem;
 }
 
+.panel-note {
+  margin: 0 0 0.75rem;
+  color: var(--gray);
+  font-size: 0.9rem;
+  max-width: 42rem;
+}
+
+.ops-details {
+  margin: 0.35rem 0 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(12, 15, 11, 0.25);
+}
+
+.ops-details > summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0.55rem 0.85rem;
+}
+
+.ops-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ops-details > summary::before {
+  content: "+ ";
+  color: var(--dusty);
+}
+
+.ops-details[open] > summary {
+  color: var(--olive);
+  border-bottom: 1px solid var(--line);
+}
+
+.ops-details[open] > summary::before {
+  content: "– ";
+}
+
+.ops-details > form,
+.ops-details > .mapping-form {
+  padding: 0.85rem;
+}
+
+.episode-template-meta {
+  margin-bottom: 0.35rem;
+}
+
+.episode-template-meta .episode-template-suffix,
+.episode-template-meta .episode-template-namefull {
+  grid-column: 1 / -1;
+}
+
+.stub-section {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.35rem;
+}
+
+.stub-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.stub-section-head h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+}
+
+.stub-add-actions {
+  grid-column: auto;
+}
+
+.stub-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.stub-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.75rem;
+  background: rgba(12, 15, 11, 0.35);
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  align-items: end;
+}
+
+.stub-card-head {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.stub-kind {
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--chartreuse);
+}
+
 input[type="text"],
 input[type="number"],
 select {

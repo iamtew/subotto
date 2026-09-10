@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-10  
 **Branch:** `master`  
-**Status:** Phase 8 **code complete + polished locally** — not pushed. See [HANDOFF-PHASE8.md](HANDOFF-PHASE8.md).  
+**Status:** Phase 8 + **Show Episodes (medium)** in code — not pushed. See [HANDOFF-PHASE8.md](HANDOFF-PHASE8.md).  
 **Guide:** [DEPLOY.md](DEPLOY.md) · jump-back [JUMPBACK.md](JUMPBACK.md)
 
 ---
@@ -16,8 +16,9 @@
 | 6b | Content listeners + ops desk UI | Dark digicam Admin, public playlists, epochs, notices, DUPE/OLD reacts |
 | 7 | Linux package / deploy | `just package-linux`, sample systemd, headless + SSH-tunnel docs |
 | 8 | Picture listeners + OBS slideshow | Parallel picture epochs, `data/pictures/`, public `/slideshow/{slug\|latest}`, Admin tabs |
+| Episodes | Show episodes (medium) | Templates → start/cease group; public `/api/get/episode/{show}`; Admin Episodes tab |
 
-**Also:** public Streamer.bot GETs — `/api/get/content/{channel}` and `/api/get/picture/{channel}` (no auth; open epoch only).
+**Also:** public Streamer.bot GETs — `/api/get/content/{channel}`, `/api/get/picture/{channel}`, `/api/get/episode/{show}` (no auth; live episode / open epoch only).
 
 ## Key paths
 
@@ -25,17 +26,19 @@
 cmd/subotto/main.go          Entry: run / auth / content + picture CLI / resync
 internal/pictures/           Discord attachment download + save
 internal/db/pictures.go      picture_listeners + collected_pictures
+internal/db/episodes.go      episodes + episode_templates
 internal/web/slideshow.go    Public slideshow + media (no Basic Auth)
-internal/web/get_api.go      Public /api/get/{content|picture}/{channel} (Streamer.bot)
+internal/web/get_api.go      Public /api/get/{content|picture}/{channel} + /api/get/episode/{show}
 internal/web/picture_api.go  Admin /api/picture-listens
+internal/web/episode_api.go  Admin /api/episodes + /api/episode-templates
 webroot/slideshow/           OBS overlay HTML/CSS/JS
-webroot/                     Admin UI (tabs: content | pictures)
+webroot/                     Admin UI (tabs: content | pictures | episodes)
 data/pictures/{slug}/        Saved images (next to DATABASE_PATH)
 ```
 
 ## Verified — code
 
-- `just test` — parser, youtube, db (mappings + pictures), ingest, pictures package, web API (incl. public slideshow + `/api/get`), scheduler, announce  
+- `just test` — parser, youtube, db (mappings + pictures + episodes), ingest, pictures package, web API (incl. public slideshow + `/api/get` + episodes), scheduler, announce  
 - `just build` — Windows binary builds  
 
 ## Operator sign-off still needed (Phase 8 live)
@@ -46,9 +49,17 @@ data/pictures/{slug}/        Saved images (next to DATABASE_PATH)
 - [ ] Same channel: content + picture listeners both live
 - [ ] Picture DUPE / OLD chrome matches content when re-ingest / previous epoch hits
 
-## Parked (not Phase 8)
+## Episodes — operator check
 
-- **Shows** — bi-weekly listeners, Discord announce-as-show-runner, richer scheduling
+- [ ] Admin **Episodes** tab: save a template (show + listener stubs JSON)
+- [ ] Start episode from template → linked content/picture listeners online
+- [ ] **Absorb:** after PROD deploy/restart with live orphan listeners → ABSORB LIVE LISTENERS (keeps epochs, sets episode_id)
+- [ ] `GET /api/get/episode/{show_slug}` returns fields + listeners (Streamer.bot)
+- [ ] Cease episode → all linked listeners cease
+
+## Parked
+
+- Bi-weekly show-runner / Discord announce-as-show-runner / richer scheduling
 - Deeper overlay polish (fonts, transitions, emoji filters)
 
 ## PROD checklist

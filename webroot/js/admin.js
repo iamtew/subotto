@@ -6,6 +6,7 @@
    Meat Bag: to add a future tab, push { id, label } here and add a
    matching #tab-{id} panel in index.html. */
 const TAB_REGISTRY = [
+  { id: "episodes", label: "Episodes" },
   { id: "content", label: "Content listeners" },
   { id: "pictures", label: "Picture listeners" },
 ];
@@ -358,8 +359,12 @@ async function loadGuilds() {
   ]);
 }
 
-async function loadChannelsForGuild(guildID, channelSelectId) {
-  const sel = document.getElementById(channelSelectId);
+async function loadChannelsForGuild(guildID, channelSelect) {
+  const sel =
+    typeof channelSelect === "string"
+      ? document.getElementById(channelSelect)
+      : channelSelect;
+  if (!sel) return;
   if (!guildID) {
     sel.disabled = true;
     sel.innerHTML = `<option value="">— pick a server first —</option>`;
@@ -566,8 +571,484 @@ async function loadPictureAnnounce() {
 }
 
 async function refreshAll() {
-  await Promise.all([loadStatus(), loadListens(), loadPictureListens(), loadActivity()]);
+  await Promise.all([
+    loadStatus(),
+    loadListens(),
+    loadPictureListens(),
+    loadEpisodes(),
+    loadEpisodeTemplates(),
+    loadActivity(),
+  ]);
 }
+
+/* ---------- Episodes ---------- */
+
+let cachedEpisodeTemplates = [];
+let cachedEpisodes = [];
+
+async function loadEpisodes() {
+  const tbody = document.querySelector("#episodes-table tbody");
+  const absorbSel = document.getElementById("episode-absorb-episode-select");
+  try {
+    const data = await api("/api/episodes");
+    const list = data.episodes || [];
+    cachedEpisodes = list;
+    if (absorbSel) {
+      const cur = absorbSel.value;
+      absorbSel.innerHTML =
+        `<option value="">— pick live episode —</option>` +
+        list
+          .map(
+            (e) =>
+              `<option value="${e.id}">${esc(e.show)} · ${esc(e.episode_short)} · ${esc(e.name)}</option>`
+          )
+          .join("");
+      if (cur && list.some((e) => String(e.id) === cur)) {
+        absorbSel.value = cur;
+      }
+    }
+    if (!list.length) {
+      tbody.innerHTML = `<tr><td colspan="7" class="empty">no live episodes</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = list
+      .map((e) => {
+        const listeners = (e.listeners || [])
+          .map((l) => `${esc(l.kind)}:${esc(l.name || l.discord_channel_id || l.channel)}`)
+          .join(", ");
+        const apiPath = e.public_url || `/api/get/episode/${e.show_slug}`;
+        return `<tr data-id="${e.id}">
+          <td>${esc(e.show)}<br><code class="mono">${esc(e.show_slug)}</code></td>
+          <td>${esc(e.episode_short)} · ${esc(e.name)}</td>
+          <td class="mono">${esc(e.episode_name_full)}</td>
+          <td>${listeners || "—"}</td>
+          <td class="mono">${esc(e.since ? new Date(e.since).toLocaleString() : "—")}</td>
+          <td><a class="api-get" href="${esc(apiPath)}" target="_blank" rel="noopener">GET</a></td>
+          <td class="actions">
+            <button type="button" class="secondary" data-ep-edit="${e.id}">Edit</button>
+            <button type="button" class="danger" data-ep-cease="${e.id}">Cease</button>
+          </td>
+        </tr>`;
+      })
+      .join("");
+  } catch (err) {
+    cachedEpisodes = [];
+    tbody.innerHTML = `<tr><td colspan="7" class="empty">load failed: ${esc(err.message)}</td></tr>`;
+  }
+}
+
+async function loadEpisodeTemplates() {
+  const tbody = document.querySelector("#episode-templates-table tbody");
+  const sel = document.getElementById("episode-template-select");
+  try {
+    const data = await api("/api/episode-templates");
+    cachedEpisodeTemplates = data.templates || [];
+    const cur = sel.value;
+    const options =
+      cachedEpisodeTemplates
+        .map(
+          (t) =>
+            `<option value="${t.id}">${esc(t.show)} (${esc(t.show_slug)})</option>`
+        )
+        .join("");
+    sel.innerHTML = `<option value="">— pick a template —</option>` + options;
+    if (cur && cachedEpisodeTemplates.some((t) => String(t.id) === cur)) {
+      sel.value = cur;
+    }
+    if (!cachedEpisodeTemplates.length) {
+      tbody.innerHTML = `<tr><td colspan="5" class="empty">no templates yet</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = cachedEpisodeTemplates
+      .map((t) => {
+        const n = (t.listeners || []).length;
+        return `<tr>
+          <td>${esc(t.show)}</td>
+          <td><code class="mono">${esc(t.show_slug)}</code></td>
+          <td>${esc(t.twitch_suffix) || "—"}</td>
+          <td>${n} stub${n === 1 ? "" : "s"}</td>
+          <td class="actions">
+            <button type="button" class="secondary" data-tmpl-edit="${t.id}">Edit</button>
+            <button type="button" class="danger" data-tmpl-del="${t.id}">Delete</button>
+          </td>
+        </tr>`;
+      })
+      .join("");
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="5" class="empty">load failed: ${esc(err.message)}</td></tr>`;
+  }
+}
+
+function syncEpisodeStubsEmpty() {
+  const list = document.getElementById("episode-template-stubs");
+  const empty = document.getElementById("episode-template-stubs-empty");
+  if (!list || !empty) return;
+  empty.hidden = list.children.length > 0;
+}
+
+async function addEpisodeStubPanel(stub) {
+  const kind = (stub && stub.kind) || "content";
+  const isContent = kind === "content";
+  const list = document.getElementById("episode-template-stubs");
+  const card = document.createElement("div");
+  card.className = "stub-card";
+  card.dataset.kind = isContent ? "content" : "picture";
+
+  const nameDefault = isContent
+    ? "{{episode_short}} {{name}}"
+    : "{{episode_short}} {{name}}";
+  const playlistDefault = "{{episode_short}} {{name}}";
+  const slugDefault = "{{episode_short}}_{{name}}";
+
+  card.innerHTML = `
+    <div class="stub-card-head">
+      <span class="stub-kind">${isContent ? "Content listener" : "Picture listener"}</span>
+      <button type="button" class="danger" data-stub-remove>Remove</button>
+    </div>
+    <label>
+      Server
+      <select class="stub-guild" required>
+        <option value="">— loading servers —</option>
+      </select>
+    </label>
+    <label>
+      Target channel
+      <select class="stub-channel" required disabled>
+        <option value="">— pick a server first —</option>
+      </select>
+    </label>
+    <label>
+      Listener name
+      <input class="stub-name" type="text" required
+        value="${esc((stub && stub.name) || nameDefault)}"
+        placeholder="${esc(nameDefault)}" autocomplete="off" spellcheck="false">
+    </label>
+    ${
+      isContent
+        ? `<label>
+      Playlist title
+      <input class="stub-playlist" type="text" required
+        value="${esc((stub && stub.playlist_title) || playlistDefault)}"
+        placeholder="${esc(playlistDefault)}" autocomplete="off" spellcheck="false">
+    </label>`
+        : `<label>
+      Slideshow slug <span class="optional">opt</span>
+      <input class="stub-slug" type="text"
+        value="${esc((stub && stub.slug) || slugDefault)}"
+        placeholder="${esc(slugDefault)}" autocomplete="off" spellcheck="false">
+    </label>`
+    }
+  `;
+
+  list.appendChild(card);
+  syncEpisodeStubsEmpty();
+
+  const guildSel = card.querySelector(".stub-guild");
+  const channelSel = card.querySelector(".stub-channel");
+  await fillGuildSelect(guildSel);
+
+  guildSel.addEventListener("change", () => {
+    loadChannelsForGuild(guildSel.value, channelSel);
+  });
+
+  const wantGuild = (stub && stub.guild_id) || "";
+  const wantChannel = (stub && stub.discord_channel_id) || "";
+  if (wantGuild) {
+    guildSel.value = wantGuild;
+    await loadChannelsForGuild(wantGuild, channelSel);
+    if (wantChannel) channelSel.value = wantChannel;
+  }
+}
+
+function clearEpisodeStubPanels() {
+  const list = document.getElementById("episode-template-stubs");
+  if (list) list.innerHTML = "";
+  syncEpisodeStubsEmpty();
+}
+
+function collectEpisodeStubPanels() {
+  const cards = document.querySelectorAll("#episode-template-stubs .stub-card");
+  const out = [];
+  for (const card of cards) {
+    const kind = card.dataset.kind;
+    const guild = card.querySelector(".stub-guild").value.trim();
+    const channel = card.querySelector(".stub-channel").value.trim();
+    const name = card.querySelector(".stub-name").value.trim();
+    if (!guild || !channel || !name) {
+      throw new Error("each stub needs server, channel, and name");
+    }
+    const stub = {
+      kind,
+      guild_id: guild,
+      discord_channel_id: channel,
+      name,
+    };
+    if (kind === "content") {
+      const title = card.querySelector(".stub-playlist").value.trim();
+      if (!title) throw new Error("content stub needs playlist title");
+      stub.playlist_title = title;
+    } else {
+      const slug = card.querySelector(".stub-slug").value.trim();
+      if (slug) stub.slug = slug;
+    }
+    out.push(stub);
+  }
+  return out;
+}
+
+function resetEpisodeTemplateForm() {
+  document.getElementById("episode-template-id").value = "";
+  document.getElementById("episode-template-show").value = "";
+  document.getElementById("episode-template-suffix").value = "";
+  document.getElementById("episode-template-namefull").value = "";
+  clearEpisodeStubPanels();
+  document.getElementById("episode-template-save").textContent = "SAVE TEMPLATE";
+}
+
+async function fillEpisodeTemplateForm(t) {
+  document.getElementById("episode-template-id").value = t.id;
+  document.getElementById("episode-template-show").value = t.show || "";
+  document.getElementById("episode-template-suffix").value = t.twitch_suffix || "";
+  document.getElementById("episode-template-namefull").value = t.name_full_template || "";
+  clearEpisodeStubPanels();
+  for (const stub of t.listeners || []) {
+    await addEpisodeStubPanel(stub);
+  }
+  document.getElementById("episode-template-save").textContent = "UPDATE TEMPLATE";
+}
+
+document.getElementById("episode-stub-add-content").addEventListener("click", () => {
+  addEpisodeStubPanel({ kind: "content" });
+});
+document.getElementById("episode-stub-add-picture").addEventListener("click", () => {
+  addEpisodeStubPanel({ kind: "picture" });
+});
+document.getElementById("episode-template-stubs").addEventListener("click", (ev) => {
+  const btn = ev.target.closest("[data-stub-remove]");
+  if (!btn) return;
+  btn.closest(".stub-card")?.remove();
+  syncEpisodeStubsEmpty();
+});
+
+document.getElementById("episode-template-select").addEventListener("change", (ev) => {
+  const id = Number(ev.target.value || 0);
+  const suffixInput = document.querySelector("#episode-start-form [name=twitch_suffix]");
+  if (!suffixInput) return;
+  const t = cachedEpisodeTemplates.find((x) => x.id === id);
+  suffixInput.value = t ? t.twitch_suffix || "" : "";
+  suffixInput.placeholder = t && t.twitch_suffix
+    ? "from template (edit to override)"
+    : "leave blank = template default";
+});
+
+document.getElementById("episode-start-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const fd = new FormData(ev.target);
+  const btn = ev.target.querySelector('button[type="submit"]');
+  const body = {
+    template_id: Number(fd.get("template_id")),
+    episode: Number(fd.get("episode")),
+    name: String(fd.get("name") || "").trim(),
+  };
+  const suffix = String(fd.get("twitch_suffix") || "").trim();
+  if (suffix) body.twitch_suffix = suffix;
+
+  btn.disabled = true;
+  try {
+    await api("/api/episodes", { method: "POST", body: JSON.stringify(body) });
+    toast("episode started");
+    ev.target.reset();
+    await refreshAll();
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("episode-absorb-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const fd = new FormData(ev.target);
+  const btn = ev.target.querySelector('button[type="submit"]');
+  const episodeID = Number(fd.get("episode_id") || 0);
+  if (!episodeID) {
+    toast("pick the live show episode to absorb into", true);
+    return;
+  }
+  const ep = (cachedEpisodes || []).find((e) => e.id === episodeID);
+  const destLabel = ep
+    ? `${ep.show} · ${ep.episode_short} · ${ep.name}`
+    : `episode #${episodeID}`;
+
+  let preview;
+  try {
+    preview = await api("/api/episodes/unlinked");
+  } catch (err) {
+    toast(err.message, true);
+    return;
+  }
+  const total = preview.total || 0;
+  if (!total) {
+    toast("no unlinked live listeners to absorb", true);
+    return;
+  }
+  const lines = [];
+  for (const c of preview.content || []) {
+    lines.push(`content: ${c.name || c.discord_channel_id}`);
+  }
+  for (const p of preview.picture || []) {
+    lines.push(`picture: ${p.name || p.slug || p.discord_channel_id}`);
+  }
+  if (!confirm(
+    `Absorb ${total} unlinked live listener(s) into:\n${destLabel}\n\n` +
+      lines.join("\n") +
+      "\n\nNo playlists or epochs will be recreated."
+  )) {
+    return;
+  }
+
+  btn.disabled = true;
+  try {
+    await api("/api/episodes/absorb", {
+      method: "POST",
+      body: JSON.stringify({ episode_id: episodeID }),
+    });
+    toast("listeners absorbed into episode");
+    ev.target.reset();
+    await refreshAll();
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("episodes-table").addEventListener("click", async (ev) => {
+  const cease = ev.target.closest("[data-ep-cease]");
+  if (cease) {
+    const id = cease.getAttribute("data-ep-cease");
+    if (!confirm("Cease this episode and stop all linked listeners?")) return;
+    try {
+      await api("/api/episodes/" + id, { method: "DELETE" });
+      toast("episode ceased");
+      await refreshAll();
+    } catch (err) {
+      toast(err.message, true);
+    }
+    return;
+  }
+  const edit = ev.target.closest("[data-ep-edit]");
+  if (!edit) return;
+  const id = Number(edit.getAttribute("data-ep-edit"));
+  const ep = (cachedEpisodes || []).find((e) => e.id === id);
+  if (!ep) {
+    toast("episode not found in list — refresh", true);
+    return;
+  }
+  document.getElementById("episode-edit-id").value = String(ep.id);
+  document.getElementById("episode-edit-label").value =
+    `${ep.episode_short} · ${ep.show} (immutable)`;
+  document.getElementById("episode-edit-name").value = ep.name || "";
+  document.getElementById("episode-edit-suffix").value = ep.twitch_suffix || "";
+  document.getElementById("episode-edit-namefull").value = ep.name_full_template || "";
+  const details = document.getElementById("episode-edit-details");
+  details.open = true;
+  document.getElementById("episode-edit-name").focus();
+});
+
+document.getElementById("episode-edit-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const id = document.getElementById("episode-edit-id").value;
+  if (!id) {
+    toast("pick Edit on a live episode first", true);
+    return;
+  }
+  const body = {
+    name: document.getElementById("episode-edit-name").value.trim(),
+    twitch_suffix: document.getElementById("episode-edit-suffix").value.trim(),
+    name_full_template: document.getElementById("episode-edit-namefull").value.trim(),
+  };
+  const btn = ev.target.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  try {
+    await api("/api/episodes/" + id, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+    toast("episode name updated · listeners re-resolved");
+    document.getElementById("episode-edit-details").open = false;
+    await refreshAll();
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("episode-template-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const id = document.getElementById("episode-template-id").value;
+  let listeners;
+  try {
+    listeners = collectEpisodeStubPanels();
+  } catch (err) {
+    toast(err.message, true);
+    return;
+  }
+  const body = {
+    show: document.getElementById("episode-template-show").value.trim(),
+    twitch_suffix: document.getElementById("episode-template-suffix").value.trim(),
+    name_full_template: document.getElementById("episode-template-namefull").value.trim(),
+    listeners,
+  };
+  const btn = document.getElementById("episode-template-save");
+  btn.disabled = true;
+  try {
+    if (id) {
+      await api("/api/episode-templates/" + id, {
+        method: "PUT",
+        body: JSON.stringify(body),
+      });
+      toast("template updated");
+    } else {
+      await api("/api/episode-templates", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      toast("template saved");
+    }
+    resetEpisodeTemplateForm();
+    await loadEpisodeTemplates();
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("episode-template-reset").addEventListener("click", resetEpisodeTemplateForm);
+
+document.getElementById("episode-templates-table").addEventListener("click", async (ev) => {
+  const edit = ev.target.closest("[data-tmpl-edit]");
+  if (edit) {
+    const id = Number(edit.getAttribute("data-tmpl-edit"));
+    const t = cachedEpisodeTemplates.find((x) => x.id === id);
+    if (t) await fillEpisodeTemplateForm(t);
+    return;
+  }
+  const del = ev.target.closest("[data-tmpl-del]");
+  if (!del) return;
+  const id = del.getAttribute("data-tmpl-del");
+  if (!confirm("Delete this episode template?")) return;
+  try {
+    await api("/api/episode-templates/" + id, { method: "DELETE" });
+    toast("template deleted");
+    resetEpisodeTemplateForm();
+    await loadEpisodeTemplates();
+  } catch (err) {
+    toast(err.message, true);
+  }
+});
 
 document.getElementById("guild-select").addEventListener("change", (ev) => {
   loadChannelsForGuild(ev.target.value, "channel-select");
@@ -969,5 +1450,6 @@ fillOverlayScaleSelects();
 loadGuilds();
 loadAnnounce();
 loadPictureAnnounce();
+syncEpisodeStubsEmpty();
 refreshAll();
 setInterval(refreshAll, 15000);

@@ -2,7 +2,8 @@
 // Streamer.bot listener GETs.
 //
 // Meat Bag: Admin is http://localhost:50770 (Basic Auth: admin / ADMIN_PASSWORD).
-// Public (no password): /slideshow/..., /api/slideshow/..., /api/get/{content|picture}/{channel}.
+// Public (no password): /slideshow/..., /api/slideshow/..., /api/get/{content|picture}/{channel},
+// /api/get/episode/{show}.
 package web
 
 import (
@@ -56,6 +57,9 @@ type Server struct {
 	httpServer  *http.Server
 	startedAt   time.Time
 	youtubeName string // optional; filled by Ping at boot if available
+
+	// createPlaylistFn lets tests stub YouTube playlist create (episode start).
+	createPlaylistFn func(ctx context.Context, title, description string) (string, error)
 }
 
 // Options configures the Admin server.
@@ -120,6 +124,7 @@ func New(opts Options) (*Server, error) {
 	s.registerPublic(mux) // OBS slideshow — no Basic Auth
 	s.registerAPI(mux)
 	s.registerPictureAPI(mux)
+	s.registerEpisodeAPI(mux)
 	// Static Admin files last — "/" catches everything else under webroot (auth’d).
 	fileServer := http.FileServer(http.Dir(s.webroot))
 	mux.Handle("/", s.basicAuth(fileServer))

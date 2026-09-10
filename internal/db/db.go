@@ -204,7 +204,80 @@ func (d *DB) migrateUpgrades() error {
 	if err := d.migrateProcessedVideosChannelScope(); err != nil {
 		return err
 	}
-	return d.migratePictureListenerIndexes()
+	if err := d.migratePictureListenerIndexes(); err != nil {
+		return err
+	}
+	return d.migrateEpisodes()
+}
+
+// migrateEpisodes adds show-episode tables and nullable episode_id on listeners.
+func (d *DB) migrateEpisodes() error {
+	if _, err := d.sql.Exec(`
+CREATE TABLE IF NOT EXISTS episodes (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	show_name TEXT NOT NULL,
+	show_slug TEXT NOT NULL,
+	episode_num INTEGER NOT NULL,
+	name TEXT NOT NULL DEFAULT '',
+	twitch_suffix TEXT NOT NULL DEFAULT '',
+	name_full_template TEXT NOT NULL DEFAULT '',
+	listeners_json TEXT NOT NULL DEFAULT '[]',
+	created_at TEXT NOT NULL DEFAULT (datetime('now')),
+	active_from TEXT NOT NULL DEFAULT (datetime('now')),
+	active_until TEXT
+)`); err != nil {
+		return fmt.Errorf("create episodes: %w", err)
+	}
+	if _, err := d.sql.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_episodes_live_show_slug
+		ON episodes (show_slug) WHERE active_until IS NULL
+	`); err != nil {
+		return fmt.Errorf("create episodes live show_slug index: %w", err)
+	}
+
+	if _, err := d.sql.Exec(`
+CREATE TABLE IF NOT EXISTS episode_templates (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	show_name TEXT NOT NULL,
+	show_slug TEXT NOT NULL,
+	twitch_suffix TEXT NOT NULL DEFAULT '',
+	name_full_template TEXT NOT NULL DEFAULT '',
+	listeners_json TEXT NOT NULL DEFAULT '[]',
+	updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`); err != nil {
+		return fmt.Errorf("create episode_templates: %w", err)
+	}
+
+	mapCols, err := d.tableColumns("channel_mappings")
+	if err != nil {
+		return err
+	}
+	if !mapCols["episode_id"] {
+		if _, err := d.sql.Exec(`ALTER TABLE channel_mappings ADD COLUMN episode_id INTEGER`); err != nil {
+			return fmt.Errorf("add channel_mappings.episode_id: %w", err)
+		}
+	}
+
+	picCols, err := d.tableColumns("picture_listeners")
+	if err != nil {
+		return err
+	}
+	if !picCols["episode_id"] {
+		if _, err := d.sql.Exec(`ALTER TABLE picture_listeners ADD COLUMN episode_id INTEGER`); err != nil {
+			return fmt.Errorf("add picture_listeners.episode_id: %w", err)
+		}
+	}
+
+	epCols, err := d.tableColumns("episodes")
+	if err != nil {
+		return err
+	}
+	if !epCols["listeners_json"] {
+		if _, err := d.sql.Exec(`ALTER TABLE episodes ADD COLUMN listeners_json TEXT NOT NULL DEFAULT '[]'`); err != nil {
+			return fmt.Errorf("add episodes.listeners_json: %w", err)
+		}
+	}
+	return nil
 }
 
 // migratePictureListenerIndexes ensures unique constraints for live picture listeners.

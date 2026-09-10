@@ -113,6 +113,43 @@ func listenerState(enabled bool) string {
 	return "paused"
 }
 
+// handlePublicGetEpisode serves Streamer.bot JSON for one live show episode.
+// Meat Bag: GET /api/get/episode/{show} — {show} is show_slug (e.g. sesh-sofa).
+func (s *Server) handlePublicGetEpisode(w http.ResponseWriter, r *http.Request) {
+	raw := strings.TrimSpace(r.PathValue("show"))
+	if raw == "" {
+		writeErr(w, http.StatusBadRequest, "show slug is required")
+		return
+	}
+	ep, err := s.store.GetLiveEpisodeByShowSlug(r.Context(), raw)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if ep == nil {
+		writeErr(w, http.StatusNotFound, "no live episode for show: "+raw)
+		return
+	}
+	listeners, err := s.episodeListenersDTO(r.Context(), ep.ID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"show":              ep.Show,
+		"show_slug":         ep.ShowSlug,
+		"episode":           ep.Episode,
+		"episode_short":     ep.Short(),
+		"episode_long":      ep.Long(),
+		"name":              ep.Name,
+		"twitch_suffix":     ep.TwitchSuffix,
+		"episode_name_full": ep.NameFull(),
+		"since":             ep.ActiveFrom.UTC().Format(time.RFC3339),
+		"state":             "live",
+		"listeners":         publicEpisodeListeners(listeners),
+	})
+}
+
 func normalizeChannelName(name string) string {
 	name = strings.TrimSpace(name)
 	name = strings.TrimPrefix(name, "#")

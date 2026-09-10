@@ -315,6 +315,155 @@
         </section>
       </div>
     </div>
+
+    <!-- ========== Show episodes (template → start / cease group) ========== -->
+    <div class="tab-panel" id="tab-episodes" role="tabpanel" data-tab="episodes" hidden>
+      <section class="panel" id="episodes-section">
+        <div class="panel-head">
+          <h2>LIVE EPISODES</h2>
+          <p>One live episode per show · stop ceases linked listeners · public <code>/api/get/episode/{show_slug}</code></p>
+        </div>
+
+        <form id="episode-start-form" class="mapping-form">
+          <label>
+            Template
+            <select name="template_id" id="episode-template-select" required>
+              <option value="">— pick a template —</option>
+            </select>
+          </label>
+          <label>
+            Episode #
+            <input name="episode" type="number" min="1" required placeholder="20" autocomplete="off">
+          </label>
+          <label>
+            Name
+            <input name="name" type="text" required placeholder="Creature Park" autocomplete="off" spellcheck="false">
+          </label>
+          <label>
+            Twitch suffix <span class="optional">opt</span>
+            <input name="twitch_suffix" type="text" placeholder="leave blank = template default" autocomplete="off" spellcheck="false">
+          </label>
+          <button type="submit">START EPISODE</button>
+        </form>
+
+        <details class="ops-details" id="episode-edit-details">
+          <summary>Edit episode name</summary>
+          <form id="episode-edit-form" class="mapping-form">
+            <input type="hidden" name="id" id="episode-edit-id" value="">
+            <p class="panel-note">Show + episode # stay fixed. Changing name re-resolves linked listener labels from the template stubs (playlist title on YouTube when possible; slideshow slug stays put).</p>
+            <label>
+              Live episode
+              <input id="episode-edit-label" type="text" readonly tabindex="-1" value="">
+            </label>
+            <label>
+              Name
+              <input name="name" id="episode-edit-name" type="text" required placeholder="Creature Park" autocomplete="off" spellcheck="false">
+            </label>
+            <label>
+              Twitch suffix
+              <input name="twitch_suffix" id="episode-edit-suffix" type="text" placeholder="optional" autocomplete="off" spellcheck="false">
+            </label>
+            <label>
+              Full name template
+              <input name="name_full_template" id="episode-edit-namefull" type="text" placeholder="{{episode_short}} {{name}} | {{show}} | {{twitch_suffix}}" autocomplete="off" spellcheck="false">
+            </label>
+            <button type="submit">SAVE NAME</button>
+          </form>
+        </details>
+
+        <details class="ops-details" id="episode-absorb-details">
+          <summary>Absorb live listeners</summary>
+          <form id="episode-absorb-form" class="mapping-form">
+            <p class="panel-note">Link already-live orphan listeners into a live show episode (no new playlists / no cease). Start the episode first, then pick it here. Deploy + restart when PROD still has open epochs.</p>
+            <label>
+              Absorb into show episode
+              <select name="episode_id" id="episode-absorb-episode-select" required>
+                <option value="">— pick live episode —</option>
+              </select>
+            </label>
+            <button type="submit">ABSORB LIVE LISTENERS</button>
+          </form>
+        </details>
+
+        <div class="table-wrap">
+          <table id="episodes-table">
+            <thead>
+              <tr>
+                <th>Show</th>
+                <th>Episode</th>
+                <th>Full name</th>
+                <th>Listeners</th>
+                <th>Since</th>
+                <th>API</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td colspan="7" class="empty">loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel" id="episode-templates-section">
+        <div class="panel-head">
+          <h2>EPISODE TEMPLATES</h2>
+          <p>Show defaults + listener stubs. Names/playlist/slug support placeholders: <code>{{episode_short}}</code> <code>{{name}}</code> <code>{{show}}</code> <code>{{twitch_suffix}}</code> <code>{{episode}}</code> <code>{{episode_long}}</code></p>
+        </div>
+
+        <form id="episode-template-form" class="announce-form">
+          <input type="hidden" name="id" id="episode-template-id" value="">
+          <div class="mapping-form episode-template-meta">
+            <label>
+              Show
+              <input name="show" id="episode-template-show" type="text" required placeholder="Sesh Sofa" autocomplete="off" spellcheck="false">
+            </label>
+            <label class="episode-template-suffix">
+              Twitch suffix
+              <input name="twitch_suffix" id="episode-template-suffix" type="text" placeholder="e.g. LIVE or !commands" autocomplete="off" spellcheck="false">
+            </label>
+            <label class="episode-template-namefull">
+              Full name template
+              <input name="name_full_template" id="episode-template-namefull" type="text" placeholder="{{episode_short}} {{name}} | {{show}} | {{twitch_suffix}}" autocomplete="off" spellcheck="false">
+            </label>
+          </div>
+
+          <div class="stub-section">
+            <div class="stub-section-head">
+              <h3>LISTENER STUBS</h3>
+              <div class="form-actions stub-add-actions">
+                <button type="button" class="secondary" id="episode-stub-add-content">+ Content listener</button>
+                <button type="button" class="secondary" id="episode-stub-add-picture">+ Picture listener</button>
+              </div>
+            </div>
+            <div id="episode-template-stubs" class="stub-list"></div>
+            <p id="episode-template-stubs-empty" class="panel-note">No stubs yet — add content and/or picture listeners above.</p>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" id="episode-template-save">SAVE TEMPLATE</button>
+            <button type="button" class="secondary" id="episode-template-reset">New / clear</button>
+          </div>
+        </form>
+
+        <div class="table-wrap">
+          <table id="episode-templates-table">
+            <thead>
+              <tr>
+                <th>Show</th>
+                <th>Slug</th>
+                <th>Twitch suffix</th>
+                <th>Stubs</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td colspan="5" class="empty">loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
   </main>
 
   <footer>
