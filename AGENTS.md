@@ -32,8 +32,8 @@
 
 ## How work proceeds
 
-1. Feed this file and [PLAN.md](PLAN.md) into Cursor when starting work.
-2. Implement step-by-step following the PLAN.md phases (Phases 0–8; see [docs/PROGRESS.md](docs/PROGRESS.md)).
+1. Feed this file into Cursor when starting work. Operator runbooks: [README.md](README.md) (DEV), [docs/DEPLOY.md](docs/DEPLOY.md) (PROD).
+2. Build against the product language and parked list above — not against a phase roadmap.
 3. Agents generate code with lots of comments.
 4. The maintainer tests, provides keys, and reports results.
 5. Iterate until Subotto is solid on the Linux VPS (native binary, no containers).

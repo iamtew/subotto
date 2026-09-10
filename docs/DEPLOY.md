@@ -1,4 +1,4 @@
-# Deploy Subotto to a Linux VPS (Phase 7)
+# Deploy Subotto to a Linux VPS
 
 **No Docker.** Cross-compile on Windows, zip, copy to the VPS, run the native binary (or systemd).  
 Caddy / TLS / firewall stay with the operator — this guide only covers Subotto’s side.
@@ -24,7 +24,7 @@ Produces `dist/subotto-linux.zip` with:
 **Not in the zip:** live `.env` or `data/` (copy those yourself — DB **and** `data/pictures/` if you already collected images).
 
 Public slideshow URLs (no Basic Auth): `/slideshow/latest`, `/slideshow/{slug}`, `/media/pictures/...`.  
-Streamer.bot listener status (no Basic Auth): `GET /api/get/content/{channel-name}` and `GET /api/get/picture/{channel-name}` — JSON with name, channel, playlist_id or slideshow, since, state (`listening`/`paused`). Channel name is the Discord name without `#`; Discord must be connected.  
+Streamer.bot GETs (no Basic Auth): `GET /api/get/content/{channel-name}`, `GET /api/get/picture/{channel-name}`, and `GET /api/get/episode/{show}` — live listener / episode JSON. Channel name is the Discord name without `#`; Discord must be connected.  
 If you put Caddy in front, proxy the whole port (Admin + public slideshow) or expose slideshow paths publicly and keep Admin locked down as you prefer.
 
 ---
