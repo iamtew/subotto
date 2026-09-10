@@ -196,24 +196,6 @@
         </div>
       </section>
 
-      <section class="panel" id="picture-announce-section">
-        <div class="panel-head">
-          <h2>ONLINE / OFFLINE NOTICES</h2>
-          <p>Discord notices when a picture listener opens or closes. placeholders: <code>{{name}}</code> <code>{{slug}}</code> <code>{{channel_id}}</code> · prepend your public host to <code>/slideshow/{{slug}}</code> for a clickable link · clear a box + save to silence · max 2000 Discord chars</p>
-        </div>
-        <form id="picture-announce-form" class="announce-form">
-          <label>
-            ONLINE notice
-            <textarea name="start_message" id="picture-start-message" rows="5" spellcheck="true"></textarea>
-          </label>
-          <label>
-            OFFLINE notice
-            <textarea name="stop_message" id="picture-stop-message" rows="5" spellcheck="true"></textarea>
-          </label>
-          <button type="submit">SAVE NOTICES</button>
-        </form>
-      </section>
-
       <section class="panel" id="picture-settings-panel" hidden>
         <div class="panel-head">
           <h2>SLIDESHOW SETTINGS</h2>
@@ -280,6 +262,24 @@
             <button type="submit">SAVE SETTINGS</button>
             <button type="button" class="secondary" id="picture-settings-cancel">Cancel</button>
           </div>
+        </form>
+      </section>
+
+      <section class="panel" id="picture-announce-section">
+        <div class="panel-head">
+          <h2>ONLINE / OFFLINE NOTICES</h2>
+          <p>Discord notices when a picture listener opens or closes. placeholders: <code>{{name}}</code> <code>{{slug}}</code> <code>{{channel_id}}</code> · prepend your public host to <code>/slideshow/{{slug}}</code> for a clickable link · clear a box + save to silence · max 2000 Discord chars</p>
+        </div>
+        <form id="picture-announce-form" class="announce-form">
+          <label>
+            ONLINE notice
+            <textarea name="start_message" id="picture-start-message" rows="5" spellcheck="true"></textarea>
+          </label>
+          <label>
+            OFFLINE notice
+            <textarea name="stop_message" id="picture-stop-message" rows="5" spellcheck="true"></textarea>
+          </label>
+          <button type="submit">SAVE NOTICES</button>
         </form>
       </section>
 

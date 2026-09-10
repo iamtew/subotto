@@ -199,7 +199,7 @@ button.pill.pill-action:disabled {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
-  max-width: 72rem;
+  max-width: 96rem;
   margin: 0 auto;
   padding: 0.75rem clamp(1rem, 3vw, 2.25rem) 0;
   border-bottom: 1px solid var(--line);
@@ -268,7 +268,7 @@ button.pill.pill-action:disabled {
 }
 
 main {
-  max-width: 72rem;
+  max-width: 96rem;
   margin: 0 auto;
   padding: 1.25rem clamp(1rem, 3vw, 2.25rem) 2.5rem;
   display: grid;
@@ -314,7 +314,6 @@ main {
   margin: 0 0 1rem;
   color: var(--muted);
   font-size: 0.84rem;
-  max-width: 42rem;
 }
 
 .mapping-form,
