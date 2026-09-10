@@ -3,8 +3,13 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"log/slog"
+	"mime"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -35,6 +40,8 @@ func (s *Server) registerAPI(mux *http.ServeMux) {
 	mux.Handle("POST /api/resync", s.basicAuth(http.HandlerFunc(s.handleResync)))
 	mux.Handle("GET /api/discord/guilds", s.basicAuth(http.HandlerFunc(s.handleDiscordGuilds)))
 	mux.Handle("GET /api/discord/guilds/{guild}/channels", s.basicAuth(http.HandlerFunc(s.handleDiscordChannels)))
+	mux.Handle("GET /api/discord/guilds/{guild}/channels/{channel}/messages", s.basicAuth(http.HandlerFunc(s.handleDiscordMessages)))
+	mux.Handle("POST /api/discord/guilds/{guild}/channels/{channel}/messages", s.basicAuth(http.HandlerFunc(s.handleDiscordSendMessage)))
 	mux.Handle("POST /api/discord/reconnect", s.basicAuth(http.HandlerFunc(s.handleDiscordReconnect)))
 	mux.Handle("GET /api/settings/listen-messages", s.basicAuth(http.HandlerFunc(s.handleGetListenMessages)))
 	mux.Handle("PUT /api/settings/listen-messages", s.basicAuth(http.HandlerFunc(s.handlePutListenMessages)))
@@ -147,26 +154,26 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	picsEnabled, _ := s.store.CountEnabledPictureListeners(ctx)
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ok":                 true,
-		"phase":              8,
-		"started_at":         s.startedAt.Format(time.RFC3339),
-		"discord_connected":  discordOK,
-		"youtube_authorized": hasTok,
-		"youtube_channel":    s.youtubeName,
-		"mappings_total":     mappings,
-		"mappings_enabled":   enabled,
-		"airs_total":         mappings,
-		"airs_enabled":       enabled,
-		"listens_total":      mappings,
-		"listens_enabled":    enabled,
+		"ok":                      true,
+		"phase":                   8,
+		"started_at":              s.startedAt.Format(time.RFC3339),
+		"discord_connected":       discordOK,
+		"youtube_authorized":      hasTok,
+		"youtube_channel":         s.youtubeName,
+		"mappings_total":          mappings,
+		"mappings_enabled":        enabled,
+		"airs_total":              mappings,
+		"airs_enabled":            enabled,
+		"listens_total":           mappings,
+		"listens_enabled":         enabled,
 		"picture_listens_total":   picsTotal,
 		"picture_listens_enabled": picsEnabled,
-		"activity_total":     activity,
-		"listen_addr":        s.addr,
-		"resync_interval_hours": sched.IntervalHours,
-		"scheduler_enabled":     sched.Enabled,
-		"scheduler_last_run_at": sched.LastRunAt,
-		"scheduler_last_error":  sched.LastError,
+		"activity_total":          activity,
+		"listen_addr":             s.addr,
+		"resync_interval_hours":   sched.IntervalHours,
+		"scheduler_enabled":       sched.Enabled,
+		"scheduler_last_run_at":   sched.LastRunAt,
+		"scheduler_last_error":    sched.LastError,
 	})
 }
 
@@ -350,6 +357,142 @@ func (s *Server) handleDiscordChannels(w http.ResponseWriter, r *http.Request) {
 		list = []discord.ChannelInfo{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"channels": list})
+}
+
+// accessibleChannel checks the channel is on this guild's pruned list
+// (bot has View Channel). Returns 404-style error if not.
+func (s *Server) accessibleChannel(guildID, channelID string) error {
+	if s.discord == nil {
+		return fmt.Errorf("Discord catalog not available")
+	}
+	channelID = strings.TrimSpace(channelID)
+	if channelID == "" {
+		return fmt.Errorf("channel id is required")
+	}
+	list, err := s.discord.ListTextChannels(guildID)
+	if err != nil {
+		return err
+	}
+	for _, ch := range list {
+		if ch.ID == channelID {
+			return nil
+		}
+	}
+	return errChannelNotVisible
+}
+
+var errChannelNotVisible = fmt.Errorf("channel not visible to the bot")
+
+type chatSendBody struct {
+	Content string `json:"content"`
+}
+
+func (s *Server) handleDiscordMessages(w http.ResponseWriter, r *http.Request) {
+	if s.discord == nil {
+		writeErr(w, http.StatusServiceUnavailable, "Discord catalog not available")
+		return
+	}
+	guildID := r.PathValue("guild")
+	channelID := r.PathValue("channel")
+	if err := s.accessibleChannel(guildID, channelID); err != nil {
+		status := http.StatusBadRequest
+		if err == errChannelNotVisible {
+			status = http.StatusNotFound
+		}
+		writeErr(w, status, err.Error())
+		return
+	}
+	limit := 10
+	if q := r.URL.Query().Get("limit"); q != "" {
+		if n, err := strconv.Atoi(q); err == nil {
+			limit = n
+		}
+	}
+	list, err := s.discord.ListRecentMessages(channelID, limit)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if list == nil {
+		list = []discord.ChatMessage{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"messages": list})
+}
+
+func (s *Server) handleDiscordSendMessage(w http.ResponseWriter, r *http.Request) {
+	if s.discord == nil {
+		writeErr(w, http.StatusServiceUnavailable, "Discord catalog not available")
+		return
+	}
+	guildID := r.PathValue("guild")
+	channelID := r.PathValue("channel")
+	if err := s.accessibleChannel(guildID, channelID); err != nil {
+		status := http.StatusBadRequest
+		if err == errChannelNotVisible {
+			status = http.StatusNotFound
+		}
+		writeErr(w, status, err.Error())
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, discord.MaxChatUploadBytes)
+	content, files, err := readChatSend(r)
+	if err != nil {
+		status := http.StatusBadRequest
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			status = http.StatusRequestEntityTooLarge
+		}
+		writeErr(w, status, err.Error())
+		return
+	}
+	msg, err := s.discord.SendChannelMessage(channelID, content, files)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, msg)
+}
+
+func readChatSend(r *http.Request) (string, []discord.ChatFile, error) {
+	media, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if media == "multipart/form-data" {
+		if err := r.ParseMultipartForm(32 << 20); err != nil {
+			return "", nil, err
+		}
+		content := ""
+		if r.MultipartForm != nil {
+			content = r.FormValue("content")
+		}
+		var files []discord.ChatFile
+		if r.MultipartForm != nil {
+			for _, fh := range r.MultipartForm.File["files"] {
+				if fh == nil {
+					continue
+				}
+				name := filepath.Base(strings.TrimSpace(fh.Filename))
+				src, err := fh.Open()
+				if err != nil {
+					return "", nil, fmt.Errorf("read %s: %w", name, err)
+				}
+				data, err := io.ReadAll(io.LimitReader(src, discord.MaxChatFileBytes+1))
+				_ = src.Close()
+				if err != nil {
+					return "", nil, fmt.Errorf("read %s: %w", name, err)
+				}
+				files = append(files, discord.ChatFile{
+					Name:        name,
+					ContentType: fh.Header.Get("Content-Type"),
+					Data:        data,
+				})
+			}
+		}
+		return content, files, nil
+	}
+	var body chatSendBody
+	if err := readJSON(r, &body); err != nil {
+		return "", nil, fmt.Errorf("invalid JSON: %w", err)
+	}
+	return body.Content, nil, nil
 }
 
 type patchBody struct {

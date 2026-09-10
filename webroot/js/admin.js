@@ -6,6 +6,8 @@
    Meat Bag: to add a future tab, push { id, label } here and add a
    matching #tab-{id} panel in index.html. */
 const TAB_REGISTRY = [
+  { id: "status", label: "Status" },
+  { id: "chat", label: "Chat" },
   { id: "episodes", label: "Episodes" },
   { id: "content", label: "Content listeners" },
   { id: "pictures", label: "Picture listeners" },
@@ -62,7 +64,8 @@ document.getElementById("picture-settings-animated").addEventListener("change", 
 
 function initTabs() {
   const bar = document.getElementById("tab-bar");
-  const saved = localStorage.getItem("subotto_admin_tab") || "content";
+  // First visit → Status; otherwise keep the Meat Bag's last tab.
+  const saved = localStorage.getItem("subotto_admin_tab") || "status";
   bar.innerHTML = TAB_REGISTRY.map((t) => {
     const sel = t.id === saved ? "true" : "false";
     return `<button type="button" class="tab-btn" role="tab" id="tabbtn-${t.id}"
@@ -86,6 +89,7 @@ function activateTab(id) {
   document.querySelectorAll(".tab-panel").forEach((panel) => {
     panel.hidden = panel.getAttribute("data-tab") !== id;
   });
+  syncChatPoll();
 }
 
 /* ---------- Digital camo backdrop (noise → quantized pixels, no tile) ---------- */
@@ -199,13 +203,16 @@ paintDigicam();
 window.addEventListener("resize", scheduleDigicam);
 
 async function api(path, options = {}) {
+  const headers = {
+    Accept: "application/json",
+    ...(options.headers || {}),
+  };
+  if (options.body && !(options.body instanceof FormData) && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
   const res = await fetch(path, {
-    headers: {
-      Accept: "application/json",
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-      ...(options.headers || {}),
-    },
     ...options,
+    headers,
   });
   const text = await res.text();
   let data = null;
@@ -290,6 +297,248 @@ let lastResyncChannel = "";
 let lastPictureResyncChannel = "";
 let cachedListens = [];
 let cachedPictureListens = [];
+let cachedEpisodes = [];
+let cachedStatus = null;
+let cachedActivity = [];
+let cachedUnlinked = { content: [], picture: [], total: 0 };
+
+/** Human-readable uptime from process started_at (RFC3339). */
+function fmtUptime(startedAt) {
+  if (!startedAt) return "—";
+  const start = new Date(startedAt).getTime();
+  if (Number.isNaN(start)) return esc(startedAt);
+  let sec = Math.max(0, Math.floor((Date.now() - start) / 1000));
+  const d = Math.floor(sec / 86400);
+  sec %= 86400;
+  const h = Math.floor(sec / 3600);
+  sec %= 3600;
+  const m = Math.floor(sec / 60);
+  const parts = [];
+  if (d) parts.push(d + "d");
+  if (h || d) parts.push(h + "h");
+  parts.push(m + "m");
+  return parts.join(" ");
+}
+
+function unlinkedChannelSet() {
+  const ids = new Set();
+  for (const row of cachedUnlinked.content || []) {
+    if (row.discord_channel_id) ids.add(row.discord_channel_id);
+  }
+  for (const row of cachedUnlinked.picture || []) {
+    if (row.discord_channel_id) ids.add(row.discord_channel_id);
+  }
+  return ids;
+}
+
+/** Status tab dashboard — composed from caches filled by refreshAll(). */
+function renderStatusDashboard() {
+  renderStatusHealth();
+  renderStatusOrphans();
+  renderStatusEpisodes();
+  renderStatusContent();
+  renderStatusPictures();
+  renderStatusActivity();
+}
+
+function renderStatusHealth() {
+  const host = document.getElementById("status-health");
+  if (!host) return;
+  const s = cachedStatus;
+  if (!s) {
+    host.innerHTML = `<p class="empty">status unavailable</p>`;
+    return;
+  }
+  const discord = s.discord_connected
+    ? `<span class="state-on">UP</span>`
+    : `<span class="state-off">DOWN</span>
+       <button type="button" class="secondary" data-status-act="reconnect">Reconnect</button>`;
+  const yt = s.youtube_authorized
+    ? `<span class="state-on">AUTHORIZED</span>${s.youtube_channel ? ` · ${esc(s.youtube_channel)}` : ""}`
+    : `<span class="state-off">MISSING TOKEN</span>`;
+  let sched = `<span class="state-off">OFF</span>`;
+  if (s.scheduler_enabled) {
+    const hours = s.resync_interval_hours || "?";
+    const last = s.scheduler_last_run_at
+      ? new Date(s.scheduler_last_run_at).toLocaleString()
+      : "never";
+    const err = s.scheduler_last_error
+      ? ` · <span class="ok-no">err: ${esc(s.scheduler_last_error)}</span>`
+      : "";
+    sched = `<span class="state-on">ON</span> · every ${esc(String(hours))}h · last ${esc(last)}${err}`;
+  }
+  const on = s.listens_enabled ?? s.airs_enabled ?? s.mappings_enabled ?? 0;
+  const tot = s.listens_total ?? s.airs_total ?? s.mappings_total ?? 0;
+  const picOn = s.picture_listens_enabled ?? 0;
+  const picTot = s.picture_listens_total ?? 0;
+  host.innerHTML = `<dl class="status-health-grid">
+    <div><dt>Discord</dt><dd>${discord}</dd></div>
+    <div><dt>YouTube</dt><dd>${yt}</dd></div>
+    <div><dt>Uptime</dt><dd class="mono">${esc(fmtUptime(s.started_at))} <span class="muted">since ${esc(s.started_at ? new Date(s.started_at).toLocaleString() : "—")}</span></dd></div>
+    <div><dt>Listen addr</dt><dd class="mono">${esc(s.listen_addr || "—")}</dd></div>
+    <div><dt>Scheduler</dt><dd>${sched}</dd></div>
+    <div><dt>Counts</dt><dd>content ${esc(String(on))}/${esc(String(tot))} · pics ${esc(String(picOn))}/${esc(String(picTot))} · log ${esc(String(s.activity_total ?? 0))}</dd></div>
+  </dl>`;
+}
+
+function renderStatusOrphans() {
+  const el = document.getElementById("status-orphans");
+  if (!el) return;
+  const n = cachedUnlinked.total || 0;
+  if (n <= 0) {
+    el.hidden = true;
+    el.textContent = "";
+    return;
+  }
+  el.hidden = false;
+  el.innerHTML = `<strong>${esc(String(n))}</strong> live listener${n === 1 ? "" : "s"} not under a show — absorb on the <button type="button" class="linkish" data-status-act="goto-episodes">Episodes</button> tab.`;
+}
+
+function renderStatusEpisodes() {
+  const tbody = document.querySelector("#status-episodes-table tbody");
+  if (!tbody) return;
+  const list = cachedEpisodes || [];
+  if (!list.length) {
+    tbody.innerHTML = `<tr><td colspan="5" class="empty">none live</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = list
+    .map((e) => {
+      const listeners = (e.listeners || [])
+        .map((l) => {
+          const st = (l.state || "").toUpperCase();
+          const label = `${esc(l.kind)}:${esc(l.name || l.channel || l.discord_channel_id || "?")}`;
+          return st === "PAUSED" ? `${label} <span class="state-off">(paused)</span>` : label;
+        })
+        .join(", ");
+      const apiPath = e.public_url || `/api/get/episode/${e.show_slug}`;
+      const since = e.since ? new Date(e.since).toLocaleString() : "—";
+      return `<tr>
+        <td>${esc(e.episode_name_full || e.name)}<br><span class="mono">${esc(e.show)} · ${esc(e.episode_short)}</span></td>
+        <td>${listeners || "—"}</td>
+        <td class="mono">${esc(since)}</td>
+        <td><a class="api-get" href="${esc(apiPath)}" target="_blank" rel="noopener">GET</a></td>
+        <td class="actions">
+          <button type="button" class="danger" data-status-act="ep-cease" data-id="${e.id}">Cease</button>
+        </td>
+      </tr>`;
+    })
+    .join("");
+}
+
+function renderStatusContent() {
+  const tbody = document.querySelector("#status-content-table tbody");
+  if (!tbody) return;
+  const rows = cachedListens || [];
+  const orphans = unlinkedChannelSet();
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty">none live</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows
+    .map((m) => {
+      const ch = esc(m.discord_channel_id);
+      const chName = (m.discord_channel_name || "").trim();
+      const chLabel = chName ? `#${esc(chName)}` : ch;
+      const state = m.enabled
+        ? `<span class="state-on">LISTENING</span>`
+        : `<span class="state-off">PAUSED</span>`;
+      const since = m.active_from ? new Date(m.active_from).toLocaleString() : "—";
+      const orphan = orphans.has(m.discord_channel_id)
+        ? ` <span class="status-orphan-flag" title="Not linked to a show episode">orphan</span>`
+        : "";
+      return `<tr>
+        <td>${esc(m.name) || "—"}${orphan}</td>
+        <td class="mono" title="${ch}">${chLabel}</td>
+        <td class="mono">${esc(m.youtube_playlist_id)}</td>
+        <td class="mono">${esc(since)}</td>
+        <td>${state}</td>
+        <td class="actions">
+          <button type="button" class="secondary" data-status-act="content-toggle" data-channel="${ch}" data-enabled="${m.enabled}">
+            ${m.enabled ? "Pause" : "Resume"}
+          </button>
+        </td>
+      </tr>`;
+    })
+    .join("");
+}
+
+function renderStatusPictures() {
+  const tbody = document.querySelector("#status-pictures-table tbody");
+  if (!tbody) return;
+  const rows = cachedPictureListens || [];
+  const orphans = unlinkedChannelSet();
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="7" class="empty">none live</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows
+    .map((p) => {
+      const ch = esc(p.discord_channel_id);
+      const chName = (p.discord_channel_name || "").trim();
+      const chLabel = chName ? `#${esc(chName)}` : ch;
+      const state = p.enabled
+        ? `<span class="state-on">LISTENING</span>`
+        : `<span class="state-off">PAUSED</span>`;
+      const since = p.active_from ? new Date(p.active_from).toLocaleString() : "—";
+      const url = p.slideshow_url || ("/slideshow/" + p.slug);
+      const orphan = orphans.has(p.discord_channel_id)
+        ? ` <span class="status-orphan-flag" title="Not linked to a show episode">orphan</span>`
+        : "";
+      return `<tr>
+        <td>${esc(p.name) || "—"}<br><span class="mono">${esc(p.slug)}</span>${orphan}</td>
+        <td class="mono" title="${ch}">${chLabel}</td>
+        <td class="mono">${esc(p.picture_count)}</td>
+        <td><a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a></td>
+        <td class="mono">${esc(since)}</td>
+        <td>${state}</td>
+        <td class="actions">
+          <button type="button" class="secondary" data-status-act="picture-toggle" data-channel="${ch}" data-enabled="${p.enabled}">
+            ${p.enabled ? "Pause" : "Resume"}
+          </button>
+        </td>
+      </tr>`;
+    })
+    .join("");
+}
+
+function renderStatusActivity() {
+  const tbody = document.querySelector("#status-activity-table tbody");
+  if (!tbody) return;
+  const rows = (cachedActivity || []).slice(0, 20);
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="4" class="empty">no activity yet</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows
+    .map((e) => {
+      const when = e.timestamp ? new Date(e.timestamp).toLocaleString() : "";
+      const details = esc(fmtDetails(e.details));
+      const ok = e.success
+        ? `<span class="ok-yes">YES</span>`
+        : `<span class="ok-no">NO</span>`;
+      return `<tr>
+        <td>${esc(when)}</td>
+        <td class="mono">${esc(e.event_type)}</td>
+        <td>${ok}</td>
+        <td><pre class="details-pre">${details}</pre></td>
+      </tr>`;
+    })
+    .join("");
+}
+
+async function loadUnlinked() {
+  try {
+    const data = await api("/api/episodes/unlinked");
+    cachedUnlinked = {
+      content: data.content || [],
+      picture: data.picture || [],
+      total: data.total || 0,
+    };
+  } catch (err) {
+    cachedUnlinked = { content: [], picture: [], total: 0 };
+  }
+}
 
 function channelLabel(m) {
   if (!m) return "";
@@ -356,10 +605,11 @@ async function loadGuilds() {
   await Promise.all([
     fillGuildSelect(document.getElementById("guild-select")),
     fillGuildSelect(document.getElementById("pic-guild-select")),
+    fillGuildSelect(document.getElementById("chat-guild-select")),
   ]);
 }
 
-async function loadChannelsForGuild(guildID, channelSelect) {
+async function loadChannelsForGuild(guildID, channelSelect, opts) {
   const sel =
     typeof channelSelect === "string"
       ? document.getElementById(channelSelect)
@@ -374,7 +624,11 @@ async function loadChannelsForGuild(guildID, channelSelect) {
   sel.innerHTML = `<option value="">loading channels…</option>`;
   try {
     const data = await api("/api/discord/guilds/" + encodeURIComponent(guildID) + "/channels");
-    const channels = data.channels || [];
+    let channels = data.channels || [];
+    // Chat tab: skip rooms the bot can see but not send in.
+    if (opts && opts.sendable) {
+      channels = channels.filter((c) => c.can_send !== false);
+    }
     if (!channels.length) {
       sel.innerHTML = `<option value="">— no text channels visible —</option>`;
       return;
@@ -390,10 +644,174 @@ async function loadChannelsForGuild(guildID, channelSelect) {
   }
 }
 
+/* ---------- Chat tab (talk as the bot) ---------- */
+const CHAT_POLL_MS = 5000;
+const CHAT_MAX_FILES = 10;
+const CHAT_MAX_FILE_BYTES = 10 * 1024 * 1024;
+let chatPollTimer = 0;
+let chatLoadToken = 0;
+let chatLastChannel = "";
+let chatStaged = [];
+
+function chatGuildID() {
+  return (document.getElementById("chat-guild-select").value || "").trim();
+}
+
+function chatChannelID() {
+  return (document.getElementById("chat-channel-select").value || "").trim();
+}
+
+function setChatComposeEnabled(on) {
+  document.getElementById("chat-input").disabled = !on;
+  document.getElementById("chat-send").disabled = !on;
+  document.getElementById("chat-attach").disabled = !on;
+}
+
+function clearChatStaged() {
+  chatStaged = [];
+  renderChatStaged();
+}
+
+function renderChatStaged() {
+  const el = document.getElementById("chat-staged");
+  if (!chatStaged.length) {
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
+  el.hidden = false;
+  el.innerHTML = chatStaged
+    .map(
+      (f, i) =>
+        `<span class="chat-chip">${esc(f.name)}<button type="button" class="secondary" data-chat-unstick="${i}" title="remove">x</button></span>`
+    )
+    .join("");
+}
+
+function addChatFiles(fileList) {
+  if (!chatChannelID()) {
+    toast("pick a channel first", true);
+    return;
+  }
+  for (const f of fileList || []) {
+    if (chatStaged.length >= CHAT_MAX_FILES) {
+      toast("max " + CHAT_MAX_FILES + " attachments", true);
+      break;
+    }
+    if (f.size > CHAT_MAX_FILE_BYTES) {
+      toast(f.name + " is over 10 MB", true);
+      continue;
+    }
+    chatStaged.push(f);
+  }
+  renderChatStaged();
+}
+
+function chatLogPinned() {
+  const log = document.getElementById("chat-log");
+  return log.scrollHeight - log.scrollTop - log.clientHeight < 48;
+}
+
+function chatAttachHTML(m) {
+  const atts = m.attachments || [];
+  if (!atts.length) return "";
+  return (
+    `<div class="chat-atts">` +
+    atts
+      .map((a) => {
+        const name = a.filename || "file";
+        const url = a.url || "";
+        const img = (a.content_type || "").indexOf("image/") === 0 && url;
+        if (img) {
+          return `<a href="${esc(url)}" target="_blank" rel="noopener"><img class="chat-thumb" src="${esc(url)}" alt="${esc(name)}"></a>`;
+        }
+        if (url) {
+          return `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(name)}</a>`;
+        }
+        return `<span>${esc(name)}</span>`;
+      })
+      .join("") +
+    `</div>`
+  );
+}
+
+function renderChatMessages(messages) {
+  const log = document.getElementById("chat-log");
+  const pin = chatLogPinned();
+  const list = messages || [];
+  if (!list.length) {
+    log.innerHTML = `<p class="empty">no messages yet</p>`;
+    return;
+  }
+  log.innerHTML = list
+    .map((m) => {
+      const mine = m.self ? " mine" : "";
+      const when = m.timestamp ? new Date(m.timestamp).toLocaleString() : "";
+      const body = (m.content || "").trim();
+      const bodyHTML = body ? `<div class="body">${esc(body)}</div>` : "";
+      return `<article class="chat-msg${mine}">
+        <div class="who">${esc(m.author || "unknown")}<span class="when">${esc(when)}</span></div>
+        ${bodyHTML}
+        ${chatAttachHTML(m)}
+      </article>`;
+    })
+    .join("");
+  if (pin) log.scrollTop = log.scrollHeight;
+}
+
+async function loadChatMessages() {
+  const guild = chatGuildID();
+  const channel = chatChannelID();
+  const log = document.getElementById("chat-log");
+  if (!guild || !channel) {
+    setChatComposeEnabled(false);
+    log.innerHTML = `<p class="empty">pick a channel</p>`;
+    return;
+  }
+  const token = ++chatLoadToken;
+  try {
+    const data = await api(
+      "/api/discord/guilds/" +
+        encodeURIComponent(guild) +
+        "/channels/" +
+        encodeURIComponent(channel) +
+        "/messages?limit=10"
+    );
+    if (token !== chatLoadToken) return;
+    chatLastChannel = channel;
+    renderChatMessages(data.messages || []);
+    setChatComposeEnabled(true);
+  } catch (err) {
+    if (token !== chatLoadToken) return;
+    setChatComposeEnabled(false);
+    log.innerHTML = `<p class="empty">load failed: ${esc(err.message)}</p>`;
+  }
+}
+
+function stopChatPoll() {
+  if (chatPollTimer) {
+    clearInterval(chatPollTimer);
+    chatPollTimer = 0;
+  }
+}
+
+function syncChatPoll() {
+  const panel = document.getElementById("tab-chat");
+  const on = panel && !panel.hidden && !!chatChannelID() && !document.hidden;
+  stopChatPoll();
+  if (!on) return;
+  loadChatMessages();
+  chatPollTimer = setInterval(() => {
+    if (document.hidden) return;
+    loadChatMessages();
+  }, CHAT_POLL_MS);
+}
+
 async function loadStatus() {
   const host = document.getElementById("status-pills");
   try {
     const s = await api("/api/status");
+    cachedStatus = s;
     const on = s.listens_enabled ?? s.airs_enabled ?? s.mappings_enabled;
     const tot = s.listens_total ?? s.airs_total ?? s.mappings_total;
     const picOn = s.picture_listens_enabled ?? 0;
@@ -420,6 +838,7 @@ async function loadStatus() {
       host.appendChild(pill("sched off", "muted"));
     }
   } catch (err) {
+    cachedStatus = null;
     host.replaceChildren(pill("status fail: " + err.message, "bad"));
   }
 }
@@ -526,6 +945,7 @@ async function loadActivity() {
   try {
     const data = await api("/api/activity?limit=40");
     const rows = data.activity || [];
+    cachedActivity = rows;
     if (!rows.length) {
       tbody.innerHTML = `<tr><td colspan="4" class="empty">no activity yet</td></tr>`;
       return;
@@ -546,6 +966,7 @@ async function loadActivity() {
       })
       .join("");
   } catch (err) {
+    cachedActivity = [];
     tbody.innerHTML = `<tr><td colspan="4" class="empty">failed: ${esc(err.message)}</td></tr>`;
   }
 }
@@ -578,13 +999,14 @@ async function refreshAll() {
     loadEpisodes(),
     loadEpisodeTemplates(),
     loadActivity(),
+    loadUnlinked(),
   ]);
+  renderStatusDashboard();
 }
 
 /* ---------- Episodes ---------- */
 
 let cachedEpisodeTemplates = [];
-let cachedEpisodes = [];
 
 async function loadEpisodes() {
   const tbody = document.querySelector("#episodes-table tbody");
@@ -1056,6 +1478,102 @@ document.getElementById("guild-select").addEventListener("change", (ev) => {
 document.getElementById("pic-guild-select").addEventListener("change", (ev) => {
   loadChannelsForGuild(ev.target.value, "pic-channel-select");
 });
+document.getElementById("chat-guild-select").addEventListener("change", async (ev) => {
+  chatLoadToken++;
+  setChatComposeEnabled(false);
+  clearChatStaged();
+  document.getElementById("chat-log").innerHTML = `<p class="empty">pick a channel</p>`;
+  await loadChannelsForGuild(ev.target.value, "chat-channel-select", { sendable: true });
+  stopChatPoll();
+});
+document.getElementById("chat-channel-select").addEventListener("change", () => {
+  clearChatStaged();
+  syncChatPoll();
+});
+document.getElementById("chat-attach").addEventListener("click", () => {
+  document.getElementById("chat-file").click();
+});
+document.getElementById("chat-file").addEventListener("change", (ev) => {
+  addChatFiles(ev.target.files);
+  ev.target.value = "";
+});
+document.getElementById("chat-staged").addEventListener("click", (ev) => {
+  const btn = ev.target.closest("[data-chat-unstick]");
+  if (!btn) return;
+  chatStaged.splice(Number(btn.getAttribute("data-chat-unstick")), 1);
+  renderChatStaged();
+});
+(function bindChatDrop() {
+  const box = document.getElementById("chat-window");
+  function isFileDrag(ev) {
+    return ev.dataTransfer && [...ev.dataTransfer.types].includes("Files");
+  }
+  box.addEventListener("dragenter", (ev) => {
+    if (!isFileDrag(ev)) return;
+    ev.preventDefault();
+    box.classList.add("drop-hover");
+  });
+  box.addEventListener("dragover", (ev) => {
+    if (!isFileDrag(ev)) return;
+    ev.preventDefault();
+    ev.dataTransfer.dropEffect = "copy";
+  });
+  box.addEventListener("dragleave", (ev) => {
+    if (!box.contains(ev.relatedTarget)) box.classList.remove("drop-hover");
+  });
+  box.addEventListener("drop", (ev) => {
+    ev.preventDefault();
+    box.classList.remove("drop-hover");
+    addChatFiles(ev.dataTransfer.files);
+  });
+})();
+document.getElementById("chat-send-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const guild = chatGuildID();
+  const channel = chatChannelID();
+  const input = document.getElementById("chat-input");
+  const content = (input.value || "").trim();
+  if (!guild || !channel) return;
+  if (!content && !chatStaged.length) return;
+  const btn = document.getElementById("chat-send");
+  btn.disabled = true;
+  try {
+    const fd = new FormData();
+    fd.append("content", content);
+    for (const f of chatStaged) fd.append("files", f);
+    await api(
+      "/api/discord/guilds/" +
+        encodeURIComponent(guild) +
+        "/channels/" +
+        encodeURIComponent(channel) +
+        "/messages",
+      { method: "POST", body: fd }
+    );
+    input.value = "";
+    clearChatStaged();
+    await loadChatMessages();
+    const log = document.getElementById("chat-log");
+    log.scrollTop = log.scrollHeight;
+  } catch (err) {
+    toast("send failed: " + err.message, true);
+  } finally {
+    setChatComposeEnabled(!!chatChannelID());
+    input.focus();
+  }
+});
+document.getElementById("chat-input").addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter" && !ev.shiftKey) {
+    ev.preventDefault();
+    document.getElementById("chat-send-form").requestSubmit();
+  }
+});
+document.getElementById("chat-input").addEventListener("paste", (ev) => {
+  const files = ev.clipboardData && ev.clipboardData.files;
+  if (!files || !files.length) return;
+  ev.preventDefault();
+  addChatFiles(files);
+});
+document.addEventListener("visibilitychange", syncChatPoll);
 
 document.getElementById("listen-form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
@@ -1451,5 +1969,59 @@ loadGuilds();
 loadAnnounce();
 loadPictureAnnounce();
 syncEpisodeStubsEmpty();
+
+/* Status tab actions — Pause/Resume, Cease episode, Discord reconnect.
+   Absorb stays on Episodes only. */
+document.getElementById("tab-status").addEventListener("click", async (ev) => {
+  const btn = ev.target.closest("[data-status-act]");
+  if (!btn || btn.disabled) return;
+  const act = btn.getAttribute("data-status-act");
+
+  if (act === "goto-episodes") {
+    activateTab("episodes");
+    return;
+  }
+
+  if (act === "ep-cease") {
+    if (!confirm("Cease this episode and stop all linked listeners?")) return;
+  }
+
+  btn.disabled = true;
+  try {
+    if (act === "reconnect") {
+      const data = await api("/api/discord/reconnect", { method: "POST" });
+      toast(data.message || "discord reconnect requested", false);
+      await refreshAll();
+    } else if (act === "ep-cease") {
+      const id = btn.getAttribute("data-id");
+      await api("/api/episodes/" + id, { method: "DELETE" });
+      toast("episode ceased");
+      await refreshAll();
+    } else if (act === "content-toggle") {
+      const channel = btn.getAttribute("data-channel");
+      const enabled = btn.getAttribute("data-enabled") === "true";
+      await api("/api/listens/" + encodeURIComponent(channel), {
+        method: "PATCH",
+        body: JSON.stringify({ enabled: !enabled }),
+      });
+      toast(enabled ? "content listener paused" : "content listener resumed");
+      await refreshAll();
+    } else if (act === "picture-toggle") {
+      const channel = btn.getAttribute("data-channel");
+      const enabled = btn.getAttribute("data-enabled") === "true";
+      await api("/api/picture-listens/" + encodeURIComponent(channel), {
+        method: "PATCH",
+        body: JSON.stringify({ enabled: !enabled }),
+      });
+      toast(enabled ? "picture listener paused" : "picture listener resumed");
+      await refreshAll();
+    }
+  } catch (err) {
+    toast(err.message || "status action failed", true);
+  } finally {
+    if (btn.isConnected) btn.disabled = false;
+  }
+});
+
 refreshAll();
 setInterval(refreshAll, 15000);

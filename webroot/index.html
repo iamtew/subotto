@@ -25,6 +25,153 @@
   <nav class="tabs" id="tab-bar" role="tablist" aria-label="Admin sections"></nav>
 
   <main id="tab-panels">
+    <!-- ========== Status (live glance + quick actions; no absorb) ========== -->
+    <div class="tab-panel" id="tab-status" role="tabpanel" data-tab="status" hidden>
+      <section class="panel" id="status-health-section">
+        <div class="panel-head">
+          <h2>WIRE HEALTH</h2>
+          <p>Discord · YouTube · process · scheduler · listen address</p>
+        </div>
+        <div id="status-health" class="status-health" aria-live="polite">
+          <p class="empty">loading…</p>
+        </div>
+      </section>
+
+      <div id="status-orphans" class="status-callout" hidden></div>
+
+      <section class="panel" id="status-episodes-section">
+        <div class="panel-head">
+          <h2>LIVE EPISODES</h2>
+          <p>Open show episodes · Cease stops linked listeners</p>
+        </div>
+        <div class="table-wrap">
+          <table id="status-episodes-table">
+            <thead>
+              <tr>
+                <th>Episode</th>
+                <th>Listeners</th>
+                <th>Since</th>
+                <th>API</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td colspan="5" class="empty">loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel" id="status-content-section">
+        <div class="panel-head">
+          <h2>LIVE CONTENT LISTENERS</h2>
+          <p>Discord channel → YouTube playlist · Pause / Resume</p>
+        </div>
+        <div class="table-wrap">
+          <table id="status-content-table">
+            <thead>
+              <tr>
+                <th>Listener</th>
+                <th>Channel</th>
+                <th>Playlist</th>
+                <th>Since</th>
+                <th>State</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td colspan="6" class="empty">loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel" id="status-pictures-section">
+        <div class="panel-head">
+          <h2>LIVE PICTURE LISTENERS</h2>
+          <p>Discord channel → disk pics + slideshow · Pause / Resume</p>
+        </div>
+        <div class="table-wrap">
+          <table id="status-pictures-table">
+            <thead>
+              <tr>
+                <th>Listener</th>
+                <th>Channel</th>
+                <th>Pics</th>
+                <th>Slideshow</th>
+                <th>Since</th>
+                <th>State</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td colspan="7" class="empty">loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel" id="status-activity-section">
+        <div class="panel-head">
+          <h2>RECENT ACTIVITY</h2>
+          <p>Last ops · full log on Content listeners</p>
+        </div>
+        <div class="table-wrap">
+          <table id="status-activity-table">
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Event</th>
+                <th>OK</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td colspan="4" class="empty">loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- ========== Chat (talk as the bot) ========== -->
+    <div class="tab-panel" id="tab-chat" role="tabpanel" data-tab="chat" hidden>
+      <section class="panel" id="chat-section">
+        <div class="panel-head">
+          <h2>CHAT</h2>
+          <p>Talk as the bot · last 10 messages · drag files onto the chat to attach</p>
+        </div>
+
+        <form id="chat-pick-form" class="mapping-form">
+          <label>
+            Server
+            <select id="chat-guild-select">
+              <option value="">— loading servers —</option>
+            </select>
+          </label>
+          <label>
+            Channel
+            <select id="chat-channel-select" disabled>
+              <option value="">— pick a server first —</option>
+            </select>
+          </label>
+        </form>
+
+        <div class="chat-window" id="chat-window">
+          <div id="chat-log" class="chat-log" aria-live="polite">
+            <p class="empty">pick a channel</p>
+          </div>
+          <div id="chat-staged" class="chat-staged" hidden></div>
+          <form id="chat-send-form" class="chat-compose">
+            <input id="chat-file" type="file" multiple hidden>
+            <button type="button" class="secondary" id="chat-attach" disabled title="attach files">+</button>
+            <textarea id="chat-input" rows="2" maxlength="2000" placeholder="message as Subotto…" disabled></textarea>
+            <button type="submit" id="chat-send" disabled>SEND</button>
+          </form>
+        </div>
+      </section>
+    </div>
+
     <!-- ========== Content listeners (YouTube) ========== -->
     <div class="tab-panel" id="tab-content" role="tabpanel" data-tab="content" hidden>
       <section class="panel" id="listens-section">
@@ -465,10 +612,6 @@
       </section>
     </div>
   </main>
-
-  <footer>
-    <p>auth · user <code>admin</code> · pass <code>ADMIN_PASSWORD</code> · liberty edition</p>
-  </footer>
 
   <div id="toast" class="toast" hidden role="status" aria-live="polite"></div>
 

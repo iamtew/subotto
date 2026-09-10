@@ -30,11 +30,14 @@ type StatusProvider interface {
 	Reconnect() error
 }
 
-// DiscordCatalog lists servers/channels the bot can see (Admin dropdowns).
+// DiscordCatalog lists servers/channels the bot can see (Admin dropdowns)
+// and posts/reads Chat-tab messages as the bot.
 // *discord.Bot matches this.
 type DiscordCatalog interface {
 	ListGuilds() ([]discord.GuildInfo, error)
 	ListTextChannels(guildID string) ([]discord.ChannelInfo, error)
+	ListRecentMessages(channelID string, limit int) ([]discord.ChatMessage, error)
+	SendChannelMessage(channelID, content string, files []discord.ChatFile) (*discord.ChatMessage, error)
 }
 
 // SchedulerStatus reports background resync state for /api/status.

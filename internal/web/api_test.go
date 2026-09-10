@@ -1,9 +1,11 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -281,8 +283,11 @@ func TestDiscordReconnect(t *testing.T) {
 type fakeCatalog struct {
 	guilds   []discord.GuildInfo
 	channels map[string][]discord.ChannelInfo // guildID → channels
+	messages map[string][]discord.ChatMessage // channelID → history
 	guildErr error
 	chanErr  error
+	msgErr   error
+	sendErr  error
 }
 
 func (f fakeCatalog) ListGuilds() ([]discord.GuildInfo, error) {
@@ -297,6 +302,41 @@ func (f fakeCatalog) ListTextChannels(guildID string) ([]discord.ChannelInfo, er
 		return nil, f.chanErr
 	}
 	return f.channels[guildID], nil
+}
+
+func (f fakeCatalog) ListRecentMessages(channelID string, limit int) ([]discord.ChatMessage, error) {
+	if f.msgErr != nil {
+		return nil, f.msgErr
+	}
+	list := f.messages[channelID]
+	if limit > 0 && len(list) > limit {
+		list = list[len(list)-limit:]
+	}
+	return list, nil
+}
+
+func (f fakeCatalog) SendChannelMessage(channelID, content string, files []discord.ChatFile) (*discord.ChatMessage, error) {
+	if f.sendErr != nil {
+		return nil, f.sendErr
+	}
+	content = strings.TrimSpace(content)
+	if content == "" && len(files) == 0 {
+		return nil, errors.New("message is empty")
+	}
+	msg := &discord.ChatMessage{
+		ID:      "sent-1",
+		Author:  "subotto",
+		Content: content,
+		Bot:     true,
+		Self:    true,
+	}
+	for _, file := range files {
+		msg.Attachments = append(msg.Attachments, discord.ChatAttachment{
+			Filename:    file.Name,
+			ContentType: file.ContentType,
+		})
+	}
+	return msg, nil
 }
 
 func TestPublicGetListener(t *testing.T) {
@@ -411,5 +451,110 @@ func TestPublicGetListener(t *testing.T) {
 	s.httpServer.Handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("guild err: want 503, got %d", rec.Code)
+	}
+}
+
+func TestAdminChatMessages(t *testing.T) {
+	s, _ := testServer(t)
+	s.discord = fakeCatalog{
+		guilds: []discord.GuildInfo{{ID: "g1", Name: "Test Guild"}},
+		channels: map[string][]discord.ChannelInfo{
+			"g1": {{ID: "111", Name: "general", Type: 0, CanSend: true}},
+		},
+		messages: map[string][]discord.ChatMessage{
+			"111": {
+				{ID: "m1", Author: "alice", Content: "hi", Timestamp: "2026-09-11T00:00:00Z"},
+				{ID: "m2", Author: "bob", Content: "yo", Timestamp: "2026-09-11T00:01:00Z"},
+			},
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/discord/guilds/g1/channels/111/messages", nil)
+	req.SetBasicAuth("admin", "test-pass")
+	rec := httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("history: %d %s", rec.Code, rec.Body.String())
+	}
+	var hist struct {
+		Messages []discord.ChatMessage `json:"messages"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &hist); err != nil {
+		t.Fatal(err)
+	}
+	if len(hist.Messages) != 2 || hist.Messages[0].Content != "hi" {
+		t.Fatalf("unexpected history: %+v", hist)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/discord/guilds/g1/channels/999/messages", nil)
+	req.SetBasicAuth("admin", "test-pass")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("hidden channel: want 404, got %d", rec.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/discord/guilds/g1/channels/111/messages", strings.NewReader(`{"content":"  ping  "}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetBasicAuth("admin", "test-pass")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("send: %d %s", rec.Code, rec.Body.String())
+	}
+	var sent discord.ChatMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &sent); err != nil {
+		t.Fatal(err)
+	}
+	if sent.Content != "ping" || !sent.Self {
+		t.Fatalf("sent: %+v", sent)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/discord/guilds/g1/channels/111/messages", strings.NewReader(`{"content":"   "}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetBasicAuth("admin", "test-pass")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("empty send: want 400, got %d", rec.Code)
+	}
+
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	if err := mw.WriteField("content", "with file"); err != nil {
+		t.Fatal(err)
+	}
+	fw, err := mw.CreateFormFile("files", "note.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fw.Write([]byte("hello")); err != nil {
+		t.Fatal(err)
+	}
+	if err := mw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req = httptest.NewRequest(http.MethodPost, "/api/discord/guilds/g1/channels/111/messages", &buf)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.SetBasicAuth("admin", "test-pass")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("multipart send: %d %s", rec.Code, rec.Body.String())
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &sent); err != nil {
+		t.Fatal(err)
+	}
+	if sent.Content != "with file" || len(sent.Attachments) != 1 || sent.Attachments[0].Filename != "note.txt" {
+		t.Fatalf("multipart sent: %+v", sent)
+	}
+
+	s.discord = nil
+	req = httptest.NewRequest(http.MethodGet, "/api/discord/guilds/g1/channels/111/messages", nil)
+	req.SetBasicAuth("admin", "test-pass")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("no catalog: want 503, got %d", rec.Code)
 	}
 }

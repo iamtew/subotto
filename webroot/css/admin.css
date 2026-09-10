@@ -239,12 +239,235 @@ button.pill.pill-action:disabled {
   display: none !important;
 }
 
+/* Status tab — wire health grid + orphans callout */
+.status-health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.85rem 1.25rem;
+  margin: 0;
+}
+
+.status-health-grid > div {
+  min-width: 0;
+}
+
+.status-health-grid dt {
+  margin: 0 0 0.2rem;
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.status-health-grid dd {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.55rem;
+}
+
+.status-health .muted {
+  color: var(--gray);
+  font-size: 0.85em;
+}
+
+.status-callout {
+  margin: 0;
+  padding: 0.7rem 0.95rem;
+  border: 1px solid var(--warn);
+  border-radius: var(--radius);
+  background: rgba(255, 0, 255, 0.08);
+  color: var(--ink);
+  font-size: 0.92rem;
+}
+
+.status-callout[hidden] {
+  display: none !important;
+}
+
+.status-orphan-flag {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.35rem;
+  font-family: var(--font-display);
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-ink);
+  background: var(--warn);
+  border-radius: var(--radius);
+  vertical-align: middle;
+}
+
+button.linkish {
+  display: inline;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: none;
+  color: var(--cyan);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+button.linkish:hover {
+  color: var(--chartreuse);
+}
+
 .picture-form {
   grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
 }
 
 .picture-form-start {
   grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+}
+
+/* Admin Chat tab — last 10 messages + compose as the bot */
+.chat-window {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 22rem;
+  max-height: min(62vh, 38rem);
+  border: 1px solid var(--line);
+  background: var(--bg-input);
+}
+
+.chat-window.drop-hover {
+  border-color: var(--chartreuse);
+  box-shadow: inset 0 0 0 2px var(--chartreuse), 0 0 24px rgba(229, 242, 13, 0.18);
+}
+
+.chat-window.drop-hover::after {
+  content: "drop files to attach";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(16, 20, 15, 0.78);
+  color: var(--chartreuse);
+  font-family: var(--font-display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  z-index: 2;
+}
+
+.chat-log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.75rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.chat-log .empty {
+  margin: auto;
+  color: var(--gray);
+}
+
+.chat-msg {
+  display: grid;
+  gap: 0.15rem;
+  max-width: 48rem;
+}
+
+.chat-msg.mine {
+  margin-left: auto;
+  text-align: right;
+}
+
+.chat-msg .who {
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--olive);
+}
+
+.chat-msg.mine .who {
+  color: var(--chartreuse);
+}
+
+.chat-msg .when {
+  color: var(--gray);
+  font-size: 0.72rem;
+  margin-left: 0.4rem;
+  text-transform: none;
+  letter-spacing: 0;
+  font-family: var(--font-body);
+}
+
+.chat-msg .body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--off-white);
+}
+
+.chat-atts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+}
+
+.chat-msg.mine .chat-atts {
+  justify-content: flex-end;
+}
+
+.chat-thumb {
+  display: block;
+  max-width: 12rem;
+  max-height: 8rem;
+  border: 1px solid var(--line);
+  background: rgba(12, 15, 11, 0.6);
+}
+
+.chat-staged {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.4rem 0.55rem;
+  border-top: 1px solid var(--line);
+}
+
+.chat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 14rem;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--line-strong);
+  background: rgba(12, 15, 11, 0.85);
+  color: var(--olive);
+  font-size: 0.78rem;
+}
+
+.chat-chip button {
+  padding: 0.1rem 0.35rem;
+  font-size: 0.62rem;
+}
+
+.chat-compose {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  padding: 0.55rem;
+  border-top: 1px solid var(--line);
+  align-items: end;
+}
+
+.chat-compose textarea {
+  min-height: 3.1rem;
+  max-height: 8rem;
+  resize: vertical;
+  margin: 0;
 }
 
 .form-actions {
