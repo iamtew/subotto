@@ -1,7 +1,8 @@
-// Package web serves Subotto's Admin UI, JSON API, and public OBS slideshow.
+// Package web serves Subotto's Admin UI, JSON API, and public OBS slideshow /
+// Streamer.bot listener GETs.
 //
 // Meat Bag: Admin is http://localhost:50770 (Basic Auth: admin / ADMIN_PASSWORD).
-// Public slideshow (no password): /slideshow/latest or /slideshow/{slug}.
+// Public (no password): /slideshow/..., /api/slideshow/..., /api/get/{content|picture}/{channel}.
 package web
 
 import (

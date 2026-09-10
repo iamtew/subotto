@@ -427,25 +427,28 @@ async function loadListens() {
     cachedListens = rows;
     fillResyncSelect(rows);
     if (!rows.length) {
-      tbody.innerHTML = `<tr><td colspan="6" class="empty">no content listeners — start one above</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7" class="empty">no content listeners — start one above</td></tr>`;
       return;
     }
     tbody.innerHTML = rows
       .map((m) => {
         const ch = esc(m.discord_channel_id);
-        const chLabel = m.discord_channel_name
-          ? `#${esc(m.discord_channel_name)}`
-          : ch;
+        const chName = (m.discord_channel_name || "").trim();
+        const chLabel = chName ? `#${esc(chName)}` : ch;
         const state = m.enabled
           ? `<span class="state-on">LISTENING</span>`
           : `<span class="state-off">PAUSED</span>`;
         const since = m.active_from ? new Date(m.active_from).toLocaleString() : "—";
+        const apiCell = chName
+          ? `<a class="api-get" href="/api/get/content/${encodeURIComponent(chName)}" target="_blank" rel="noopener">GET</a>`
+          : `<span class="api-get muted" title="Discord channel name unavailable">GET</span>`;
         return `<tr>
           <td>${esc(m.name) || "—"}</td>
           <td class="mono" title="${ch}">${chLabel}</td>
           <td class="mono">${esc(m.youtube_playlist_id)}</td>
           <td class="mono">${esc(since)}</td>
           <td>${state}</td>
+          <td class="api-cell">${apiCell}</td>
           <td class="actions">
             <button type="button" class="secondary" data-act="rename" data-channel="${ch}" data-name="${esc(m.name)}">Rename PL</button>
             <button type="button" class="secondary" data-act="toggle" data-channel="${ch}" data-enabled="${m.enabled}">
@@ -459,7 +462,7 @@ async function loadListens() {
       .join("");
   } catch (err) {
     cachedListens = [];
-    tbody.innerHTML = `<tr><td colspan="6" class="empty">failed: ${esc(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="empty">failed: ${esc(err.message)}</td></tr>`;
   }
 }
 
@@ -471,20 +474,22 @@ async function loadPictureListens() {
     cachedPictureListens = rows;
     fillPictureResyncSelect(rows);
     if (!rows.length) {
-      tbody.innerHTML = `<tr><td colspan="7" class="empty">no picture listeners — start one above</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" class="empty">no picture listeners — start one above</td></tr>`;
       return;
     }
     tbody.innerHTML = rows
       .map((p) => {
         const ch = esc(p.discord_channel_id);
-        const chLabel = p.discord_channel_name
-          ? `#${esc(p.discord_channel_name)}`
-          : ch;
+        const chName = (p.discord_channel_name || "").trim();
+        const chLabel = chName ? `#${esc(chName)}` : ch;
         const state = p.enabled
           ? `<span class="state-on">LISTENING</span>`
           : `<span class="state-off">PAUSED</span>`;
         const since = p.active_from ? new Date(p.active_from).toLocaleString() : "—";
         const url = p.slideshow_url || ("/slideshow/" + p.slug);
+        const apiCell = chName
+          ? `<a class="api-get" href="/api/get/picture/${encodeURIComponent(chName)}" target="_blank" rel="noopener">GET</a>`
+          : `<span class="api-get muted" title="Discord channel name unavailable">GET</span>`;
         return `<tr>
           <td>${esc(p.name) || "—"}<br><span class="mono">${esc(p.slug)}</span></td>
           <td class="mono" title="${ch}">${chLabel}</td>
@@ -492,6 +497,7 @@ async function loadPictureListens() {
           <td><a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a></td>
           <td class="mono">${esc(since)}</td>
           <td>${state}</td>
+          <td class="api-cell">${apiCell}</td>
           <td class="actions">
             <button type="button" class="secondary" data-pact="settings" data-channel="${ch}">Settings</button>
             <button type="button" class="secondary" data-pact="toggle" data-channel="${ch}" data-enabled="${p.enabled}">
@@ -506,7 +512,7 @@ async function loadPictureListens() {
   } catch (err) {
     cachedPictureListens = [];
     fillPictureResyncSelect([]);
-    tbody.innerHTML = `<tr><td colspan="7" class="empty">failed: ${esc(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="empty">failed: ${esc(err.message)}</td></tr>`;
   }
 }
 

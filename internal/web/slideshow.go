@@ -9,13 +9,14 @@ import (
 	"subotto/internal/db"
 )
 
-// registerPublic mounts unauthenticated routes (OBS slideshow + media).
-// Must run before the Basic-Auth "/" catch-all.
+// registerPublic mounts unauthenticated routes (OBS slideshow + media +
+// Streamer.bot listener GET). Must run before the Basic-Auth "/" catch-all.
 func (s *Server) registerPublic(mux *http.ServeMux) {
 	mux.HandleFunc("GET /slideshow/latest", s.handleSlideshowLatest)
 	mux.HandleFunc("GET /slideshow/{slug}", s.handleSlideshowPage)
 	mux.HandleFunc("GET /api/slideshow/{slug}", s.handleSlideshowFeed)
 	mux.HandleFunc("GET /media/pictures/{slug}/{file}", s.handlePictureMedia)
+	mux.HandleFunc("GET /api/get/{kind}/{channel}", s.handlePublicGetListener)
 
 	// OBS page assets (no auth).
 	staticDir := filepath.Join(s.webroot, "slideshow")

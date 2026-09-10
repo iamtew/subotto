@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"subotto/internal/db"
+	"subotto/internal/discord"
 )
 
 var errReconnectBoom = errors.New("reconnect boom")
@@ -273,5 +274,142 @@ func TestDiscordReconnect(t *testing.T) {
 	s.httpServer.Handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("reconnect fail: want 503, got %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// fakeCatalog is a DiscordCatalog for public GET /api/get tests.
+type fakeCatalog struct {
+	guilds   []discord.GuildInfo
+	channels map[string][]discord.ChannelInfo // guildID → channels
+	guildErr error
+	chanErr  error
+}
+
+func (f fakeCatalog) ListGuilds() ([]discord.GuildInfo, error) {
+	if f.guildErr != nil {
+		return nil, f.guildErr
+	}
+	return f.guilds, nil
+}
+
+func (f fakeCatalog) ListTextChannels(guildID string) ([]discord.ChannelInfo, error) {
+	if f.chanErr != nil {
+		return nil, f.chanErr
+	}
+	return f.channels[guildID], nil
+}
+
+func TestPublicGetListener(t *testing.T) {
+	s, _ := testServer(t)
+	s.discord = fakeCatalog{
+		guilds: []discord.GuildInfo{{ID: "g1", Name: "Test Guild"}},
+		channels: map[string][]discord.ChannelInfo{
+			"g1": {
+				{ID: "111", Name: "general", Type: 0},
+				{ID: "222", Name: "pics", Type: 0},
+			},
+		},
+	}
+
+	// Seed content + picture listeners (Admin auth).
+	body := `{"discord_channel_id":"111","guild_id":"g1","youtube_playlist_id":"PL1","name":"Friday Night","enabled":true}`
+	req := httptest.NewRequest(http.MethodPost, "/api/listens", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetBasicAuth("admin", "test-pass")
+	rec := httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("content upsert: %d %s", rec.Code, rec.Body.String())
+	}
+
+	body = `{"discord_channel_id":"222","guild_id":"g1","name":"OBS Night","enabled":false,"credit_corner":"tl","interval_seconds":5}`
+	req = httptest.NewRequest(http.MethodPost, "/api/picture-listens", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetBasicAuth("admin", "test-pass")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("picture upsert: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// Content happy path — public, no auth; case-insensitive channel name.
+	req = httptest.NewRequest(http.MethodGet, "/api/get/content/General", nil)
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("content get: %d %s", rec.Code, rec.Body.String())
+	}
+	var content publicListenerDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &content); err != nil {
+		t.Fatal(err)
+	}
+	if content.Name != "Friday Night" || content.Channel != "general" || content.PlaylistID != "PL1" {
+		t.Fatalf("bad content dto: %+v", content)
+	}
+	if content.State != "listening" || content.Slideshow != "" || content.Since == "" {
+		t.Fatalf("bad content state/since: %+v", content)
+	}
+
+	if got := normalizeChannelName("#General"); got != "General" {
+		t.Fatalf("normalize # strip: got %q", got)
+	}
+
+	// Picture happy path — paused state + slideshow path.
+	req = httptest.NewRequest(http.MethodGet, "/api/get/picture/pics", nil)
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("picture get: %d %s", rec.Code, rec.Body.String())
+	}
+	var pic publicListenerDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &pic); err != nil {
+		t.Fatal(err)
+	}
+	if pic.Name != "OBS Night" || pic.Channel != "pics" || pic.Slideshow != "/slideshow/obs_night" {
+		t.Fatalf("bad picture dto: %+v", pic)
+	}
+	if pic.State != "paused" || pic.PlaylistID != "" {
+		t.Fatalf("bad picture state: %+v", pic)
+	}
+
+	// Invalid kind → 400.
+	req = httptest.NewRequest(http.MethodGet, "/api/get/banana/general", nil)
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("bad kind: want 400, got %d", rec.Code)
+	}
+
+	// Unknown Discord channel → 404.
+	req = httptest.NewRequest(http.MethodGet, "/api/get/content/nope", nil)
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("unknown channel: want 404, got %d", rec.Code)
+	}
+
+	// Channel exists but no content listener → 404.
+	req = httptest.NewRequest(http.MethodGet, "/api/get/content/pics", nil)
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("no content on pics: want 404, got %d", rec.Code)
+	}
+
+	// Discord unavailable → 503.
+	s.discord = nil
+	req = httptest.NewRequest(http.MethodGet, "/api/get/content/general", nil)
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("no discord: want 503, got %d", rec.Code)
+	}
+
+	s.discord = fakeCatalog{guildErr: errors.New("gateway down")}
+	req = httptest.NewRequest(http.MethodGet, "/api/get/content/general", nil)
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("guild err: want 503, got %d", rec.Code)
 	}
 }

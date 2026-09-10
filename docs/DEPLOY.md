@@ -24,6 +24,7 @@ Produces `dist/subotto-linux.zip` with:
 **Not in the zip:** live `.env` or `data/` (copy those yourself — DB **and** `data/pictures/` if you already collected images).
 
 Public slideshow URLs (no Basic Auth): `/slideshow/latest`, `/slideshow/{slug}`, `/media/pictures/...`.  
+Streamer.bot listener status (no Basic Auth): `GET /api/get/content/{channel-name}` and `GET /api/get/picture/{channel-name}` — JSON with name, channel, playlist_id or slideshow, since, state (`listening`/`paused`). Channel name is the Discord name without `#`; Discord must be connected.  
 If you put Caddy in front, proxy the whole port (Admin + public slideshow) or expose slideshow paths publicly and keep Admin locked down as you prefer.
 
 ---

@@ -565,6 +565,38 @@ td.empty {
   font-size: 0.58rem;
 }
 
+.api-cell {
+  white-space: nowrap;
+}
+
+a.api-get {
+  display: inline-block;
+  padding: 0.4rem 0.55rem;
+  font-family: var(--font-display);
+  font-size: 0.58rem;
+  letter-spacing: 0.06em;
+  text-decoration: none;
+  color: var(--cyan);
+  border: 1px solid rgba(0, 255, 255, 0.35);
+  background: rgba(0, 255, 255, 0.06);
+}
+
+a.api-get:hover {
+  background: rgba(0, 255, 255, 0.14);
+  border-color: rgba(0, 255, 255, 0.55);
+}
+
+span.api-get.muted {
+  display: inline-block;
+  padding: 0.4rem 0.55rem;
+  font-family: var(--font-display);
+  font-size: 0.58rem;
+  letter-spacing: 0.06em;
+  opacity: 0.35;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  cursor: not-allowed;
+}
+
 .result {
   margin: 0.65rem 0 0;
   font-family: var(--font-mono);
