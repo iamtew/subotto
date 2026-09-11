@@ -516,6 +516,17 @@ button.linkish:hover {
   word-break: break-word;
   font-size: 0.9rem;
   line-height: 1.45;
+  display: block; /* not .chat-msg grid — that stacked inline links onto their own rows */
+}
+
+.bc-msg-preview a {
+  color: var(--cyan);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.bc-msg-preview a:hover {
+  color: var(--chartreuse);
 }
 
 .bc-msg-preview .chat-code {

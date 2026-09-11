@@ -240,5 +240,5 @@ func (s *Server) announce(ctx context.Context, channelID, content string) error 
 	if s.announceFn != nil {
 		return s.announceFn(ctx, s.discordTok, channelID, content)
 	}
-	return discord.Announce(ctx, s.discordTok, channelID, content)
+	return discord.AnnounceBroadcast(ctx, s.discordTok, channelID, content)
 }

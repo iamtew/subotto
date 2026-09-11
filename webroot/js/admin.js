@@ -1742,7 +1742,7 @@ async function addBroadcastMessageRow(msg) {
     </div>
     <div class="bc-msg-split">
       <textarea class="bc-msg-body" rows="6" maxlength="2000" placeholder="Discord markdown… {{show}} {{episode_short}} …"></textarea>
-      <div class="bc-msg-preview chat-msg" aria-live="polite"></div>
+      <div class="bc-msg-preview" aria-live="polite"></div>
     </div>
     <div class="bc-chan-row mapping-form">
       <label>

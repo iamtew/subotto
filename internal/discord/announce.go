@@ -84,6 +84,16 @@ func sanitizeAnnounceField(s string) string {
 // Announce posts a plain message to a Discord channel using the bot token (REST).
 // Empty content is a no-op (Meat Bag silenced the template). Oversize content errors.
 func Announce(ctx context.Context, token, channelID, content string) error {
+	return announce(ctx, token, channelID, content, false)
+}
+
+// AnnounceBroadcast is Announce for Fire: when the target is a Discord
+// announcement (news) channel, crosspost so followers receive it.
+func AnnounceBroadcast(ctx context.Context, token, channelID, content string) error {
+	return announce(ctx, token, channelID, content, true)
+}
+
+func announce(ctx context.Context, token, channelID, content string, crosspost bool) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -113,7 +123,7 @@ func Announce(ctx context.Context, token, channelID, content string) error {
 	session.Client = announceHTTPClient
 
 	// AllowedMentions with empty Parse = no @everyone / role / user pings from content.
-	_, err = session.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
+	msg, err := session.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
 		Content: content,
 		AllowedMentions: &discordgo.MessageAllowedMentions{
 			Parse: []discordgo.AllowedMentionType{},
@@ -123,5 +133,28 @@ func Announce(ctx context.Context, token, channelID, content string) error {
 		return fmt.Errorf("announce in channel %s: %w", channelID, err)
 	}
 	slog.Info("announced in discord channel", "channel", channelID, "chars", DiscordUTF16Len(content))
+
+	if crosspost && msg != nil && msg.ID != "" {
+		if err := maybeCrosspost(session, channelID, msg.ID); err != nil {
+			// Message is already in the channel — don't fail the send.
+			slog.Warn("announcement crosspost failed", "channel", channelID, "err", err)
+		}
+	}
+	return nil
+}
+
+// maybeCrosspost publishes to announcement followers when the channel is news-type.
+func maybeCrosspost(session *discordgo.Session, channelID, messageID string) error {
+	ch, err := session.Channel(channelID)
+	if err != nil {
+		return fmt.Errorf("posted but could not inspect channel %s for crosspost: %w", channelID, err)
+	}
+	if ch.Type != discordgo.ChannelTypeGuildNews {
+		return nil
+	}
+	if _, err := session.ChannelMessageCrosspost(channelID, messageID); err != nil {
+		return fmt.Errorf("posted in %s but crosspost failed: %w", channelID, err)
+	}
+	slog.Info("crossposted announcement", "channel", channelID, "message", messageID)
 	return nil
 }
