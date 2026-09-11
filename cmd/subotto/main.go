@@ -520,6 +520,7 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 		Discord:        bot,
 		DiscordToken:   cfg.DiscordBotToken,
 		AdminPassword:  cfg.AdminPassword,
+		APIPassword:    cfg.APIPassword,
 		AdminHost:      cfg.AdminHost,
 		AdminPort:      cfg.AdminPort,
 		Webroot:        "webroot",

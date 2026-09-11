@@ -207,7 +207,26 @@ func (d *DB) migrateUpgrades() error {
 	if err := d.migratePictureListenerIndexes(); err != nil {
 		return err
 	}
-	return d.migrateEpisodes()
+	if err := d.migrateEpisodes(); err != nil {
+		return err
+	}
+	return d.migrateBroadcasts()
+}
+
+// migrateBroadcasts adds named Discord broadcast definitions (standalone or template-bound).
+func (d *DB) migrateBroadcasts() error {
+	if _, err := d.sql.Exec(`
+CREATE TABLE IF NOT EXISTS broadcasts (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	slug TEXT NOT NULL UNIQUE,
+	name TEXT NOT NULL,
+	episode_template_id INTEGER,
+	messages_json TEXT NOT NULL DEFAULT '[]',
+	updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`); err != nil {
+		return fmt.Errorf("create broadcasts: %w", err)
+	}
+	return nil
 }
 
 // migrateEpisodes adds show-episode tables and nullable episode_id on listeners.

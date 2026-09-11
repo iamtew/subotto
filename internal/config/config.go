@@ -29,6 +29,7 @@ type Config struct {
 
 	// Admin UI
 	AdminPassword string
+	APIPassword   string // optional; Basic Auth user "api" for broadcast fire GETs
 	AdminPort     int
 	AdminHost     string
 
@@ -54,6 +55,7 @@ func Load() (*Config, error) {
 		YouTubeClientSecret: os.Getenv("YOUTUBE_CLIENT_SECRET"),
 		YouTubeRedirectURL:  envOr("YOUTUBE_REDIRECT_URL", "http://localhost:50770/oauth/callback"),
 		AdminPassword:       envOr("ADMIN_PASSWORD", "change-me-please"),
+		APIPassword:         strings.TrimSpace(os.Getenv("API_PASSWORD")),
 		AdminHost:           envOr("ADMIN_HOST", "0.0.0.0"),
 		DatabasePath:        envOr("DATABASE_PATH", "./data/subotto.db"),
 		LogLevel:            strings.ToLower(envOr("LOG_LEVEL", "info")),

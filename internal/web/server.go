@@ -2,6 +2,7 @@
 // Streamer.bot listener GETs.
 //
 // Meat Bag: Admin is http://localhost:50770 (Basic Auth: admin / ADMIN_PASSWORD).
+// Broadcast fire also accepts api / API_PASSWORD on GET /api/broadcasts/{slug}/fire.
 // Public (no password): /slideshow/..., /api/slideshow/..., /api/get/{content|picture}/{channel},
 // /api/get/episode/{show}.
 package web
@@ -55,6 +56,7 @@ type Server struct {
 	discord     DiscordCatalog
 	discordTok  string
 	password    string
+	apiPassword string
 	webroot     string
 	addr        string
 	httpServer  *http.Server
@@ -63,6 +65,8 @@ type Server struct {
 
 	// createPlaylistFn lets tests stub YouTube playlist create (episode start).
 	createPlaylistFn func(ctx context.Context, title, description string) (string, error)
+	// announceFn lets tests stub Discord channel posts (broadcast fire).
+	announceFn func(ctx context.Context, token, channelID, content string) error
 }
 
 // Options configures the Admin server.
@@ -74,6 +78,7 @@ type Options struct {
 	Discord        DiscordCatalog
 	DiscordToken   string
 	AdminPassword  string
+	APIPassword    string // optional; user "api" for broadcast fire
 	AdminHost      string
 	AdminPort      int
 	Webroot        string // folder with index.html / css / js; default ./webroot
@@ -117,6 +122,7 @@ func New(opts Options) (*Server, error) {
 		discord:     opts.Discord,
 		discordTok:  opts.DiscordToken,
 		password:    password,
+		apiPassword: opts.APIPassword,
 		webroot:     abs,
 		addr:        net.JoinHostPort(host, fmt.Sprintf("%d", port)),
 		startedAt:   time.Now().UTC(),
@@ -128,6 +134,7 @@ func New(opts Options) (*Server, error) {
 	s.registerAPI(mux)
 	s.registerPictureAPI(mux)
 	s.registerEpisodeAPI(mux)
+	s.registerBroadcastAPI(mux)
 	// Static Admin files last — "/" catches everything else under webroot (auth’d).
 	fileServer := http.FileServer(http.Dir(s.webroot))
 	mux.Handle("/", s.basicAuth(fileServer))

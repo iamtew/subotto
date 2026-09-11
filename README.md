@@ -16,6 +16,7 @@ Shipped in code:
 - **Content listeners** — Discord channel → YouTube playlist (start / cease)
 - **Picture listeners** — Discord channel → on-disk images + public OBS `/slideshow/...`
 - **Show episodes** — templates + start/cease + absorb live listeners + public `/api/get/episode/{show}`
+- **Broadcasts** — named multi-channel Discord sends (Admin Fire or `GET /api/broadcasts/{slug}/fire` with Basic Auth `api` / `API_PASSWORD`)
 
 Parked: bi-weekly schedules, richer show-runner Discord announce.
 
@@ -46,7 +47,7 @@ Reactions on ingest: **💾** added · **♻️** DUPE · **🛑** OLD · **❌*
 
 ## DEV setup (Windows)
 
-1. Copy `.env.example` → `.env` and fill in tokens (set a real `ADMIN_PASSWORD`).
+1. Copy `.env.example` → `.env` and fill in tokens (set a real `ADMIN_PASSWORD`; optional `API_PASSWORD` for Streamer.bot broadcast fire).
 2. Google Cloud: enable YouTube Data API v3, create OAuth client, add redirect  
    `http://localhost:50770/oauth/callback`.
 3. `just auth-youtube` once (browser login; refresh token saved in SQLite).

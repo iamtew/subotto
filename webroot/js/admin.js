@@ -9,6 +9,7 @@ const TAB_REGISTRY = [
   { id: "status", label: "Status" },
   { id: "chat", label: "Chat" },
   { id: "episodes", label: "Episodes" },
+  { id: "broadcasts", label: "Broadcasts" },
   { id: "content", label: "Content listeners" },
   { id: "pictures", label: "Picture listeners" },
 ];
@@ -289,11 +290,40 @@ function chatLink(href, label) {
 
 /** Discord-ish markdown for Chat: clickable links, no embed/preview cards. */
 function renderChatMarkdown(raw) {
+  return renderDiscordMarkdown(raw, { cards: false });
+}
+
+/** Broadcast compose preview: same markdown + hostname cards for unmasked links. */
+function renderBroadcastMarkdown(raw) {
+  return renderDiscordMarkdown(raw, { cards: true });
+}
+
+/**
+ * Shared Discord-ish markdown.
+ * cards:true → tiny hostname cards for bare / normal []() links;
+ * [label](<url>) and <url> stay link-only (Discord suppress-embed syntax).
+ */
+function renderDiscordMarkdown(raw, opts) {
+  const withCards = !!(opts && opts.cards);
   const slots = [];
+  const cardList = [];
+  const seenHost = new Set();
   const stash = (html) => {
     const i = slots.length;
     slots.push(html);
     return "\u0000" + i + "\u0000";
+  };
+  const addCard = (url) => {
+    if (!withCards || !safeHttpUrl(url)) return;
+    try {
+      const u = new URL(url);
+      const host = u.hostname.toLowerCase();
+      if (seenHost.has(host)) return;
+      seenHost.add(host);
+      cardList.push({ href: u.href, host: u.hostname });
+    } catch {
+      /* ignore bad URL */
+    }
   };
   let s = String(raw || "");
 
@@ -302,9 +332,16 @@ function renderChatMarkdown(raw) {
   );
   s = s.replace(/`([^`]+)`/g, (_, code) => stash(`<code>${esc(code)}</code>`));
 
-  s = s.replace(/\[([^\]]+)\]\(\s*<?(https?:\/\/[^)\s>]+)>?\s*\)/gi, (_, text, url) =>
+  // Masked markdown link — no site card.
+  s = s.replace(/\[([^\]]+)\]\(\s*<(https?:\/\/[^>\s]+)>\s*\)/gi, (_, text, url) =>
     stash(chatLink(url, text))
   );
+  // Normal markdown link — card when previewing broadcasts.
+  s = s.replace(/\[([^\]]+)\]\(\s*(https?:\/\/[^)\s]+)\s*\)/gi, (_, text, url) => {
+    addCard(url);
+    return stash(chatLink(url, text));
+  });
+  // <url> suppress-embed — link only.
   s = s.replace(/<(https?:\/\/[^>\s]+)>/gi, (_, url) => stash(chatLink(url, url)));
   s = s.replace(/https?:\/\/[^\s<]+/gi, (url) => {
     let trail = "";
@@ -312,6 +349,7 @@ function renderChatMarkdown(raw) {
       trail = m;
       return "";
     });
+    addCard(core);
     return stash(chatLink(core, core)) + trail;
   });
 
@@ -324,7 +362,21 @@ function renderChatMarkdown(raw) {
   s = s.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
   s = s.replace(/(^|[\s(])_([^_\n]+)_/g, "$1<em>$2</em>");
 
-  return s.replace(/\u0000(\d+)\u0000/g, (_, i) => slots[Number(i)] || "");
+  let html = s.replace(/\u0000(\d+)\u0000/g, (_, i) => slots[Number(i)] || "");
+  if (withCards && cardList.length) {
+    html +=
+      `<div class="bc-link-cards">` +
+      cardList
+        .map(
+          (c) =>
+            `<a class="bc-link-card" href="${esc(c.href)}" target="_blank" rel="noopener noreferrer">` +
+            `<span class="bc-link-card-host">${esc(c.host)}</span>` +
+            `<span class="bc-link-card-hint">site preview</span></a>`
+        )
+        .join("") +
+      `</div>`;
+  }
+  return html;
 }
 
 function toast(msg, isErr) {
@@ -1052,6 +1104,7 @@ async function refreshAll() {
     loadPictureListens(),
     loadEpisodes(),
     loadEpisodeTemplates(),
+    loadBroadcasts(),
     loadActivity(),
     loadUnlinked(),
   ]);
@@ -1131,6 +1184,7 @@ async function loadEpisodeTemplates() {
     if (cur && cachedEpisodeTemplates.some((t) => String(t.id) === cur)) {
       sel.value = cur;
     }
+    fillBroadcastTemplateSelect();
     if (!cachedEpisodeTemplates.length) {
       tbody.innerHTML = `<tr><td colspan="5" class="empty">no templates yet</td></tr>`;
       return;
@@ -1521,6 +1575,390 @@ document.getElementById("episode-templates-table").addEventListener("click", asy
     toast("template deleted");
     resetEpisodeTemplateForm();
     await loadEpisodeTemplates();
+  } catch (err) {
+    toast(err.message, true);
+  }
+});
+
+/* ---------- Broadcasts ---------- */
+
+let cachedBroadcasts = [];
+let bcGuildCache = null; // [{id,name}]
+const bcChannelCache = {}; // guildID -> [{id,name}]
+const bcChannelNameByID = {}; // channelID -> name (for chips)
+
+function bcNewMsgId() {
+  return "m" + Math.random().toString(16).slice(2) + Date.now().toString(16);
+}
+
+function rememberBcChannelName(id, name) {
+  id = String(id || "").trim();
+  name = String(name || "").replace(/^#/, "").trim();
+  if (id && name) bcChannelNameByID[id] = name;
+}
+
+function bcChannelLabel(id) {
+  const name = bcChannelNameByID[id];
+  return name ? "#" + name : "#" + id;
+}
+
+async function ensureBcGuilds() {
+  if (bcGuildCache) return bcGuildCache;
+  const data = await api("/api/discord/guilds");
+  bcGuildCache = data.guilds || [];
+  return bcGuildCache;
+}
+
+async function ensureBcChannels(guildID) {
+  if (!guildID) return [];
+  if (bcChannelCache[guildID]) return bcChannelCache[guildID];
+  const data = await api("/api/discord/guilds/" + encodeURIComponent(guildID) + "/channels");
+  const channels = (data.channels || []).filter((c) => c.can_send !== false);
+  for (const c of channels) rememberBcChannelName(c.id, c.name);
+  bcChannelCache[guildID] = channels;
+  return channels;
+}
+
+/** Warm id→name map so edit chips can show #name instead of raw snowflakes. */
+async function warmBcChannelNames(channelIDs) {
+  const missing = (channelIDs || []).filter((id) => id && !bcChannelNameByID[id]);
+  if (!missing.length) return;
+  try {
+    const guilds = await ensureBcGuilds();
+    for (const g of guilds) {
+      await ensureBcChannels(g.id);
+      if (missing.every((id) => bcChannelNameByID[id])) break;
+    }
+  } catch {
+    /* chips fall back to id */
+  }
+}
+
+function fillBroadcastTemplateSelect() {
+  const sel = document.getElementById("broadcast-template-select");
+  if (!sel) return;
+  const prev = sel.value;
+  const opts = ['<option value="">— standalone —</option>'];
+  for (const t of cachedEpisodeTemplates || []) {
+    opts.push(`<option value="${t.id}">${esc(t.show)} (${esc(t.show_slug)})</option>`);
+  }
+  sel.innerHTML = opts.join("");
+  if (prev && [...sel.options].some((o) => o.value === prev)) sel.value = prev;
+}
+
+async function loadBroadcasts() {
+  const tbody = document.querySelector("#broadcasts-table tbody");
+  fillBroadcastTemplateSelect();
+  try {
+    const data = await api("/api/broadcasts");
+    cachedBroadcasts = data.broadcasts || [];
+    if (!cachedBroadcasts.length) {
+      tbody.innerHTML = `<tr><td colspan="6" class="empty">no broadcasts yet</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = cachedBroadcasts
+      .map((b) => {
+        const scope = b.episode_template_id
+          ? esc(b.template_show || "template #" + b.episode_template_id)
+          : "standalone";
+        const n = (b.messages || []).length;
+        return `<tr>
+          <td>${esc(b.name)}</td>
+          <td><code>${esc(b.slug)}</code></td>
+          <td>${scope}</td>
+          <td>${n}</td>
+          <td><code class="bc-fire-url">${esc(b.fire_url || "")}</code></td>
+          <td class="actions">
+            <button type="button" class="secondary" data-bc-fire="${esc(b.slug)}">Fire</button>
+            <button type="button" class="secondary" data-bc-edit="${b.id}">Edit</button>
+            <button type="button" class="danger" data-bc-del="${b.id}">Delete</button>
+          </td>
+        </tr>`;
+      })
+      .join("");
+  } catch (err) {
+    cachedBroadcasts = [];
+    tbody.innerHTML = `<tr><td colspan="6" class="empty">failed: ${esc(err.message)}</td></tr>`;
+  }
+}
+
+function broadcastMessagesFromDOM() {
+  const rows = [...document.querySelectorAll("#broadcast-messages .bc-msg")];
+  return rows.map((row) => {
+    const id = row.getAttribute("data-msg-id") || "";
+    const body = (row.querySelector(".bc-msg-body") || {}).value || "";
+    const channel_ids = [...row.querySelectorAll(".bc-chan-chip")].map((c) =>
+      c.getAttribute("data-channel-id")
+    );
+    return { id, body, channel_ids };
+  });
+}
+
+function syncBroadcastMessagesEmpty() {
+  const empty = document.getElementById("broadcast-messages-empty");
+  const n = document.querySelectorAll("#broadcast-messages .bc-msg").length;
+  if (empty) empty.hidden = n > 0;
+}
+
+function updateBcMsgPreview(row) {
+  const ta = row.querySelector(".bc-msg-body");
+  const prev = row.querySelector(".bc-msg-preview");
+  if (!ta || !prev) return;
+  prev.innerHTML = renderBroadcastMarkdown(ta.value);
+}
+
+function renderBcChannelChips(row, channelIDs) {
+  const wrap = row.querySelector(".bc-chan-chips");
+  if (!wrap) return;
+  const ids = channelIDs || [];
+  if (!ids.length) {
+    wrap.innerHTML = `<span class="bc-chan-empty">no channels</span>`;
+    return;
+  }
+  wrap.innerHTML = ids
+    .map(
+      (id) =>
+        `<button type="button" class="bc-chan-chip" data-channel-id="${esc(id)}" title="remove ${esc(bcChannelLabel(id))}">${esc(bcChannelLabel(id))} ×</button>`
+    )
+    .join("");
+}
+
+async function addBroadcastMessageRow(msg) {
+  const list = document.getElementById("broadcast-messages");
+  const row = document.createElement("div");
+  row.className = "bc-msg";
+  row.setAttribute("data-msg-id", (msg && msg.id) || bcNewMsgId());
+  let guildOpts = `<option value="">— server —</option>`;
+  try {
+    const guilds = await ensureBcGuilds();
+    guildOpts += guilds.map((g) => `<option value="${esc(g.id)}">${esc(g.name)}</option>`).join("");
+  } catch (err) {
+    guildOpts = `<option value="">— ${esc(err.message)} —</option>`;
+  }
+  row.innerHTML = `
+    <div class="bc-msg-head">
+      <strong>Message</strong>
+      <button type="button" class="danger bc-msg-remove">Remove</button>
+    </div>
+    <div class="bc-msg-split">
+      <textarea class="bc-msg-body" rows="6" maxlength="2000" placeholder="Discord markdown… {{show}} {{episode_short}} …"></textarea>
+      <div class="bc-msg-preview chat-msg" aria-live="polite"></div>
+    </div>
+    <div class="bc-chan-row mapping-form">
+      <label>
+        Server
+        <select class="bc-guild-select">${guildOpts}</select>
+      </label>
+      <label>
+        Channel
+        <select class="bc-channel-select" disabled>
+          <option value="">— pick a server first —</option>
+        </select>
+      </label>
+      <button type="button" class="secondary bc-chan-add">Add channel</button>
+    </div>
+    <div class="bc-chan-chips"></div>
+  `;
+  list.appendChild(row);
+  const body = (msg && msg.body) || "";
+  row.querySelector(".bc-msg-body").value = body;
+  const channelIDs = (msg && msg.channel_ids) || [];
+  await warmBcChannelNames(channelIDs);
+  renderBcChannelChips(row, channelIDs);
+  updateBcMsgPreview(row);
+  syncBroadcastMessagesEmpty();
+}
+
+function resetBroadcastForm() {
+  document.getElementById("broadcast-id").value = "";
+  document.getElementById("broadcast-name").value = "";
+  document.getElementById("broadcast-slug").value = "";
+  document.getElementById("broadcast-template-select").value = "";
+  document.getElementById("broadcast-messages").innerHTML = "";
+  syncBroadcastMessagesEmpty();
+}
+
+async function fillBroadcastForm(b) {
+  document.getElementById("broadcast-id").value = String(b.id);
+  document.getElementById("broadcast-name").value = b.name || "";
+  document.getElementById("broadcast-slug").value = b.slug || "";
+  fillBroadcastTemplateSelect();
+  document.getElementById("broadcast-template-select").value = b.episode_template_id
+    ? String(b.episode_template_id)
+    : "";
+  document.getElementById("broadcast-messages").innerHTML = "";
+  const msgs = b.messages || [];
+  if (!msgs.length) {
+    await addBroadcastMessageRow(null);
+  } else {
+    for (const m of msgs) await addBroadcastMessageRow(m);
+  }
+  syncBroadcastMessagesEmpty();
+}
+
+document.getElementById("broadcast-msg-add").addEventListener("click", () => {
+  addBroadcastMessageRow(null);
+});
+
+document.getElementById("broadcast-reset").addEventListener("click", resetBroadcastForm);
+
+document.getElementById("broadcast-name").addEventListener("input", (ev) => {
+  const slug = document.getElementById("broadcast-slug");
+  const id = document.getElementById("broadcast-id").value;
+  if (id) return; // don't overwrite slug while editing
+  if (slug.dataset.touched === "1") return;
+  slug.value = String(ev.target.value || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+});
+
+document.getElementById("broadcast-slug").addEventListener("input", (ev) => {
+  ev.target.dataset.touched = "1";
+});
+
+document.getElementById("broadcast-messages").addEventListener("input", (ev) => {
+  const ta = ev.target.closest(".bc-msg-body");
+  if (!ta) return;
+  updateBcMsgPreview(ta.closest(".bc-msg"));
+});
+
+document.getElementById("broadcast-messages").addEventListener("change", async (ev) => {
+  const guildSel = ev.target.closest(".bc-guild-select");
+  if (!guildSel) return;
+  const row = guildSel.closest(".bc-msg");
+  const chanSel = row.querySelector(".bc-channel-select");
+  const guildID = guildSel.value;
+  if (!guildID) {
+    chanSel.disabled = true;
+    chanSel.innerHTML = `<option value="">— pick a server first —</option>`;
+    return;
+  }
+  chanSel.disabled = true;
+  chanSel.innerHTML = `<option value="">loading…</option>`;
+  try {
+    const channels = await ensureBcChannels(guildID);
+    if (!channels.length) {
+      chanSel.innerHTML = `<option value="">— no text channels —</option>`;
+      return;
+    }
+    chanSel.innerHTML =
+      `<option value="">— select channel —</option>` +
+      channels.map((c) => `<option value="${esc(c.id)}">#${esc(c.name)}</option>`).join("");
+    chanSel.disabled = false;
+  } catch (err) {
+    chanSel.innerHTML = `<option value="">— ${esc(err.message)} —</option>`;
+  }
+});
+
+document.getElementById("broadcast-messages").addEventListener("click", (ev) => {
+  const row = ev.target.closest(".bc-msg");
+  if (!row) return;
+  if (ev.target.closest(".bc-msg-remove")) {
+    row.remove();
+    syncBroadcastMessagesEmpty();
+    return;
+  }
+  const chip = ev.target.closest(".bc-chan-chip");
+  if (chip) {
+    chip.remove();
+    const wrap = row.querySelector(".bc-chan-chips");
+    if (wrap && !wrap.querySelector(".bc-chan-chip")) {
+      wrap.innerHTML = `<span class="bc-chan-empty">no channels</span>`;
+    }
+    return;
+  }
+  if (ev.target.closest(".bc-chan-add")) {
+    const chanSel = row.querySelector(".bc-channel-select");
+    const id = chanSel && chanSel.value;
+    if (!id) {
+      toast("pick a channel first", true);
+      return;
+    }
+    const opt = chanSel.selectedOptions && chanSel.selectedOptions[0];
+    if (opt) rememberBcChannelName(id, opt.textContent);
+    const existing = [...row.querySelectorAll(".bc-chan-chip")].map((c) =>
+      c.getAttribute("data-channel-id")
+    );
+    if (existing.includes(id)) {
+      toast("channel already added", true);
+      return;
+    }
+    existing.push(id);
+    renderBcChannelChips(row, existing);
+  }
+});
+
+document.getElementById("broadcast-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const id = document.getElementById("broadcast-id").value.trim();
+  const name = document.getElementById("broadcast-name").value.trim();
+  const slug = document.getElementById("broadcast-slug").value.trim();
+  const tmplRaw = document.getElementById("broadcast-template-select").value.trim();
+  const messages = broadcastMessagesFromDOM();
+  const payload = {
+    name,
+    slug,
+    episode_template_id: tmplRaw ? Number(tmplRaw) : null,
+    messages,
+  };
+  const btn = document.getElementById("broadcast-save");
+  btn.disabled = true;
+  try {
+    if (id) {
+      await api("/api/broadcasts/" + id, { method: "PATCH", body: JSON.stringify(payload) });
+      toast("broadcast updated");
+    } else {
+      await api("/api/broadcasts", { method: "POST", body: JSON.stringify(payload) });
+      toast("broadcast saved");
+    }
+    resetBroadcastForm();
+    document.getElementById("broadcast-slug").dataset.touched = "";
+    await loadBroadcasts();
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("broadcasts-table").addEventListener("click", async (ev) => {
+  const fire = ev.target.closest("[data-bc-fire]");
+  if (fire) {
+    const slug = fire.getAttribute("data-bc-fire");
+    if (!confirm("Fire broadcast “" + slug + "” now?")) return;
+    fire.disabled = true;
+    try {
+      const data = await api("/api/broadcasts/" + encodeURIComponent(slug) + "/fire");
+      const n = data.sent || 0;
+      const errs = data.errors || [];
+      if (errs.length) toast("fired with errors: sent " + n + " · " + errs[0], true);
+      else toast("fired — sent " + n);
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      fire.disabled = false;
+    }
+    return;
+  }
+  const edit = ev.target.closest("[data-bc-edit]");
+  if (edit) {
+    const id = Number(edit.getAttribute("data-bc-edit"));
+    const b = cachedBroadcasts.find((x) => x.id === id);
+    if (b) await fillBroadcastForm(b);
+    return;
+  }
+  const del = ev.target.closest("[data-bc-del]");
+  if (!del) return;
+  const id = del.getAttribute("data-bc-del");
+  if (!confirm("Delete this broadcast?")) return;
+  try {
+    await api("/api/broadcasts/" + id, { method: "DELETE" });
+    toast("broadcast deleted");
+    resetBroadcastForm();
+    await loadBroadcasts();
   } catch (err) {
     toast(err.message, true);
   }

@@ -25,6 +25,7 @@ Produces `dist/subotto-linux.zip` with:
 
 Public slideshow URLs (no Basic Auth): `/slideshow/latest`, `/slideshow/{slug}`, `/media/pictures/...`.  
 Streamer.bot GETs (no Basic Auth): `GET /api/get/content/{channel-name}`, `GET /api/get/picture/{channel-name}`, and `GET /api/get/episode/{show}` — live listener / episode JSON. Channel name is the Discord name without `#`; Discord must be connected.  
+Broadcast fire (Basic Auth): `GET /api/broadcasts/{slug}/fire` — user `api` / `API_PASSWORD` (or `admin` / `ADMIN_PASSWORD`). Sends every message of that named broadcast to its mapped channels.  
 If you put Caddy in front, proxy the whole port (Admin + public slideshow) or expose slideshow paths publicly and keep Admin locked down as you prefer.
 
 ---
@@ -44,6 +45,8 @@ You already authorized on Windows; the refresh token lives in SQLite, not in `.e
 | `picture_listeners` | Picture listeners / epochs |
 | `collected_pictures` | Saved image metadata (+ reactions) |
 | `activity_log` / `app_settings` | Ops / settings |
+| `episodes` / `episode_templates` | Show episodes |
+| `broadcasts` | Named Discord broadcasts |
 
 Also copy **`data/pictures/`** if present — image files for picture listeners live there (next to the DB).
 
@@ -57,6 +60,7 @@ Also copy **`data/pictures/`** if present — image files for picture listeners 
 4. Tweaks in PROD `.env` (not new tokens):
    - `ADMIN_HOST=127.0.0.1` when Caddy (or another proxy) terminates TLS in front of Admin  
    - Optional stronger `ADMIN_PASSWORD`  
+   - Optional `API_PASSWORD` for Streamer.bot broadcast fire (`api` user)  
    - Leave `YOUTUBE_REDIRECT_URL=http://localhost:50770/oauth/callback` if you are not re-authing on the box  
 5. `chmod +x subotto-linux`
 6. **Stop Windows `just run`** (one Discord gateway per bot token).
