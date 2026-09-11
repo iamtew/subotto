@@ -273,6 +273,60 @@ function esc(s) {
     .replace(/"/g, "&quot;");
 }
 
+function safeHttpUrl(url) {
+  try {
+    const u = new URL(url);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function chatLink(href, label) {
+  if (!safeHttpUrl(href)) return esc(label);
+  return `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(label)}</a>`;
+}
+
+/** Discord-ish markdown for Chat: clickable links, no embed/preview cards. */
+function renderChatMarkdown(raw) {
+  const slots = [];
+  const stash = (html) => {
+    const i = slots.length;
+    slots.push(html);
+    return "\u0000" + i + "\u0000";
+  };
+  let s = String(raw || "");
+
+  s = s.replace(/```([\s\S]*?)```/g, (_, code) =>
+    stash(`<pre class="chat-code"><code>${esc(code)}</code></pre>`)
+  );
+  s = s.replace(/`([^`]+)`/g, (_, code) => stash(`<code>${esc(code)}</code>`));
+
+  s = s.replace(/\[([^\]]+)\]\(\s*<?(https?:\/\/[^)\s>]+)>?\s*\)/gi, (_, text, url) =>
+    stash(chatLink(url, text))
+  );
+  s = s.replace(/<(https?:\/\/[^>\s]+)>/gi, (_, url) => stash(chatLink(url, url)));
+  s = s.replace(/https?:\/\/[^\s<]+/gi, (url) => {
+    let trail = "";
+    const core = url.replace(/[),.;!?]+$/g, (m) => {
+      trail = m;
+      return "";
+    });
+    return stash(chatLink(core, core)) + trail;
+  });
+
+  s = esc(s);
+  s = s.replace(/^#{1,3}[ \t]+(.+)$/gm, '<strong class="chat-h">$1</strong>');
+  s = s.replace(/\*\*\*([^*\n]+)\*\*\*/g, "<strong><em>$1</em></strong>");
+  s = s.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/__([^_\n]+)__/g, "<u>$1</u>");
+  s = s.replace(/~~([^~\n]+)~~/g, "<del>$1</del>");
+  s = s.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
+  s = s.replace(/(^|[\s(])_([^_\n]+)_/g, "$1<em>$2</em>");
+
+  return s.replace(/\u0000(\d+)\u0000/g, (_, i) => slots[Number(i)] || "");
+}
+
 function toast(msg, isErr) {
   const el = document.getElementById("toast");
   el.hidden = false;
@@ -748,7 +802,7 @@ function renderChatMessages(messages) {
       const mine = m.self ? " mine" : "";
       const when = m.timestamp ? new Date(m.timestamp).toLocaleString() : "";
       const body = (m.content || "").trim();
-      const bodyHTML = body ? `<div class="body">${esc(body)}</div>` : "";
+      const bodyHTML = body ? `<div class="body">${renderChatMarkdown(body)}</div>` : "";
       return `<article class="chat-msg${mine}">
         <div class="who">${esc(m.author || "unknown")}<span class="when">${esc(when)}</span></div>
         ${bodyHTML}

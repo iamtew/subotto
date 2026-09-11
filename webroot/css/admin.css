@@ -410,6 +410,43 @@ button.linkish:hover {
   color: var(--off-white);
 }
 
+.chat-msg .body a {
+  color: var(--cyan);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.chat-msg .body a:hover {
+  color: var(--chartreuse);
+}
+
+.chat-msg .body .chat-h {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  color: var(--olive);
+}
+
+.chat-msg .body code,
+.chat-msg .body .chat-code {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  background: rgba(12, 15, 11, 0.85);
+  border: 1px solid var(--line);
+}
+
+.chat-msg .body code {
+  padding: 0.05rem 0.28rem;
+}
+
+.chat-msg .body .chat-code {
+  margin: 0.35rem 0 0;
+  padding: 0.45rem 0.55rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
 .chat-atts {
   display: flex;
   flex-wrap: wrap;
