@@ -82,6 +82,7 @@ type slideshowImageDTO struct {
 	ID        int64              `json:"id"`
 	URL       string             `json:"url"`
 	Author    string             `json:"author"`
+	Message   string             `json:"message"`
 	Reactions []db.ReactionCount `json:"reactions"`
 	Collected string             `json:"collected_at"`
 }
@@ -114,6 +115,7 @@ func (s *Server) handleSlideshowFeed(w http.ResponseWriter, r *http.Request) {
 			ID:        p.ID,
 			URL:       "/media/pictures/" + filepath.ToSlash(p.StoredPath),
 			Author:    p.AuthorDisplayName,
+			Message:   p.MessageText,
 			Reactions: reactions,
 			Collected: p.CollectedAt.UTC().Format(time.RFC3339),
 		})

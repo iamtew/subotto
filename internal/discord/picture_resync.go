@@ -151,7 +151,7 @@ func ResyncPictureChannel(
 			}
 			r := pictures.ProcessAttachments(
 				ctx, store, pl, m.ID, authorID, displayNameFromMessage(m),
-				atts, reactionsFromMessage(m),
+				formatSlideshowMessage(session, m), atts, reactionsFromMessage(m),
 			)
 			summary.Result.Merge(r)
 			ensureStatusChrome(ctx, session, channelID, m.ID, m, pictureStatusChrome(r))

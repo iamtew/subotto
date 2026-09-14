@@ -163,6 +163,7 @@ CREATE TABLE IF NOT EXISTS collected_pictures (
 	author_display_name TEXT NOT NULL DEFAULT '',
 	stored_path TEXT NOT NULL,
 	content_type TEXT NOT NULL DEFAULT '',
+	message_text TEXT NOT NULL DEFAULT '',
 	collected_at TEXT NOT NULL DEFAULT (datetime('now')),
 	reactions_json TEXT NOT NULL DEFAULT '{}'
 );
@@ -343,7 +344,10 @@ func (d *DB) migratePictureListenerIndexes() error {
 	`); err != nil {
 		return fmt.Errorf("create collected_pictures listener index: %w", err)
 	}
-	return d.migratePictureListenerColumns()
+	if err := d.migratePictureListenerColumns(); err != nil {
+		return err
+	}
+	return d.migrateCollectedPictureColumns()
 }
 
 // migratePictureListenerColumns adds Phase 8+ slideshow columns on older DBs.
@@ -391,6 +395,24 @@ func (d *DB) migratePictureListenerColumns() error {
 		`); err != nil {
 			return fmt.Errorf("add transition: %w", err)
 		}
+	}
+	return nil
+}
+
+// migrateCollectedPictureColumns adds Discord caption text on older DBs.
+func (d *DB) migrateCollectedPictureColumns() error {
+	cols, err := d.tableColumns("collected_pictures")
+	if err != nil {
+		return err
+	}
+	if cols["message_text"] {
+		return nil
+	}
+	if _, err := d.sql.Exec(`
+		ALTER TABLE collected_pictures
+		ADD COLUMN message_text TEXT NOT NULL DEFAULT ''
+	`); err != nil {
+		return fmt.Errorf("add message_text: %w", err)
 	}
 	return nil
 }

@@ -9,6 +9,8 @@
   const creditEl = document.getElementById("credit");
   const nameEl = document.getElementById("credit-name");
   const reactionsEl = document.getElementById("credit-reactions");
+  const commentEl = document.getElementById("comment");
+  const commentTextEl = document.getElementById("comment-text");
   const floaterStage = document.getElementById("floater-stage");
   const emptyEl = document.getElementById("empty");
 
@@ -146,6 +148,13 @@
     return ["tl", "tr", "bl", "br"].indexOf(c) >= 0 ? c : "br";
   }
 
+  function oppositeCorner(c) {
+    if (c === "tl") return "tr";
+    if (c === "tr") return "tl";
+    if (c === "bl") return "br";
+    return "bl";
+  }
+
   function reactionsAnimated() {
     return feed.reactions_animated !== false;
   }
@@ -187,6 +196,8 @@
     const corner = cornerCode();
     creditEl.classList.remove("tl", "tr", "bl", "br");
     creditEl.classList.add(corner);
+    commentEl.classList.remove("tl", "tr", "bl", "br");
+    commentEl.classList.add(oppositeCorner(corner));
 
     const cs = Number(feed.credit_scale);
     const rs = Number(feed.reaction_scale);
@@ -194,6 +205,7 @@
     const reactionScale = rs > 0 ? rs : 1.5;
     creditEl.style.setProperty("--credit-scale", String(creditScale));
     creditEl.style.setProperty("--reaction-scale", String(reactionScale));
+    commentEl.style.setProperty("--credit-scale", String(creditScale));
     floaterStage.style.setProperty("--reaction-scale", String(reactionScale));
   }
 
@@ -252,7 +264,9 @@
       "|" +
       reactionsKey(reactions) +
       "|" +
-      ((img.author || "").trim())
+      ((img.author || "").trim()) +
+      "|" +
+      ((img.message || "").trim())
     );
   }
 
@@ -328,6 +342,15 @@
   }
 
   function applyOverlay(img, reactions, showCredit, showReact, animated, mult) {
+    const message = (img.message || "").trim();
+    if (message) {
+      renderComment(commentTextEl, message);
+      commentEl.hidden = false;
+    } else {
+      commentTextEl.textContent = "";
+      commentEl.hidden = true;
+    }
+
     if (!showCredit && !showReact) {
       creditEl.hidden = true;
       clearFloaters(false);
@@ -506,6 +529,48 @@
     const img = emoteTemplate(key, parsed).cloneNode(true);
     bindEmoteError(img, parsed);
     return img;
+  }
+
+  function renderComment(el, text) {
+    el.textContent = "";
+    const customRe = /<(a?):([a-zA-Z0-9_]+):(\d+)>/g;
+    let last = 0;
+    let m;
+    while ((m = customRe.exec(text))) {
+      appendTwemojiText(el, text.slice(last, m.index));
+      const parsed = {
+        kind: "discord",
+        name: m[2],
+        id: m[3],
+        animated: m[1] === "a",
+      };
+      const key = (parsed.animated ? "a:" : "") + parsed.name + ":" + parsed.id;
+      const img = makeEmoteImg(key, parsed);
+      img.className = "comment-emoji";
+      el.appendChild(img);
+      last = m.index + m[0].length;
+    }
+    appendTwemojiText(el, text.slice(last));
+  }
+
+  function appendTwemojiText(el, str) {
+    if (!str) return;
+    const re = /\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic})*/gu;
+    let last = 0;
+    let m;
+    while ((m = re.exec(str))) {
+      if (m.index > last) {
+        el.appendChild(document.createTextNode(str.slice(last, m.index)));
+      }
+      const parsed = { kind: "unicode", emoji: m[0] };
+      const img = makeEmoteImg(m[0], parsed);
+      img.className = "comment-emoji";
+      el.appendChild(img);
+      last = m.index + m[0].length;
+    }
+    if (last < str.length) {
+      el.appendChild(document.createTextNode(str.slice(last)));
+    }
   }
 
   function clearStaticReactions() {
@@ -770,6 +835,7 @@
       activeEl.hidden = true;
       inactiveEl.hidden = true;
       creditEl.hidden = true;
+      commentEl.hidden = true;
       floaterStage.hidden = true;
       paintedUrl = "";
     }

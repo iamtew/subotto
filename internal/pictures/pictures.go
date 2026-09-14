@@ -92,7 +92,7 @@ func ProcessAttachments(
 	ctx context.Context,
 	store *db.DB,
 	listener *db.PictureListener,
-	messageID, authorID, authorDisplayName string,
+	messageID, authorID, authorDisplayName, messageText string,
 	atts []Attachment,
 	reactions []db.ReactionCount,
 ) Result {
@@ -130,6 +130,11 @@ func ProcessAttachments(
 		}
 		if already {
 			sameListener := prev.ListenerID == listener.ID
+			if sameListener {
+				if t := strings.TrimSpace(messageText); t != "" {
+					_ = store.UpdatePictureMessageText(ctx, listener.ID, messageID, t)
+				}
+			}
 			origin := sameListener && prev.MessageID != "" && prev.MessageID == messageID
 			if origin {
 				res.OriginHits++
@@ -188,6 +193,7 @@ func ProcessAttachments(
 			AuthorDisplayName:   authorDisplayName,
 			StoredPath:          rel,
 			ContentType:         att.ContentType,
+			MessageText:         messageText,
 			Reactions:           reactions,
 		})
 		if err != nil {

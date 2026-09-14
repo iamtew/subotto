@@ -269,6 +269,27 @@ html, body {
   display: none !important;
 }
 
+.comment .credit-card {
+  min-width: 0;
+  max-width: 33vw;
+  max-height: 40vh;
+  overflow: hidden;
+}
+
+.comment-text {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.comment-text .comment-emoji {
+  width: 1.15em;
+  height: 1.15em;
+  vertical-align: -0.2em;
+  display: inline;
+  object-fit: contain;
+}
+
 .credit-reactions {
   display: flex;
   flex-wrap: wrap;

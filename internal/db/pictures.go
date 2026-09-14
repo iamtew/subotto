@@ -84,6 +84,7 @@ type CollectedPicture struct {
 	AuthorDisplayName    string
 	StoredPath           string // relative to PicturesDir(), e.g. "my-show/123_456.jpg"
 	ContentType          string
+	MessageText          string // Discord message body posted with the image (may be empty)
 	CollectedAt          time.Time
 	Reactions            []ReactionCount // Discord order preserved
 }
@@ -660,11 +661,11 @@ func (d *DB) InsertCollectedPicture(ctx context.Context, p CollectedPicture) (*C
 		INSERT INTO collected_pictures (
 			listener_id, discord_message_id, discord_attachment_id,
 			author_id, author_display_name, stored_path, content_type,
-			collected_at, reactions_json
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			message_text, collected_at, reactions_json
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, p.ListenerID, p.DiscordMessageID, p.DiscordAttachmentID,
 		p.AuthorID, p.AuthorDisplayName, p.StoredPath, p.ContentType,
-		now, reactions)
+		strings.TrimSpace(p.MessageText), now, reactions)
 	if err != nil {
 		return nil, fmt.Errorf("insert collected picture: %w", err)
 	}
@@ -680,7 +681,7 @@ func (d *DB) GetCollectedPicture(ctx context.Context, id int64) (*CollectedPictu
 	row := d.sql.QueryRowContext(ctx, `
 		SELECT id, listener_id, discord_message_id, discord_attachment_id,
 		       author_id, author_display_name, stored_path, content_type,
-		       collected_at, reactions_json
+		       message_text, collected_at, reactions_json
 		FROM collected_pictures WHERE id = ?
 	`, id)
 	return scanCollectedPicture(row)
@@ -691,7 +692,7 @@ func (d *DB) ListCollectedPicturesForListener(ctx context.Context, listenerID in
 	rows, err := d.sql.QueryContext(ctx, `
 		SELECT id, listener_id, discord_message_id, discord_attachment_id,
 		       author_id, author_display_name, stored_path, content_type,
-		       collected_at, reactions_json
+		       message_text, collected_at, reactions_json
 		FROM collected_pictures
 		WHERE listener_id = ?
 		ORDER BY id ASC
@@ -724,7 +725,7 @@ func (d *DB) ListCollectedPicturesByMessage(ctx context.Context, channelID, mess
 	rows, err := d.sql.QueryContext(ctx, `
 		SELECT c.id, c.listener_id, c.discord_message_id, c.discord_attachment_id,
 		       c.author_id, c.author_display_name, c.stored_path, c.content_type,
-		       c.collected_at, c.reactions_json
+		       c.message_text, c.collected_at, c.reactions_json
 		FROM collected_pictures c
 		INNER JOIN picture_listeners p ON p.id = c.listener_id
 		WHERE p.discord_channel_id = ? AND c.discord_message_id = ?
@@ -768,6 +769,17 @@ func (d *DB) UpdatePictureReactions(ctx context.Context, channelID, messageID st
 			WHERE discord_channel_id = ? AND active_until IS NULL
 		  )
 	`, payload, messageID, channelID)
+	return err
+}
+
+// UpdatePictureMessageText sets Discord caption text for every collected row of
+// a message under one listener (resync backfill for older image-only rows).
+func (d *DB) UpdatePictureMessageText(ctx context.Context, listenerID int64, messageID, text string) error {
+	_, err := d.sql.ExecContext(ctx, `
+		UPDATE collected_pictures
+		SET message_text = ?
+		WHERE listener_id = ? AND discord_message_id = ?
+	`, strings.TrimSpace(text), listenerID, messageID)
 	return err
 }
 
@@ -890,6 +902,7 @@ func scanCollectedPicture(row scannable) (*CollectedPicture, error) {
 		&p.AuthorDisplayName,
 		&p.StoredPath,
 		&p.ContentType,
+		&p.MessageText,
 		&collectedAt,
 		&reactionsRaw,
 	)

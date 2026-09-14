@@ -47,7 +47,7 @@ func TestProcessAttachments(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	res := ProcessAttachments(ctx, store, pl, "m1", "u1", "Alice", []Attachment{{
+	res := ProcessAttachments(ctx, store, pl, "m1", "u1", "Alice", "  hello world  ", []Attachment{{
 		ID:          "a1",
 		URL:         srv.URL + "/pic.png",
 		Filename:    "pic.png",
@@ -57,12 +57,17 @@ func TestProcessAttachments(t *testing.T) {
 		t.Fatalf("first save: %+v", res)
 	}
 
+	list, err := store.ListCollectedPicturesForListener(ctx, pl.ID)
+	if err != nil || len(list) != 1 || list[0].MessageText != "hello world" {
+		t.Fatalf("saved caption: %v %+v", err, list)
+	}
+
 	abs := filepath.Join(store.PicturesDir(), pl.Slug, "m1_a1.png")
 	if _, err := os.Stat(abs); err != nil {
 		t.Fatalf("file missing: %v", err)
 	}
 
-	res2 := ProcessAttachments(ctx, store, pl, "m1", "u1", "Alice", []Attachment{{
+	res2 := ProcessAttachments(ctx, store, pl, "m1", "u1", "Alice", "backfilled caption", []Attachment{{
 		ID:          "a1",
 		URL:         srv.URL + "/pic.png",
 		Filename:    "pic.png",
@@ -70,6 +75,10 @@ func TestProcessAttachments(t *testing.T) {
 	}}, nil)
 	if res2.Skipped != 1 || res2.SkippedSame != 1 || res2.SkippedOld != 0 || res2.OriginHits != 1 {
 		t.Fatalf("want origin hit on same message (💾 backfill), got %+v", res2)
+	}
+	list, err = store.ListCollectedPicturesForListener(ctx, pl.ID)
+	if err != nil || len(list) != 1 || list[0].MessageText != "backfilled caption" {
+		t.Fatalf("skip-same caption: %v %+v", err, list)
 	}
 }
 
@@ -100,7 +109,7 @@ func TestProcessAttachmentsSkippedOld(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	res := ProcessAttachments(ctx, store, pl1, "m1", "u1", "Alice", []Attachment{{
+	res := ProcessAttachments(ctx, store, pl1, "m1", "u1", "Alice", "keep me", []Attachment{{
 		ID:          "att-shared",
 		URL:         srv.URL + "/pic.png",
 		Filename:    "pic.png",
@@ -126,7 +135,7 @@ func TestProcessAttachmentsSkippedOld(t *testing.T) {
 		t.Fatal("expected a new picture-listener epoch")
 	}
 
-	res2 := ProcessAttachments(ctx, store, pl2, "m1", "u1", "Alice", []Attachment{{
+	res2 := ProcessAttachments(ctx, store, pl2, "m1", "u1", "Alice", "new epoch", []Attachment{{
 		ID:          "att-shared",
 		URL:         srv.URL + "/pic.png",
 		Filename:    "pic.png",

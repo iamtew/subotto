@@ -83,6 +83,7 @@ func New(token string, store *db.DB, yt *youtube.Client, guildID string) (*Bot, 
 	b.markDown("boot")
 
 	session.AddHandler(b.onMessageCreate)
+	session.AddHandler(b.onMessageUpdate)
 	session.AddHandler(b.onMessageReactionAdd)
 	session.AddHandler(b.onMessageReactionRemove)
 	session.AddHandler(b.onMessageReactionRemoveAll)
@@ -331,9 +332,56 @@ func (b *Bot) handlePictureListener(ctx context.Context, s *discordgo.Session, m
 
 	reactions := reactionsFromMessage(m.Message)
 	res := pictures.ProcessAttachments(
-		ctx, b.store, pl, m.ID, m.Author.ID, displayNameFromMessage(m.Message), atts, reactions,
+		ctx, b.store, pl, m.ID, m.Author.ID, displayNameFromMessage(m.Message),
+		formatSlideshowMessage(s, m.Message), atts, reactions,
 	)
 	ensureStatusChrome(ctx, s, m.ChannelID, m.ID, m.Message, pictureStatusChrome(res))
+}
+
+func (b *Bot) onMessageUpdate(s *discordgo.Session, m *discordgo.MessageUpdate) {
+	if m == nil || m.ID == "" || m.ChannelID == "" {
+		return
+	}
+	if m.Author != nil && m.Author.Bot {
+		return
+	}
+	if b.guildID != "" && m.GuildID != "" && m.GuildID != b.guildID {
+		return
+	}
+
+	ctx := context.Background()
+	pl, err := b.store.GetEnabledPictureListenerByChannel(ctx, m.ChannelID)
+	if err != nil {
+		slog.Error("lookup picture listener on edit failed", "channel", m.ChannelID, "err", err)
+		return
+	}
+	if pl == nil {
+		return
+	}
+
+	pics, err := b.store.ListCollectedPicturesByMessage(ctx, m.ChannelID, m.ID)
+	if err != nil {
+		slog.Error("list pictures on edit failed", "channel", m.ChannelID, "message", m.ID, "err", err)
+		return
+	}
+	if len(pics) == 0 {
+		return
+	}
+
+	msg := m.Message
+	if s != nil {
+		full, ferr := s.ChannelMessage(m.ChannelID, m.ID)
+		if ferr != nil {
+			slog.Warn("fetch message on edit failed", "channel", m.ChannelID, "message", m.ID, "err", ferr)
+		} else if full != nil {
+			msg = full
+		}
+	}
+
+	text := formatSlideshowMessage(s, msg)
+	if err := b.store.UpdatePictureMessageText(ctx, pl.ID, m.ID, text); err != nil {
+		slog.Error("update picture caption failed", "channel", m.ChannelID, "message", m.ID, "err", err)
+	}
 }
 
 func (b *Bot) onMessageReactionAdd(s *discordgo.Session, r *discordgo.MessageReactionAdd) {

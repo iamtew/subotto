@@ -272,12 +272,14 @@ func TestCollectedPictures(t *testing.T) {
 		AuthorDisplayName:   "MeatBag",
 		StoredPath:          pl.Slug + "/msg-1_att-1.jpg",
 		ContentType:         "image/jpeg",
+		MessageText:         "  nice shot  ",
 		Reactions: []ReactionCount{{Emoji: "🔥", Count: 2}},
 	})
 	if err != nil {
 		t.Fatalf("insert: %v", err)
 	}
-	if pic.ID == 0 || len(pic.Reactions) != 1 || pic.Reactions[0].Emoji != "🔥" || pic.Reactions[0].Count != 2 {
+	if pic.ID == 0 || pic.MessageText != "nice shot" ||
+		len(pic.Reactions) != 1 || pic.Reactions[0].Emoji != "🔥" || pic.Reactions[0].Count != 2 {
 		t.Fatalf("bad insert: %+v", pic)
 	}
 
@@ -305,10 +307,19 @@ func TestCollectedPictures(t *testing.T) {
 	if err != nil || len(list) != 1 {
 		t.Fatalf("list: %v len=%d", err, len(list))
 	}
-	if len(list[0].Reactions) != 2 ||
+	if list[0].MessageText != "nice shot" ||
+		len(list[0].Reactions) != 2 ||
 		list[0].Reactions[0].Emoji != "🔥" || list[0].Reactions[0].Count != 3 ||
 		list[0].Reactions[1].Emoji != "❤️" || list[0].Reactions[1].Count != 1 {
 		t.Fatalf("reactions not updated in Discord order: %+v", list[0].Reactions)
+	}
+
+	if err := store.UpdatePictureMessageText(ctx, pl.ID, "msg-1", "  caption  "); err != nil {
+		t.Fatalf("update message: %v", err)
+	}
+	list, err = store.ListCollectedPicturesForListener(ctx, pl.ID)
+	if err != nil || len(list) != 1 || list[0].MessageText != "caption" {
+		t.Fatalf("message backfill: %v %+v", err, list)
 	}
 
 	abs, err := store.AbsolutePicturePath(list[0].StoredPath)

@@ -235,11 +235,25 @@ func TestPictureListensAndPublicSlideshow(t *testing.T) {
 		DiscordMessageID:    "m1",
 		DiscordAttachmentID: "a1",
 		AuthorDisplayName:   "Bob",
+		MessageText:         "look at this",
 		StoredPath:          rel,
 		ContentType:         "image/png",
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/slideshow/obs_night", nil)
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("feed with image: %d %s", rec.Code, rec.Body.String())
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &feed); err != nil {
+		t.Fatal(err)
+	}
+	if len(feed.Images) != 1 || feed.Images[0].Author != "Bob" || feed.Images[0].Message != "look at this" {
+		t.Fatalf("feed images: %+v", feed.Images)
 	}
 
 	req = httptest.NewRequest(http.MethodGet, "/media/pictures/"+rel, nil)
