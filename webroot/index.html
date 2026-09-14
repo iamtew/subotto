@@ -792,6 +792,29 @@
         </div>
       </section>
     </div>
+
+    <!-- ========== API (docs + password for Streamer.bot) ========== -->
+    <div class="tab-panel" id="tab-api" role="tabpanel" data-tab="api" hidden>
+      <section class="panel" id="api-password-section">
+        <div class="panel-head">
+          <h2>API PASSWORD</h2>
+          <p>Basic Auth user <code>api</code> for <code>GET /api/broadcasts/{slug}/fire</code> · <code>admin</code> / Admin password still works · empty means the <code>api</code> user is off</p>
+        </div>
+        <div class="api-secret">
+          <label for="api-password">API_PASSWORD</label>
+          <div class="api-secret-row">
+            <input id="api-password" type="password" readonly autocomplete="off" spellcheck="false" value="">
+            <button type="button" class="secondary api-icon-btn" id="api-password-toggle" aria-label="Show password" aria-pressed="false" title="Show password">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <path fill="currentColor" d="M12 5c-5.5 0-9.5 4.3-10.7 6.2a1.2 1.2 0 0 0 0 1.2C2.5 14.3 6.5 18.6 12 18.6s9.5-4.3 10.7-6.2a1.2 1.2 0 0 0 0-1.2C21.5 9.3 17.5 5 12 5zm0 11.1A4.5 4.5 0 1 1 16.5 11.6 4.5 4.5 0 0 1 12 16.1zm0-7.1a2.6 2.6 0 1 0 2.6 2.6A2.6 2.6 0 0 0 12 9z"/>
+              </svg>
+            </button>
+            <button type="button" class="secondary" id="api-password-copy">Copy</button>
+          </div>
+        </div>
+      </section>
+      <div id="api-catalog"></div>
+    </div>
   </main>
 
   <div id="air-cal" class="air-cal" hidden>

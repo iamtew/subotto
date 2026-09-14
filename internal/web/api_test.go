@@ -104,6 +104,12 @@ func TestStatusAndMappingsCRUD(t *testing.T) {
 	if status["scheduler_enabled"] != false {
 		t.Fatalf("expected scheduler_enabled false without Scheduler wired: %v", status)
 	}
+	if _, ok := status["api_password"]; !ok {
+		t.Fatalf("expected api_password on status: %v", status)
+	}
+	if status["api_password"] != "" {
+		t.Fatalf("expected empty api_password when unset, got %v", status["api_password"])
+	}
 
 	body := `{"discord_channel_id":"111","youtube_playlist_id":"PL1","name":"alpha","enabled":true}`
 	req = httptest.NewRequest(http.MethodPost, "/api/mappings", strings.NewReader(body))

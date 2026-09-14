@@ -176,6 +176,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"scheduler_enabled":       sched.Enabled,
 		"scheduler_last_run_at":   sched.LastRunAt,
 		"scheduler_last_error":    sched.LastError,
+		"api_password":            s.apiPassword, // Admin tab only; empty if API_PASSWORD unset
 	})
 }
 

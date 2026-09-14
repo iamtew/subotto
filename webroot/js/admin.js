@@ -13,6 +13,89 @@ const TAB_REGISTRY = [
   { id: "scheduler", label: "Scheduler" },
   { id: "broadcasts", label: "Broadcasts" },
   { id: "chat", label: "Chat" },
+  { id: "api", label: "API" },
+];
+
+/* Canonical /api/... routes for the API tab. Legacy aliases are a separate group. */
+const API_CATALOG = [
+  {
+    title: "Public (no password)",
+    blurb: "Streamer.bot / OBS JSON. No Basic Auth.",
+    routes: [
+      { method: "GET", path: "/api/get/content/{channel}", note: "Live content listener by Discord channel name (playlist id, since, listening|paused)." },
+      { method: "GET", path: "/api/get/picture/{channel}", note: "Live picture listener by Discord channel name (slideshow URL, since, state)." },
+      { method: "GET", path: "/api/get/episode/{show}", note: "Live show episode by show slug (listeners, spot, placeholders)." },
+      { method: "GET", path: "/api/slideshow/{slug}", note: "Picture slideshow feed JSON for one listener slug." },
+    ],
+  },
+  {
+    title: "API or admin",
+    blurb: "Basic Auth user api / API_PASSWORD, or admin / ADMIN_PASSWORD. GET fires the broadcast.",
+    routes: [
+      { method: "GET", path: "/api/broadcasts/{slug}/fire", note: "Send every message of that named broadcast to its mapped channels." },
+    ],
+  },
+  {
+    title: "Admin",
+    blurb: "Basic Auth user admin / ADMIN_PASSWORD. Same login as this UI.",
+    routes: [
+      { method: "GET", path: "/api/status", note: "Wire health: Discord, YouTube, listener counts, scheduler, API password." },
+      { method: "GET", path: "/api/activity", note: "Recent ops log." },
+      { method: "GET", path: "/api/listens", note: "All content listeners (channel → YouTube playlist)." },
+      { method: "POST", path: "/api/listens", note: "Start or upsert a content listener." },
+      { method: "PATCH", path: "/api/listens/{channel}", note: "Pause / resume / edit a content listener (channel snowflake)." },
+      { method: "DELETE", path: "/api/listens/{channel}", note: "Cease a content listener epoch." },
+      { method: "POST", path: "/api/resync", note: "Replay Discord history into the playlist for one content listener." },
+      { method: "GET", path: "/api/picture-listens", note: "All picture listeners." },
+      { method: "POST", path: "/api/picture-listens", note: "Start or upsert a picture listener." },
+      { method: "PATCH", path: "/api/picture-listens/{channel}", note: "Pause / resume / edit a picture listener." },
+      { method: "DELETE", path: "/api/picture-listens/{channel}", note: "Cease a picture listener epoch." },
+      { method: "POST", path: "/api/picture-resync", note: "Replay Discord history into on-disk pictures." },
+      { method: "GET", path: "/api/discord/guilds", note: "Servers the bot can see." },
+      { method: "GET", path: "/api/discord/guilds/{guild}/channels", note: "Text channels in one server." },
+      { method: "GET", path: "/api/discord/guilds/{guild}/channels/{channel}/messages", note: "Last chat messages in a channel." },
+      { method: "POST", path: "/api/discord/guilds/{guild}/channels/{channel}/messages", note: "Send a message (and optional files) as the bot." },
+      { method: "POST", path: "/api/discord/reconnect", note: "Force Discord gateway reconnect." },
+      { method: "GET", path: "/api/settings/listen-messages", note: "Content listener announce copy." },
+      { method: "PUT", path: "/api/settings/listen-messages", note: "Save content listener announce copy." },
+      { method: "GET", path: "/api/settings/picture-listen-messages", note: "Picture listener announce copy." },
+      { method: "PUT", path: "/api/settings/picture-listen-messages", note: "Save picture listener announce copy." },
+      { method: "GET", path: "/api/settings/resync-scheduler", note: "Background resync interval, limit, scope." },
+      { method: "PUT", path: "/api/settings/resync-scheduler", note: "Save background resync settings." },
+      { method: "GET", path: "/api/episodes", note: "Show episodes (live and ceased)." },
+      { method: "GET", path: "/api/episodes/unlinked", note: "Live listeners not under a show (absorb candidates)." },
+      { method: "POST", path: "/api/episodes", note: "Start a show episode from a template." },
+      { method: "POST", path: "/api/episodes/absorb", note: "Link existing live listeners onto a new episode (no restart)." },
+      { method: "PATCH", path: "/api/episodes/{id}", note: "Edit a live episode (spot, dates — not the immutable label)." },
+      { method: "POST", path: "/api/episodes/{id}/spot", note: "Upload the episode spot image (multipart)." },
+      { method: "DELETE", path: "/api/episodes/{id}", note: "Cease an episode and its linked listeners." },
+      { method: "GET", path: "/api/episode-templates", note: "Show templates." },
+      { method: "POST", path: "/api/episode-templates", note: "Create a show template." },
+      { method: "PUT", path: "/api/episode-templates/{id}", note: "Update a show template." },
+      { method: "DELETE", path: "/api/episode-templates/{id}", note: "Delete a show template." },
+      { method: "GET", path: "/api/broadcasts", note: "Named broadcasts." },
+      { method: "POST", path: "/api/broadcasts", note: "Create a broadcast." },
+      { method: "GET", path: "/api/broadcasts/{id}", note: "One broadcast by numeric id." },
+      { method: "PATCH", path: "/api/broadcasts/{id}", note: "Update a broadcast." },
+      { method: "DELETE", path: "/api/broadcasts/{id}", note: "Delete a broadcast." },
+    ],
+  },
+  {
+    title: "Legacy aliases",
+    blurb: "Same handlers as the canonical routes. Prefer /api/listens and /api/settings/listen-messages.",
+    routes: [
+      { method: "GET", path: "/api/airs", note: "Alias of GET /api/listens." },
+      { method: "POST", path: "/api/airs", note: "Alias of POST /api/listens." },
+      { method: "PATCH", path: "/api/airs/{channel}", note: "Alias of PATCH /api/listens/{channel}." },
+      { method: "DELETE", path: "/api/airs/{channel}", note: "Alias of DELETE /api/listens/{channel}." },
+      { method: "GET", path: "/api/mappings", note: "Alias of GET /api/listens." },
+      { method: "POST", path: "/api/mappings", note: "Alias of POST /api/listens." },
+      { method: "PATCH", path: "/api/mappings/{channel}", note: "Alias of PATCH /api/listens/{channel}." },
+      { method: "DELETE", path: "/api/mappings/{channel}", note: "Alias of DELETE /api/listens/{channel}." },
+      { method: "GET", path: "/api/settings/air-messages", note: "Alias of GET /api/settings/listen-messages." },
+      { method: "PUT", path: "/api/settings/air-messages", note: "Alias of PUT /api/settings/listen-messages." },
+    ],
+  },
 ];
 
 /** Overlay size steps: 0.5x … 5x in 0.25 increments (default 1.5). */
@@ -392,6 +475,25 @@ function toast(msg, isErr) {
   toast._t = setTimeout(() => {
     el.hidden = true;
   }, 3200);
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return;
+  } catch {
+    // http://VPS is not a secure context — clipboard API may refuse.
+  }
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.setAttribute("readonly", "");
+  ta.style.position = "fixed";
+  ta.style.left = "-9999px";
+  document.body.appendChild(ta);
+  ta.select();
+  const ok = document.execCommand("copy");
+  ta.remove();
+  if (!ok) throw new Error("copy failed");
 }
 
 function fmtDetails(details) {
@@ -948,10 +1050,44 @@ async function loadStatus() {
     } else {
       host.appendChild(pill("sched off", "muted"));
     }
+    fillApiPassword(s);
   } catch (err) {
     cachedStatus = null;
+    fillApiPassword(null);
     host.replaceChildren(pill("status fail: " + err.message, "bad"));
   }
+}
+
+function fillApiPassword(s) {
+  const el = document.getElementById("api-password");
+  if (!el) return;
+  el.value = s && s.api_password ? String(s.api_password) : "";
+}
+
+function renderApiCatalog() {
+  const host = document.getElementById("api-catalog");
+  if (!host) return;
+  host.innerHTML = API_CATALOG.map((group) => {
+    const rows = group.routes
+      .map(
+        (r) => `<li class="api-row">
+          <div class="api-row-main">
+            <span class="api-method">${esc(r.method)}</span>
+            <code class="api-path">${esc(r.path)}</code>
+            <p class="api-note">${esc(r.note)}</p>
+          </div>
+          <button type="button" class="secondary" data-copy-path="${esc(r.path)}">Copy</button>
+        </li>`
+      )
+      .join("");
+    return `<section class="panel api-group">
+      <div class="panel-head">
+        <h2>${esc(group.title)}</h2>
+        <p>${esc(group.blurb)}</p>
+      </div>
+      <ul class="api-list">${rows}</ul>
+    </section>`;
+  }).join("");
 }
 
 async function loadListens() {
@@ -2918,6 +3054,7 @@ document.getElementById("picture-resync-channel").addEventListener("change", (ev
 });
 
 initTabs();
+renderApiCatalog();
 fillOverlayScaleSelects();
 loadGuilds();
 loadAnnounce();
@@ -2985,6 +3122,39 @@ document.getElementById("tab-status").addEventListener("click", async (ev) => {
     toast(err.message || "status action failed", true);
   } finally {
     if (btn.isConnected) btn.disabled = false;
+  }
+});
+
+document.getElementById("api-password-toggle").addEventListener("click", () => {
+  const input = document.getElementById("api-password");
+  const btn = document.getElementById("api-password-toggle");
+  const show = input.type === "password";
+  input.type = show ? "text" : "password";
+  btn.setAttribute("aria-pressed", show ? "true" : "false");
+  btn.setAttribute("aria-label", show ? "Hide password" : "Show password");
+  btn.title = show ? "Hide password" : "Show password";
+});
+
+document.getElementById("api-password-copy").addEventListener("click", async () => {
+  const val = document.getElementById("api-password").value;
+  try {
+    await copyText(val);
+    toast(val ? "API password copied" : "copied (API_PASSWORD unset)");
+  } catch (err) {
+    toast(err.message || "copy failed", true);
+  }
+});
+
+document.getElementById("api-catalog").addEventListener("click", async (ev) => {
+  const btn = ev.target.closest("[data-copy-path]");
+  if (!btn) return;
+  const path = btn.getAttribute("data-copy-path") || "";
+  const url = window.location.origin + path;
+  try {
+    await copyText(url);
+    toast("copied " + path);
+  } catch (err) {
+    toast(err.message || "copy failed", true);
   }
 });
 
