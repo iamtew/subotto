@@ -1193,6 +1193,229 @@ function takeSpotFile(kind, fileList) {
   setSpotFile(kind, f);
 }
 
+const DEFAULT_AIR_TZ = "Europe/Amsterdam";
+
+function tzOffsetMs(date, timeZone) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(date);
+  const p = {};
+  for (const { type, value } of parts) {
+    if (type !== "literal") p[type] = value;
+  }
+  const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
+  return asUTC - date.getTime();
+}
+
+function formatOffset(ms) {
+  const sign = ms >= 0 ? "+" : "-";
+  const abs = Math.abs(ms) / 60000;
+  return sign + String(Math.floor(abs / 60)).padStart(2, "0") + ":" + String(abs % 60).padStart(2, "0");
+}
+
+function wallToRFC3339(local, timeZone) {
+  const m = String(local || "").match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!m) return "";
+  const y = +m[1],
+    mo = +m[2],
+    d = +m[3],
+    h = +m[4],
+    mi = +m[5];
+  const guess = Date.UTC(y, mo - 1, d, h, mi, 0);
+  let off = tzOffsetMs(new Date(guess), timeZone);
+  let instant = Date.UTC(y, mo - 1, d, h, mi, 0) - off;
+  off = tzOffsetMs(new Date(instant), timeZone);
+  return m[1] + "-" + m[2] + "-" + m[3] + "T" + m[4] + ":" + m[5] + ":00" + formatOffset(off);
+}
+
+function parseHHMM(s) {
+  const m = String(s || "").trim().match(/^(\d{1,2})[:.](\d{2})$/);
+  if (!m) return "";
+  const h = +m[1],
+    mi = +m[2];
+  if (h > 23 || mi > 59) return "";
+  return String(h).padStart(2, "0") + ":" + String(mi).padStart(2, "0");
+}
+
+function parseYMD(s) {
+  const m = String(s || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return "";
+  const y = +m[1],
+    mo = +m[2],
+    d = +m[3];
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return "";
+  return m[1] + "-" + m[2] + "-" + m[3];
+}
+
+function airDateTimeFromForm(prefix) {
+  const day = parseYMD(document.getElementById(prefix + "-airdate").value);
+  const clock = parseHHMM(document.getElementById(prefix + "-airtime").value);
+  if (!day || !clock) return "";
+  const tz = document.getElementById(prefix + "-airtz").value || DEFAULT_AIR_TZ;
+  return wallToRFC3339(day + "T" + clock, tz);
+}
+
+function rfcOffset(rfc) {
+  const m = String(rfc || "").match(/(Z|[+-]\d{2}:\d{2})$/);
+  if (!m) return "";
+  return m[1] === "Z" ? "+00:00" : m[1];
+}
+
+function parseStoredAir(s) {
+  s = String(s || "").trim();
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::\d{2})?(Z|[+-]\d{2}:\d{2})$/);
+  if (!m) return { local: "", tz: DEFAULT_AIR_TZ };
+  const local = m[1] + "T" + m[2];
+  const off = m[3] === "Z" ? "+00:00" : m[3];
+  const sel = document.getElementById("episode-start-airtz");
+  const zones = sel ? [...sel.options].map((o) => o.value) : [DEFAULT_AIR_TZ];
+  let tz = DEFAULT_AIR_TZ;
+  for (const z of zones) {
+    if (rfcOffset(wallToRFC3339(local, z)) === off) {
+      tz = z;
+      break;
+    }
+  }
+  return { local, tz };
+}
+
+function fillAirDateTime(prefix, rfc) {
+  const parsed = parseStoredAir(rfc);
+  document.getElementById(prefix + "-airdate").value = parsed.local ? parsed.local.slice(0, 10) : "";
+  document.getElementById(prefix + "-airtime").value = parsed.local ? parsed.local.slice(11, 16) : "";
+  document.getElementById(prefix + "-airtz").value = parsed.tz;
+  const prev = document.getElementById(prefix + "-airiso");
+  if (prev) prev.textContent = rfc || "";
+}
+
+function bindAirDateTime(prefix) {
+  const day = document.getElementById(prefix + "-airdate");
+  const clock = document.getElementById(prefix + "-airtime");
+  const tz = document.getElementById(prefix + "-airtz");
+  const prev = document.getElementById(prefix + "-airiso");
+  function paint() {
+    if (prev) prev.textContent = airDateTimeFromForm(prefix);
+  }
+  day.addEventListener("input", paint);
+  clock.addEventListener("input", paint);
+  tz.addEventListener("change", paint);
+  paint();
+}
+
+// ponytail: native <input type="date"> week-start follows Windows (often Sunday). Own grid so Mo…Su is guaranteed.
+function bindAirCalendar() {
+  const pop = document.getElementById("air-cal");
+  const grid = document.getElementById("air-cal-grid");
+  const title = document.getElementById("air-cal-month");
+  let prefix = "";
+  let y = 0;
+  let m = 0; // 0-11
+
+  function hide() {
+    pop.hidden = true;
+    prefix = "";
+  }
+
+  function paintGrid() {
+    const picked = parseYMD(document.getElementById(prefix + "-airdate").value);
+    title.textContent = new Date(y, m, 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
+    const first = new Date(y, m, 1);
+    const start = (first.getDay() + 6) % 7; // Monday = 0
+    const days = new Date(y, m + 1, 0).getDate();
+    const prevDays = new Date(y, m, 0).getDate();
+    grid.innerHTML = "";
+    for (let i = 0; i < 42; i++) {
+      let cellY = y,
+        cellM = m,
+        cellD;
+      if (i < start) {
+        cellM = m - 1;
+        cellD = prevDays - start + i + 1;
+        if (cellM < 0) {
+          cellM = 11;
+          cellY--;
+        }
+      } else if (i - start + 1 > days) {
+        cellM = m + 1;
+        cellD = i - start + 1 - days;
+        if (cellM > 11) {
+          cellM = 0;
+          cellY++;
+        }
+      } else {
+        cellD = i - start + 1;
+      }
+      const iso = cellY + "-" + String(cellM + 1).padStart(2, "0") + "-" + String(cellD).padStart(2, "0");
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = String(cellD);
+      if (cellM !== m) btn.classList.add("muted");
+      if (iso === picked) btn.classList.add("picked");
+      btn.addEventListener("click", () => {
+        const input = document.getElementById(prefix + "-airdate");
+        input.value = iso;
+        input.dispatchEvent(new Event("input"));
+        hide();
+      });
+      grid.appendChild(btn);
+    }
+  }
+
+  function open(forPrefix, anchor) {
+    prefix = forPrefix;
+    const cur = parseYMD(document.getElementById(prefix + "-airdate").value);
+    const base = cur ? new Date(cur + "T00:00:00") : new Date();
+    y = base.getFullYear();
+    m = base.getMonth();
+    paintGrid();
+    pop.hidden = false;
+    const r = anchor.getBoundingClientRect();
+    pop.style.left = r.left + "px";
+    pop.style.top = r.bottom + 4 + "px";
+  }
+
+  document.querySelectorAll("[data-air-cal]").forEach((btn) => {
+    btn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      const p = btn.getAttribute("data-air-cal");
+      if (!pop.hidden && prefix === p) {
+        hide();
+        return;
+      }
+      open(p, btn.closest(".air-date-row") || btn);
+    });
+  });
+  document.getElementById("air-cal-prev").addEventListener("click", () => {
+    m--;
+    if (m < 0) {
+      m = 11;
+      y--;
+    }
+    paintGrid();
+  });
+  document.getElementById("air-cal-next").addEventListener("click", () => {
+    m++;
+    if (m > 11) {
+      m = 0;
+      y++;
+    }
+    paintGrid();
+  });
+  document.addEventListener("click", (ev) => {
+    if (pop.hidden) return;
+    if (pop.contains(ev.target) || ev.target.closest("[data-air-cal]")) return;
+    hide();
+  });
+}
+
 function openEpisodeEditor(ep) {
   document.getElementById("episode-edit-id").value = String(ep.id);
   document.getElementById("episode-edit-label").value =
@@ -1200,7 +1423,7 @@ function openEpisodeEditor(ep) {
   document.getElementById("episode-edit-name").value = ep.name || "";
   document.getElementById("episode-edit-suffix").value = ep.twitch_suffix || "";
   document.getElementById("episode-edit-namefull").value = ep.name_full_template || "";
-  document.getElementById("episode-edit-airdate").value = ep.air_date || "";
+  fillAirDateTime("episode-edit", ep.air_datetime || "");
   setSpotFile("edit", null, ep.spot_image || "");
   const details = document.getElementById("episode-edit-details");
   details.open = true;
@@ -1228,6 +1451,9 @@ function bindSpotDrop(kind) {
 
 bindSpotDrop("start");
 bindSpotDrop("edit");
+bindAirDateTime("episode-start");
+bindAirDateTime("episode-edit");
+bindAirCalendar();
 
 async function loadEpisodes() {
   const tbody = document.querySelector("#episodes-table tbody");
@@ -1267,7 +1493,7 @@ async function loadEpisodes() {
           <td>${esc(e.show)}<br><code class="mono">${esc(e.show_slug)}</code></td>
           <td>${esc(e.episode_short)} · ${esc(e.name)}</td>
           <td class="mono">${esc(e.episode_name_full)}</td>
-          <td class="mono">${esc(e.air_date || "—")}</td>
+          <td class="mono">${esc(e.air_datetime || "—")}</td>
           <td>${spot}</td>
           <td>${listeners || "—"}</td>
           <td class="mono">${esc(e.since ? new Date(e.since).toLocaleString() : "—")}</td>
@@ -1498,7 +1724,7 @@ document.getElementById("episode-start-form").addEventListener("submit", async (
     template_id: Number(fd.get("template_id")),
     episode: Number(fd.get("episode")),
     name: String(fd.get("name") || "").trim(),
-    air_date: String(fd.get("air_date") || "").trim(),
+    air_datetime: airDateTimeFromForm("episode-start"),
   };
   const suffix = String(fd.get("twitch_suffix") || "").trim();
   if (suffix) body.twitch_suffix = suffix;
@@ -1511,6 +1737,8 @@ document.getElementById("episode-start-form").addEventListener("submit", async (
     }
     toast("episode started");
     ev.target.reset();
+    document.getElementById("episode-start-airtz").value = DEFAULT_AIR_TZ;
+    fillAirDateTime("episode-start", "");
     setSpotFile("start", null);
     await refreshAll();
   } catch (err) {
@@ -1613,7 +1841,7 @@ document.getElementById("episode-edit-form").addEventListener("submit", async (e
     name: document.getElementById("episode-edit-name").value.trim(),
     twitch_suffix: document.getElementById("episode-edit-suffix").value.trim(),
     name_full_template: document.getElementById("episode-edit-namefull").value.trim(),
-    air_date: document.getElementById("episode-edit-airdate").value.trim(),
+    air_datetime: airDateTimeFromForm("episode-edit"),
   };
   const btn = ev.target.querySelector('button[type="submit"]');
   btn.disabled = true;

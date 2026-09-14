@@ -80,8 +80,8 @@ func TestEpisodeTemplatesAndPublicGet(t *testing.T) {
 	if pub["episode_short"] != "EP20" || pub["state"] != "live" {
 		t.Fatalf("public: %+v", pub)
 	}
-	if _, ok := pub["air_date"]; !ok {
-		t.Fatalf("public missing air_date: %+v", pub)
+	if _, ok := pub["air_datetime"]; !ok {
+		t.Fatalf("public missing air_datetime: %+v", pub)
 	}
 	if _, ok := pub["spot_image"]; !ok {
 		t.Fatalf("public missing spot_image: %+v", pub)
@@ -349,7 +349,7 @@ func TestEpisodeAirDateAndSpot(t *testing.T) {
 	_ = json.Unmarshal(rec.Body.Bytes(), &tmplDTO)
 	tmplID := int64(tmplDTO["id"].(float64))
 
-	start := `{"template_id":` + strconv.FormatInt(tmplID, 10) + `,"episode":20,"name":"Creature Park","air_date":"2026-09-20"}`
+	start := `{"template_id":` + strconv.FormatInt(tmplID, 10) + `,"episode":20,"name":"Creature Park","air_datetime":"2026-09-20T20:00:00+02:00"}`
 	req = httptest.NewRequest(http.MethodPost, "/api/episodes", strings.NewReader(start))
 	req.SetBasicAuth("admin", "test-pass")
 	rec = httptest.NewRecorder()
@@ -361,15 +361,15 @@ func TestEpisodeAirDateAndSpot(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &ep); err != nil {
 		t.Fatal(err)
 	}
-	if ep.AirDate != "2026-09-20" {
-		t.Fatalf("start air_date: %q", ep.AirDate)
+	if ep.AirDateTime != "2026-09-20T20:00:00+02:00" {
+		t.Fatalf("start air_datetime: %q", ep.AirDateTime)
 	}
 	if ep.SpotImage != "" {
 		t.Fatalf("spot should be empty, got %q", ep.SpotImage)
 	}
 
 	idPath := "/api/episodes/" + strconv.FormatInt(ep.ID, 10)
-	req = httptest.NewRequest(http.MethodPatch, idPath, strings.NewReader(`{"air_date":"2026-10-01"}`))
+	req = httptest.NewRequest(http.MethodPatch, idPath, strings.NewReader(`{"air_datetime":"2026-10-01T20:00:00+02:00"}`))
 	req.SetBasicAuth("admin", "test-pass")
 	rec = httptest.NewRecorder()
 	s.httpServer.Handler.ServeHTTP(rec, req)
@@ -414,8 +414,8 @@ func TestEpisodeAirDateAndSpot(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &pub); err != nil {
 		t.Fatal(err)
 	}
-	if pub["air_date"] != "2026-10-01" {
-		t.Fatalf("public air_date: %+v", pub)
+	if pub["air_datetime"] != "2026-10-01T20:00:00+02:00" {
+		t.Fatalf("public air_datetime: %+v", pub)
 	}
 	spot, _ := pub["spot_image"].(string)
 	if !strings.HasPrefix(spot, "/media/episodes/") {

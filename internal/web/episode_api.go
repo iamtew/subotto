@@ -62,7 +62,7 @@ type episodeDTO struct {
 	TwitchSuffix     string               `json:"twitch_suffix"`
 	NameFullTemplate string               `json:"name_full_template"`
 	EpisodeNameFull  string               `json:"episode_name_full"`
-	AirDate          string               `json:"air_date"`
+	AirDateTime      string               `json:"air_datetime"`
 	SpotImage        string               `json:"spot_image"`
 	Since            string               `json:"since"`
 	State            string               `json:"state"` // live
@@ -82,7 +82,7 @@ func toEpisodeDTO(e db.Episode, listeners []episodeListenerDTO) episodeDTO {
 		TwitchSuffix:     e.TwitchSuffix,
 		NameFullTemplate: e.NameFullTemplate,
 		EpisodeNameFull:  e.NameFull(),
-		AirDate:          e.AirDate,
+		AirDateTime:      e.AirDateTime,
 		SpotImage:        e.SpotURL(),
 		Since:            e.ActiveFrom.UTC().Format(time.RFC3339),
 		State:            "live",
@@ -203,7 +203,7 @@ type startEpisodeBody struct {
 	Episode      int     `json:"episode"`
 	Name         string  `json:"name"`
 	TwitchSuffix *string `json:"twitch_suffix"` // nil = use template default
-	AirDate      string  `json:"air_date"`     // YYYY-MM-DD; empty = unset
+	AirDateTime  string  `json:"air_datetime"` // RFC3339 with offset; empty = unset
 }
 
 func (s *Server) handleStartEpisode(w http.ResponseWriter, r *http.Request) {
@@ -241,7 +241,7 @@ func (s *Server) handleStartEpisode(w http.ResponseWriter, r *http.Request) {
 		suffix = strings.TrimSpace(*body.TwitchSuffix)
 	}
 
-	ep, err := s.store.CreateEpisode(r.Context(), tmpl.Show, body.Episode, name, suffix, tmpl.NameFullTemplate, body.AirDate, tmpl.Listeners)
+	ep, err := s.store.CreateEpisode(r.Context(), tmpl.Show, body.Episode, name, suffix, tmpl.NameFullTemplate, body.AirDateTime, tmpl.Listeners)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
@@ -502,7 +502,7 @@ type patchEpisodeBody struct {
 	Name             *string `json:"name"`
 	TwitchSuffix     *string `json:"twitch_suffix"`
 	NameFullTemplate *string `json:"name_full_template"`
-	AirDate          *string `json:"air_date"`
+	AirDateTime      *string `json:"air_datetime"`
 }
 
 func (s *Server) handlePatchEpisode(w http.ResponseWriter, r *http.Request) {
@@ -516,12 +516,12 @@ func (s *Server) handlePatchEpisode(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
-	if body.Name == nil && body.TwitchSuffix == nil && body.NameFullTemplate == nil && body.AirDate == nil {
-		writeErr(w, http.StatusBadRequest, "provide name, twitch_suffix, name_full_template, and/or air_date")
+	if body.Name == nil && body.TwitchSuffix == nil && body.NameFullTemplate == nil && body.AirDateTime == nil {
+		writeErr(w, http.StatusBadRequest, "provide name, twitch_suffix, name_full_template, and/or air_datetime")
 		return
 	}
 
-	ep, err := s.store.UpdateEpisodeMutable(r.Context(), id, body.Name, body.TwitchSuffix, body.NameFullTemplate, body.AirDate)
+	ep, err := s.store.UpdateEpisodeMutable(r.Context(), id, body.Name, body.TwitchSuffix, body.NameFullTemplate, body.AirDateTime)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return

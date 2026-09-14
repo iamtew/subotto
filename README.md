@@ -15,7 +15,7 @@ Shipped in code:
 
 - **Content listeners** — Discord channel → YouTube playlist (start / cease)
 - **Picture listeners** — Discord channel → on-disk images + public OBS `/slideshow/...`
-- **Show episodes** — templates + start/cease + absorb live listeners + public `/api/get/episode/{show}` (`air_date`, `spot_image`)
+- **Show episodes** — templates + start/cease + absorb live listeners + public `/api/get/episode/{show}` (`air_datetime`, `spot_image`)
 - **Broadcasts** — named multi-channel Discord sends (Admin Fire or `GET /api/broadcasts/{slug}/fire` with Basic Auth `api` / `API_PASSWORD`)
 
 Parked: bi-weekly schedules, richer show-runner Discord announce.
@@ -28,7 +28,7 @@ Parked: bi-weekly schedules, richer show-runner Discord announce.
 - **Content:** detects YouTube links and adds them to that channel’s playlist.
 - **Pictures:** saves image attachments under `data/pictures/` and serves an OBS slideshow.
 - Both listener types may be live on the **same channel** at once.
-- **Episodes** group content + picture listeners for a show (Admin tab + Streamer.bot GET). Optional **air date** and **spot image** live on the episode (`data/episode-spots/`, public `/media/episodes/{id}/…`).
+- **Episodes** group content + picture listeners for a show (Admin tab + Streamer.bot GET). Optional **air datetime** (RFC3339 with offset, e.g. `2026-09-20T20:00:00+02:00`) and **spot image** live on the episode (`data/episode-spots/`, public `/media/episodes/{id}/…`).
 - Admin UI from `webroot/`; optional background history re-scan via `RESYNC_INTERVAL_HOURS`.
 
 Reactions on ingest: **💾** added · **♻️** DUPE · **🛑** OLD · **❌** failed.

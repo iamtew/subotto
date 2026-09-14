@@ -144,7 +144,7 @@ func (s *Server) handlePublicGetEpisode(w http.ResponseWriter, r *http.Request) 
 		"name":              ep.Name,
 		"twitch_suffix":     ep.TwitchSuffix,
 		"episode_name_full": ep.NameFull(),
-		"air_date":          ep.AirDate,
+		"air_datetime":      ep.AirDateTime,
 		"spot_image":        ep.SpotURL(),
 		"since":             ep.ActiveFrom.UTC().Format(time.RFC3339),
 		"state":             "live",

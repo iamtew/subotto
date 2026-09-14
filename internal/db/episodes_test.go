@@ -76,17 +76,17 @@ func TestEpisodeCRUDAndTemplateResolve(t *testing.T) {
 		t.Fatalf("pics: %v %v", pics, err)
 	}
 
-	if ep.AirDate != "2026-09-20" {
-		t.Fatalf("air date: %+v", ep)
+	if ep.AirDateTime != "2026-09-20T00:00:00+02:00" {
+		t.Fatalf("air datetime: %+v", ep)
 	}
 
 	name := "Renamed"
-	air := "2026-10-01"
+	air := "2026-09-20T20:00:00+02:00"
 	if _, err := store.UpdateEpisodeMutable(ctx, ep.ID, &name, nil, nil, &air); err != nil {
 		t.Fatal(err)
 	}
 	ep2, _ := store.GetEpisodeByID(ctx, ep.ID)
-	if ep2.Name != "Renamed" || ep2.Show != "Sesh Sofa" || ep2.Episode != 20 || ep2.AirDate != "2026-10-01" {
+	if ep2.Name != "Renamed" || ep2.Show != "Sesh Sofa" || ep2.Episode != 20 || ep2.AirDateTime != air {
 		t.Fatalf("mutable update: %+v", ep2)
 	}
 
@@ -109,5 +109,19 @@ func TestEpisodeCRUDAndTemplateResolve(t *testing.T) {
 	// New episode same show ok after cease.
 	if _, err := store.CreateEpisode(ctx, "Sesh Sofa", 21, "Next", "LIVE", "", "", nil); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestNormalizeAirDateTime(t *testing.T) {
+	got, err := NormalizeAirDateTime("2026-09-20T20:00:00+02:00")
+	if err != nil || got != "2026-09-20T20:00:00+02:00" {
+		t.Fatalf("rfc3339: %q %v", got, err)
+	}
+	got, err = NormalizeAirDateTime("2026-09-20")
+	if err != nil || got != "2026-09-20T00:00:00+02:00" {
+		t.Fatalf("legacy date: %q %v", got, err)
+	}
+	if _, err := NormalizeAirDateTime("2026-09-20T20:00:00"); err == nil {
+		t.Fatal("expected missing-offset error")
 	}
 }

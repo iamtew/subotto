@@ -248,7 +248,7 @@ CREATE TABLE IF NOT EXISTS episodes (
 	twitch_suffix TEXT NOT NULL DEFAULT '',
 	name_full_template TEXT NOT NULL DEFAULT '',
 	listeners_json TEXT NOT NULL DEFAULT '[]',
-	air_date TEXT NOT NULL DEFAULT '',
+	air_datetime TEXT NOT NULL DEFAULT '',
 	spot_path TEXT NOT NULL DEFAULT '',
 	created_at TEXT NOT NULL DEFAULT (datetime('now')),
 	active_from TEXT NOT NULL DEFAULT (datetime('now')),
@@ -305,15 +305,34 @@ CREATE TABLE IF NOT EXISTS episode_templates (
 			return fmt.Errorf("add episodes.listeners_json: %w", err)
 		}
 	}
-	if !epCols["air_date"] {
-		if _, err := d.sql.Exec(`ALTER TABLE episodes ADD COLUMN air_date TEXT NOT NULL DEFAULT ''`); err != nil {
-			return fmt.Errorf("add episodes.air_date: %w", err)
-		}
+	if err := d.migrateEpisodeAirDateTime(epCols); err != nil {
+		return err
 	}
 	if !epCols["spot_path"] {
 		if _, err := d.sql.Exec(`ALTER TABLE episodes ADD COLUMN spot_path TEXT NOT NULL DEFAULT ''`); err != nil {
 			return fmt.Errorf("add episodes.spot_path: %w", err)
 		}
+	}
+	return nil
+}
+
+// migrateEpisodeAirDateTime renames air_date → air_datetime and lifts YYYY-MM-DD to RFC3339 +02:00.
+func (d *DB) migrateEpisodeAirDateTime(epCols map[string]bool) error {
+	if epCols["air_date"] && !epCols["air_datetime"] {
+		if _, err := d.sql.Exec(`ALTER TABLE episodes RENAME COLUMN air_date TO air_datetime`); err != nil {
+			return fmt.Errorf("rename episodes.air_date: %w", err)
+		}
+	} else if !epCols["air_datetime"] {
+		if _, err := d.sql.Exec(`ALTER TABLE episodes ADD COLUMN air_datetime TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("add episodes.air_datetime: %w", err)
+		}
+	}
+	if _, err := d.sql.Exec(`
+		UPDATE episodes
+		SET air_datetime = air_datetime || 'T00:00:00+02:00'
+		WHERE length(trim(air_datetime)) = 10
+	`); err != nil {
+		return fmt.Errorf("backfill episodes.air_datetime: %w", err)
 	}
 	return nil
 }

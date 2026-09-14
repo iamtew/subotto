@@ -26,7 +26,7 @@ type Episode struct {
 	TwitchSuffix     string
 	NameFullTemplate string
 	Listeners        []EpisodeListenerStub // stub snapshot for rename re-resolve
-	AirDate          string                // YYYY-MM-DD calendar day; empty = unset
+	AirDateTime      string                // RFC3339 with offset, e.g. 2026-09-20T20:00:00+02:00
 	SpotPath         string                // basename under episode-spots/, e.g. 42.jpg
 	CreatedAt        time.Time
 	ActiveFrom       time.Time
@@ -117,26 +117,33 @@ func (e Episode) SpotURL() string {
 	return fmt.Sprintf("/media/episodes/%d/%s", e.ID, filepath.Base(e.SpotPath))
 }
 
-// NormalizeAirDate accepts YYYY-MM-DD or empty. Rejects anything else.
-func NormalizeAirDate(s string) (string, error) {
+// NormalizeAirDateTime accepts RFC3339 with offset, a legacy YYYY-MM-DD (midnight +02:00), or empty.
+func NormalizeAirDateTime(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return "", nil
 	}
-	if _, err := time.Parse("2006-01-02", s); err != nil {
-		return "", fmt.Errorf("air_date must be YYYY-MM-DD")
+	if len(s) == 10 {
+		if _, err := time.Parse("2006-01-02", s); err != nil {
+			return "", fmt.Errorf("air_datetime must be RFC3339 with offset, e.g. 2026-09-20T20:00:00+02:00")
+		}
+		return s + "T00:00:00+02:00", nil
 	}
-	return s, nil
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return "", fmt.Errorf("air_datetime must be RFC3339 with offset, e.g. 2026-09-20T20:00:00+02:00")
+	}
+	return t.Format("2006-01-02T15:04:05Z07:00"), nil
 }
 
 const episodeSelectCols = `
 	id, show_name, show_slug, episode_num, name, twitch_suffix, name_full_template,
-	listeners_json, air_date, spot_path, created_at, active_from, active_until
+	listeners_json, air_datetime, spot_path, created_at, active_from, active_until
 `
 
 // CreateEpisode opens a new live episode. Fails if show_slug already has a live one.
 // stubs are snapshotted so a later name change can re-resolve listener labels.
-func (d *DB) CreateEpisode(ctx context.Context, show string, episode int, name, twitchSuffix, nameFullTemplate, airDate string, stubs []EpisodeListenerStub) (*Episode, error) {
+func (d *DB) CreateEpisode(ctx context.Context, show string, episode int, name, twitchSuffix, nameFullTemplate, airDateTime string, stubs []EpisodeListenerStub) (*Episode, error) {
 	show = strings.TrimSpace(show)
 	name = strings.TrimSpace(name)
 	twitchSuffix = strings.TrimSpace(twitchSuffix)
@@ -160,7 +167,7 @@ func (d *DB) CreateEpisode(ctx context.Context, show string, episode int, name, 
 	if stubs == nil {
 		stubs = []EpisodeListenerStub{}
 	}
-	airDate, err := NormalizeAirDate(airDate)
+	airDateTime, err := NormalizeAirDateTime(airDateTime)
 	if err != nil {
 		return nil, err
 	}
@@ -181,9 +188,9 @@ func (d *DB) CreateEpisode(ctx context.Context, show string, episode int, name, 
 	res, err := d.sql.ExecContext(ctx, `
 		INSERT INTO episodes (
 			show_name, show_slug, episode_num, name, twitch_suffix, name_full_template,
-			listeners_json, air_date, spot_path, created_at, active_from, active_until
+			listeners_json, air_datetime, spot_path, created_at, active_from, active_until
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, NULL)
-	`, show, slug, episode, name, twitchSuffix, tmpl, string(stubsJSON), airDate, now, now)
+	`, show, slug, episode, name, twitchSuffix, tmpl, string(stubsJSON), airDateTime, now, now)
 	if err != nil {
 		return nil, fmt.Errorf("insert episode: %w", err)
 	}
@@ -259,8 +266,8 @@ func (d *DB) ListLiveEpisodes(ctx context.Context) ([]Episode, error) {
 	return out, nil
 }
 
-// UpdateEpisodeMutable patches name / twitch_suffix / name_full_template / air_date.
-func (d *DB) UpdateEpisodeMutable(ctx context.Context, id int64, name, twitchSuffix, nameFullTemplate, airDate *string) (*Episode, error) {
+// UpdateEpisodeMutable patches name / twitch_suffix / name_full_template / air_datetime.
+func (d *DB) UpdateEpisodeMutable(ctx context.Context, id int64, name, twitchSuffix, nameFullTemplate, airDateTime *string) (*Episode, error) {
 	e, err := d.GetEpisodeByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -275,7 +282,7 @@ func (d *DB) UpdateEpisodeMutable(ctx context.Context, id int64, name, twitchSuf
 	newName := e.Name
 	newSuffix := e.TwitchSuffix
 	newTmpl := e.NameFullTemplate
-	newAir := e.AirDate
+	newAir := e.AirDateTime
 	if name != nil {
 		newName = strings.TrimSpace(*name)
 		if newName == "" {
@@ -291,8 +298,8 @@ func (d *DB) UpdateEpisodeMutable(ctx context.Context, id int64, name, twitchSuf
 			newTmpl = DefaultEpisodeNameFullTemplate
 		}
 	}
-	if airDate != nil {
-		newAir, err = NormalizeAirDate(*airDate)
+	if airDateTime != nil {
+		newAir, err = NormalizeAirDateTime(*airDateTime)
 		if err != nil {
 			return nil, err
 		}
@@ -300,7 +307,7 @@ func (d *DB) UpdateEpisodeMutable(ctx context.Context, id int64, name, twitchSuf
 
 	_, err = d.sql.ExecContext(ctx, `
 		UPDATE episodes
-		SET name = ?, twitch_suffix = ?, name_full_template = ?, air_date = ?
+		SET name = ?, twitch_suffix = ?, name_full_template = ?, air_datetime = ?
 		WHERE id = ? AND active_until IS NULL
 	`, newName, newSuffix, newTmpl, newAir, id)
 	if err != nil {
@@ -719,7 +726,7 @@ func scanEpisode(row scannable) (*Episode, error) {
 		&e.TwitchSuffix,
 		&e.NameFullTemplate,
 		&stubsRaw,
-		&e.AirDate,
+		&e.AirDateTime,
 		&e.SpotPath,
 		&createdAt,
 		&activeFrom,
@@ -729,7 +736,7 @@ func scanEpisode(row scannable) (*Episode, error) {
 		return nil, err
 	}
 	e.Listeners = []EpisodeListenerStub{}
-	e.AirDate = strings.TrimSpace(e.AirDate)
+	e.AirDateTime = strings.TrimSpace(e.AirDateTime)
 	e.SpotPath = strings.TrimSpace(e.SpotPath)
 	if strings.TrimSpace(stubsRaw) != "" {
 		dec := json.NewDecoder(strings.NewReader(stubsRaw))
