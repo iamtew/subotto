@@ -5,6 +5,9 @@
 # ============================================
 # No Docker. Native Go binaries only.
 # Meat Bag: install Just from https://github.com/casey/just
+#
+# Cursor / Git for Windows run recipes with sh, not cmd.exe.
+# Keep recipe bodies POSIX (rm, GOOS=linux go build). powershell.exe is fine to call.
 
 # Default: list all recipes so you can see what's available
 default:
@@ -92,21 +95,19 @@ build:
 # ---------- PROD (Linux) ----------
 
 # Cross-compile a Linux binary from Windows (copy this to the VPS).
-# Just sets GOOS/GOARCH for this recipe — works on PowerShell and cmd.
 build-linux:
     GOOS=linux GOARCH=amd64 go build -o bin/subotto-linux ./cmd/subotto
 
-# Build Linux binary and zip a deployable drop (no .env / no SQLite secrets).
+# Wipe bin/dist, rebuild Linux binary, zip webroot + binary (no .env / no SQLite).
 # Output: dist/subotto-linux.zip — see docs/DEPLOY.md
-package-linux: build-linux
+package-linux: clean build-linux
     powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-linux.ps1
 
 # ---------- Utility ----------
 
-# Clean build artifacts (cmd.exe syntax; Just's default shell on Windows)
+# Clean build artifacts (sh: Git Bash / Cursor)
 clean:
-    if exist bin rmdir /s /q bin
-    if exist dist rmdir /s /q dist
+    rm -rf bin dist
 
 # Run all Go tests
 test:
