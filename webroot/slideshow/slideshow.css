@@ -282,6 +282,20 @@ html, body {
   word-break: break-word;
 }
 
+.comment-text strong,
+.comment-text em,
+.comment-text u,
+.comment-text del {
+  font-size: inherit;
+}
+
+.comment-text code {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.9em;
+  font-weight: 500;
+  opacity: 0.88;
+}
+
 .comment-text .comment-emoji {
   width: 1.15em;
   height: 1.15em;

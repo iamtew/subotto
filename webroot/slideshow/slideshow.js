@@ -531,26 +531,72 @@
     return img;
   }
 
+  // Discord-ish overlay: keep bold/italic/underline/strike/code, drop links
+  // and headers, then paint custom emoji + Twemoji. Escape before any tags.
+  function escComment(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
   function renderComment(el, text) {
     el.textContent = "";
-    const customRe = /<(a?):([a-zA-Z0-9_]+):(\d+)>/g;
-    let last = 0;
-    let m;
-    while ((m = customRe.exec(text))) {
-      appendTwemojiText(el, text.slice(last, m.index));
-      const parsed = {
-        kind: "discord",
-        name: m[2],
-        id: m[3],
-        animated: m[1] === "a",
-      };
-      const key = (parsed.animated ? "a:" : "") + parsed.name + ":" + parsed.id;
-      const img = makeEmoteImg(key, parsed);
+    const slots = [];
+    const stash = (html) => {
+      const i = slots.length;
+      slots.push(html);
+      return "\u0000" + i + "\u0000";
+    };
+    let s = String(text || "");
+
+    s = s.replace(/<(a?):([a-zA-Z0-9_]+):(\d+)>/g, (_, a, name, id) => {
+      const key = (a === "a" ? "a:" : "") + name + ":" + id;
+      return stash('<span data-emote="' + key + '"></span>');
+    });
+
+    s = s.replace(/```([\s\S]*?)```/g, "$1");
+    s = s.replace(/`([^`]+)`/g, (_, code) => stash("<code>" + escComment(code) + "</code>"));
+
+    s = s.replace(/\[([^\]]+)\]\(\s*<(https?:\/\/[^>\s]+)>\s*\)/gi, "$1");
+    s = s.replace(/\[([^\]]+)\]\(\s*(https?:\/\/[^)\s]+)\s*\)/gi, "$1");
+    s = s.replace(/<(https?:\/\/[^>\s]+)>/gi, "");
+    s = s.replace(/https?:\/\/[^\s<]+/gi, (url) => {
+      const m = /[),.;!?]+$/.exec(url);
+      return m ? m[0] : "";
+    });
+
+    s = s.replace(/^#{1,3}[ \t]+/gm, "");
+
+    s = escComment(s);
+    s = s.replace(/\*\*\*([^*\n]+)\*\*\*/g, "<strong><em>$1</em></strong>");
+    s = s.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+    s = s.replace(/__([^_\n]+)__/g, "<u>$1</u>");
+    s = s.replace(/~~([^~\n]+)~~/g, "<del>$1</del>");
+    s = s.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
+    s = s.replace(/(^|[\s(])_([^_\n]+)_/g, "$1<em>$2</em>");
+
+    el.innerHTML = s.replace(/\u0000(\d+)\u0000/g, (_, i) => slots[Number(i)] || "");
+
+    const emotes = el.querySelectorAll("[data-emote]");
+    for (let i = 0; i < emotes.length; i++) {
+      const span = emotes[i];
+      const key = span.getAttribute("data-emote") || "";
+      const img = makeEmoteImg(key, parseReactionKey(key));
       img.className = "comment-emoji";
-      el.appendChild(img);
-      last = m.index + m[0].length;
+      span.replaceWith(img);
     }
-    appendTwemojiText(el, text.slice(last));
+
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      if (!n.nodeValue || !/\p{Extended_Pictographic}/u.test(n.nodeValue)) continue;
+      const frag = document.createDocumentFragment();
+      appendTwemojiText(frag, n.nodeValue);
+      n.parentNode.replaceChild(frag, n);
+    }
   }
 
   function appendTwemojiText(el, str) {
