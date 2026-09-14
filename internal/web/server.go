@@ -45,6 +45,7 @@ type DiscordCatalog interface {
 // *scheduler.Scheduler matches this; nil means "not wired / disabled view".
 type SchedulerStatus interface {
 	Info() scheduler.Info
+	Reload()
 }
 
 // Server is the integrated Admin HTTP server (static files + /api/...).
@@ -62,6 +63,7 @@ type Server struct {
 	httpServer  *http.Server
 	startedAt   time.Time
 	youtubeName string // optional; filled by Ping at boot if available
+	envHours    int    // RESYNC_INTERVAL_HOURS until Admin saves scheduler row
 
 	// createPlaylistFn lets tests stub YouTube playlist create (episode start).
 	createPlaylistFn func(ctx context.Context, title, description string) (string, error)
@@ -82,7 +84,8 @@ type Options struct {
 	AdminHost      string
 	AdminPort      int
 	Webroot        string // folder with index.html / css / js; default ./webroot
-	YouTubeChannel string // display name from Ping, may be empty
+	YouTubeChannel      string // display name from Ping, may be empty
+	ResyncIntervalHours int    // .env bootstrap for GET until Admin saves
 }
 
 // New builds an Admin server (does not listen yet — call Start).
@@ -127,6 +130,7 @@ func New(opts Options) (*Server, error) {
 		addr:        net.JoinHostPort(host, fmt.Sprintf("%d", port)),
 		startedAt:   time.Now().UTC(),
 		youtubeName: opts.YouTubeChannel,
+		envHours:    opts.ResyncIntervalHours,
 	}
 
 	mux := http.NewServeMux()

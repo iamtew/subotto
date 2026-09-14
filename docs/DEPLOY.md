@@ -44,7 +44,7 @@ You already authorized on Windows; the refresh token lives in SQLite, not in `.e
 | `processed_videos` | Content dedup history |
 | `picture_listeners` | Picture listeners / epochs |
 | `collected_pictures` | Saved image metadata (+ reactions) |
-| `activity_log` / `app_settings` | Ops / settings |
+| `activity_log` / `app_settings` | Ops / settings (including Scheduler tab: interval, amount, listener targets) |
 | `episodes` / `episode_templates` | Show episodes |
 | `broadcasts` | Named Discord broadcasts |
 

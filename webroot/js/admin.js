@@ -10,6 +10,7 @@ const TAB_REGISTRY = [
   { id: "episodes", label: "Episodes" },
   { id: "content", label: "Content listeners" },
   { id: "pictures", label: "Picture listeners" },
+  { id: "scheduler", label: "Scheduler" },
   { id: "broadcasts", label: "Broadcasts" },
   { id: "chat", label: "Chat" },
 ];
@@ -91,6 +92,9 @@ function activateTab(id) {
     panel.hidden = panel.getAttribute("data-tab") !== id;
   });
   syncChatPoll();
+  if (id === "scheduler") {
+    loadSchedulerTab();
+  }
 }
 
 /* ---------- Digital camo backdrop (noise → quantized pixels, no tile) ---------- */
@@ -1098,6 +1102,96 @@ async function loadPictureAnnounce() {
   }
 }
 
+let cachedSchedSettings = { interval_hours: 0, limit: 100, scope: "all", targets: [] };
+
+function schedListenerLabel(row) {
+  const name = (row.name || "").trim() || "unnamed";
+  const chName = (row.discord_channel_name || "").trim();
+  const ch = chName ? "#" + chName : row.discord_channel_id || "";
+  const paused = row.enabled ? "" : " (paused)";
+  return name + " · " + ch + paused;
+}
+
+function renderSchedCheckList(host, rows, kind, selected) {
+  if (!host) return;
+  if (!rows.length) {
+    host.innerHTML = `<p class="empty">none</p>`;
+    return;
+  }
+  const want = new Set(
+    (selected || [])
+      .filter((t) => t.kind === kind)
+      .map((t) => t.channel_id)
+  );
+  host.innerHTML = rows
+    .map((row) => {
+      const id = row.discord_channel_id;
+      const checked = want.has(id) ? " checked" : "";
+      return `<label class="check">
+        <input type="checkbox" name="sched_target" value="${esc(kind)}:${esc(id)}"${checked}>
+        <span>${esc(schedListenerLabel(row))}</span>
+      </label>`;
+    })
+    .join("");
+}
+
+function syncSchedScope() {
+  const form = document.getElementById("scheduler-form");
+  const box = document.getElementById("sched-targets");
+  if (!form || !box) return;
+  const scope = (form.querySelector('input[name="scope"]:checked') || {}).value || "all";
+  box.classList.toggle("is-all", scope === "all");
+}
+
+function renderSchedGlance() {
+  const el = document.getElementById("scheduler-glance");
+  if (!el) return;
+  const s = cachedStatus;
+  if (!s) {
+    el.textContent = "";
+    return;
+  }
+  if (!s.scheduler_enabled) {
+    el.textContent = "Ticker is off.";
+    return;
+  }
+  const last = s.scheduler_last_run_at
+    ? new Date(s.scheduler_last_run_at).toLocaleString()
+    : "never";
+  const err = s.scheduler_last_error ? " · last error: " + s.scheduler_last_error : "";
+  el.textContent = "On · every " + (s.resync_interval_hours || "?") + "h · last run " + last + err;
+}
+
+async function loadSchedulerTab() {
+  renderSchedGlance();
+  try {
+    const data = await api("/api/settings/resync-scheduler");
+    cachedSchedSettings = data;
+    document.getElementById("sched-interval").value = data.interval_hours ?? 0;
+    document.getElementById("sched-limit").value = data.limit ?? 100;
+    const scope = data.scope === "selected" ? "selected" : "all";
+    const radios = document.querySelectorAll('#scheduler-form input[name="scope"]');
+    radios.forEach((r) => {
+      r.checked = r.value === scope;
+    });
+    renderSchedCheckList(
+      document.getElementById("sched-content-list"),
+      cachedListens || [],
+      "content",
+      data.targets || []
+    );
+    renderSchedCheckList(
+      document.getElementById("sched-picture-list"),
+      cachedPictureListens || [],
+      "picture",
+      data.targets || []
+    );
+    syncSchedScope();
+  } catch (err) {
+    toast("scheduler load failed: " + err.message, true);
+  }
+}
+
 async function refreshAll() {
   await Promise.all([
     loadStatus(),
@@ -1108,6 +1202,7 @@ async function refreshAll() {
     loadBroadcasts(),
     loadActivity(),
     loadUnlinked(),
+    loadSchedulerTab(),
   ]);
   renderStatusDashboard();
 }
@@ -2481,6 +2576,45 @@ document.getElementById("picture-form").addEventListener("submit", async (ev) =>
   } finally {
     btn.disabled = false;
   }
+});
+
+document.getElementById("scheduler-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const form = ev.target;
+  const btn = form.querySelector('button[type="submit"]');
+  const fd = new FormData(form);
+  const scope = fd.get("scope") || "all";
+  const targets = [];
+  form.querySelectorAll('input[name="sched_target"]:checked').forEach((el) => {
+    const parts = String(el.value || "").split(":");
+    if (parts.length < 2) return;
+    const kind = parts[0];
+    const channel_id = parts.slice(1).join(":");
+    if (kind && channel_id) targets.push({ kind, channel_id });
+  });
+  btn.disabled = true;
+  try {
+    await api("/api/settings/resync-scheduler", {
+      method: "PUT",
+      body: JSON.stringify({
+        interval_hours: Number(fd.get("interval_hours") || 0),
+        limit: Number(fd.get("limit") || 100),
+        scope,
+        targets,
+      }),
+    });
+    toast("scheduler saved");
+    await loadStatus();
+    renderSchedGlance();
+  } catch (err) {
+    toast("scheduler save failed: " + err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("scheduler-form").addEventListener("change", (ev) => {
+  if (ev.target && ev.target.name === "scope") syncSchedScope();
 });
 
 document.getElementById("announce-form").addEventListener("submit", async (ev) => {

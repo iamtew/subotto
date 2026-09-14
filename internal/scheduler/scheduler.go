@@ -1,9 +1,8 @@
 // Package scheduler runs optional background channel re-scans.
 //
-// Meat Bag: set RESYNC_INTERVAL_HOURS in .env to a positive number (e.g. 6)
-// and Subotto will periodically walk recent messages in every *enabled*
-// mapping — same path as Admin "Resync", including status chrome.
-// Leave it at 0 and this package does nothing (live Discord posts still work).
+// Meat Bag: the Admin Scheduler tab owns interval, message amount, and which
+// listeners to walk. RESYNC_INTERVAL_HOURS in .env is only used until the first
+// Admin save. Interval 0 = off. Live Discord posts still work either way.
 package scheduler
 
 import (
@@ -17,11 +16,7 @@ import (
 	"subotto/internal/youtube"
 )
 
-// Default message cap per scheduled channel scan (same as CLI default).
-const defaultResyncLimit = 100
-
-// resyncFn is the history-scan function. Production uses discord.ResyncChannel;
-// tests inject a fake so we do not talk to Discord.
+// resyncFn is the content history-scan. Production uses discord.ResyncChannel.
 type resyncFn func(
 	ctx context.Context,
 	token string,
@@ -31,15 +26,24 @@ type resyncFn func(
 	limit int,
 ) (*discord.ResyncSummary, error)
 
-// Scheduler ticks every N hours and re-scans enabled mappings.
+// pictureResyncFn is the picture history-scan.
+type pictureResyncFn func(
+	ctx context.Context,
+	token string,
+	store *db.DB,
+	channelID string,
+	limit int,
+) (*discord.PictureResyncSummary, error)
+
+// Scheduler ticks every N hours and re-scans selected listeners.
 type Scheduler struct {
 	store        *db.DB
 	yt           *youtube.Client
 	discordToken string
-	interval     time.Duration
-	hours        int // original config value for /api/status
-	limit        int
+	envHours     int // .env fallback until Admin saves a row
 	resync       resyncFn
+	picture      pictureResyncFn
+	reload       chan struct{}
 
 	mu        sync.Mutex
 	lastRunAt time.Time
@@ -51,44 +55,50 @@ type Options struct {
 	Store               *db.DB
 	YouTube             *youtube.Client
 	DiscordToken        string
-	ResyncIntervalHours int
-	// ResyncLimit caps messages per channel per tick (0 = default 100).
-	ResyncLimit int
+	ResyncIntervalHours int // env bootstrap when no DB row
 }
 
 // Info is a snapshot for the Admin /api/status endpoint.
 type Info struct {
 	Enabled       bool   `json:"scheduler_enabled"`
 	IntervalHours int    `json:"resync_interval_hours"`
+	Limit         int    `json:"resync_limit,omitempty"`
 	LastRunAt     string `json:"scheduler_last_run_at,omitempty"`
 	LastError     string `json:"scheduler_last_error,omitempty"`
 }
 
-// New builds a scheduler. IntervalHours <= 0 means disabled (Run is a no-op).
+// New builds a scheduler. Run always blocks until ctx cancel so Admin can
+// enable the ticker later without a process restart.
 func New(opts Options) *Scheduler {
-	limit := opts.ResyncLimit
-	if limit <= 0 {
-		limit = defaultResyncLimit
-	}
-	hours := opts.ResyncIntervalHours
-	var interval time.Duration
-	if hours > 0 {
-		interval = time.Duration(hours) * time.Hour
-	}
 	return &Scheduler{
 		store:        opts.Store,
 		yt:           opts.YouTube,
 		discordToken: opts.DiscordToken,
-		interval:     interval,
-		hours:        hours,
-		limit:        limit,
+		envHours:     opts.ResyncIntervalHours,
 		resync:       discord.ResyncChannel,
+		picture:      discord.ResyncPictureChannel,
+		reload:       make(chan struct{}, 1),
 	}
 }
 
-// Enabled reports whether background resync is configured.
+func (s *Scheduler) loadCfg(ctx context.Context) db.ResyncScheduler {
+	if s == nil || s.store == nil {
+		return db.DefaultResyncScheduler(0)
+	}
+	cfg, err := s.store.LoadResyncScheduler(ctx, s.envHours)
+	if err != nil {
+		slog.Error("scheduler could not load settings", "err", err)
+		return db.DefaultResyncScheduler(s.envHours)
+	}
+	return cfg
+}
+
+// Enabled reports whether background resync is on (interval > 0).
 func (s *Scheduler) Enabled() bool {
-	return s != nil && s.hours > 0
+	if s == nil {
+		return false
+	}
+	return s.loadCfg(context.Background()).IntervalHours > 0
 }
 
 // Info returns a thread-safe status snapshot for the Admin UI.
@@ -96,11 +106,13 @@ func (s *Scheduler) Info() Info {
 	if s == nil {
 		return Info{Enabled: false, IntervalHours: 0}
 	}
+	cfg := s.loadCfg(context.Background())
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	info := Info{
-		Enabled:       s.hours > 0,
-		IntervalHours: s.hours,
+		Enabled:       cfg.IntervalHours > 0,
+		IntervalHours: cfg.IntervalHours,
+		Limit:         cfg.Limit,
 		LastError:     s.lastErr,
 	}
 	if !s.lastRunAt.IsZero() {
@@ -109,60 +121,90 @@ func (s *Scheduler) Info() Info {
 	return info
 }
 
-// Run blocks until ctx is cancelled. When disabled, returns immediately.
-func (s *Scheduler) Run(ctx context.Context) {
-	if s == nil || s.hours <= 0 {
-		slog.Info("scheduler disabled (RESYNC_INTERVAL_HOURS is 0 or unset)")
+// Reload wakes the wait loop so a settings save does not sit out the old interval.
+func (s *Scheduler) Reload() {
+	if s == nil {
 		return
 	}
+	select {
+	case s.reload <- struct{}{}:
+	default:
+	}
+}
 
-	slog.Info("scheduler started",
-		"interval_hours", s.hours,
-		"resync_limit", s.limit,
-	)
-
-	// First tick waits a full interval so boot does not hammer YouTube quota.
-	ticker := time.NewTicker(s.interval)
-	defer ticker.Stop()
+// Run blocks until ctx is cancelled. Interval 0 waits for Reload (or cancel).
+func (s *Scheduler) Run(ctx context.Context) {
+	if s == nil {
+		return
+	}
+	slog.Info("scheduler loop started (Admin Scheduler tab; interval 0 = idle)")
 
 	for {
+		if err := ctx.Err(); err != nil {
+			slog.Info("scheduler stopped")
+			return
+		}
+		cfg := s.loadCfg(ctx)
+		if cfg.IntervalHours <= 0 {
+			slog.Info("scheduler idle (interval 0)")
+			select {
+			case <-ctx.Done():
+				slog.Info("scheduler stopped")
+				return
+			case <-s.reload:
+				continue
+			}
+		}
+
+		interval := time.Duration(cfg.IntervalHours) * time.Hour
+		slog.Info("scheduler waiting",
+			"interval_hours", cfg.IntervalHours,
+			"resync_limit", cfg.Limit,
+			"scope", cfg.Scope,
+		)
 		select {
 		case <-ctx.Done():
 			slog.Info("scheduler stopped")
 			return
-		case <-ticker.C:
-			s.runOnce(ctx)
+		case <-s.reload:
+			continue
+		case <-time.After(interval):
+			s.runOnceCfg(ctx, cfg)
 		}
 	}
 }
 
-// runOnce scans every enabled mapping. Exported-ish for tests via runOnce.
 func (s *Scheduler) runOnce(ctx context.Context) {
+	s.runOnceCfg(ctx, s.loadCfg(ctx))
+}
+
+func (s *Scheduler) runOnceCfg(ctx context.Context, cfg db.ResyncScheduler) {
 	if err := ctx.Err(); err != nil {
 		return
 	}
 
 	_ = s.store.LogActivity(ctx, "resync_scheduled_started", map[string]any{
 		"source":         "scheduler",
-		"interval_hours": s.hours,
-		"limit":          s.limit,
+		"interval_hours": cfg.IntervalHours,
+		"limit":          cfg.Limit,
+		"scope":          cfg.Scope,
 	}, true)
+
+	var ran, failed int
+	var firstErr error
 
 	list, err := s.store.ListMappings(ctx)
 	if err != nil {
 		s.record(err)
-		slog.Error("scheduler could not list mappings", "err", err)
+		slog.Error("scheduler could not list content listeners", "err", err)
 		_ = s.store.LogActivity(ctx, "resync_scheduled_finished", map[string]any{
 			"source": "scheduler",
 			"error":  err.Error(),
 		}, false)
 		return
 	}
-
-	var ran, failed int
-	var firstErr error
 	for _, m := range list {
-		if !m.Enabled {
+		if !m.Enabled || !cfg.Wants(db.ResyncKindContent, m.DiscordChannelID) {
 			continue
 		}
 		if err := ctx.Err(); err != nil {
@@ -170,19 +212,61 @@ func (s *Scheduler) runOnce(ctx context.Context) {
 			return
 		}
 		ran++
-		slog.Info("scheduler resync starting",
+		slog.Info("scheduler content resync starting",
 			"channel", m.DiscordChannelID,
 			"playlist", m.YouTubePlaylistID,
 			"name", m.Name,
 		)
-		_, err := s.resync(ctx, s.discordToken, s.store, s.yt, m.DiscordChannelID, s.limit)
+		_, err := s.resync(ctx, s.discordToken, s.store, s.yt, m.DiscordChannelID, cfg.Limit)
 		if err != nil {
 			failed++
 			if firstErr == nil {
 				firstErr = err
 			}
-			slog.Warn("scheduler resync failed",
+			slog.Warn("scheduler content resync failed",
 				"channel", m.DiscordChannelID,
+				"err", err,
+			)
+		}
+	}
+
+	pics, err := s.store.ListPictureListeners(ctx)
+	if err != nil {
+		if firstErr == nil {
+			firstErr = err
+		}
+		s.record(firstErr)
+		slog.Error("scheduler could not list picture listeners", "err", err)
+		_ = s.store.LogActivity(ctx, "resync_scheduled_finished", map[string]any{
+			"source":           "scheduler",
+			"channels_scanned": ran,
+			"channels_failed":  failed,
+			"error":            err.Error(),
+		}, false)
+		return
+	}
+	for _, p := range pics {
+		if !p.Enabled || !cfg.Wants(db.ResyncKindPicture, p.DiscordChannelID) {
+			continue
+		}
+		if err := ctx.Err(); err != nil {
+			s.record(err)
+			return
+		}
+		ran++
+		slog.Info("scheduler picture resync starting",
+			"channel", p.DiscordChannelID,
+			"slug", p.Slug,
+			"name", p.Name,
+		)
+		_, err := s.picture(ctx, s.discordToken, s.store, p.DiscordChannelID, cfg.Limit)
+		if err != nil {
+			failed++
+			if firstErr == nil {
+				firstErr = err
+			}
+			slog.Warn("scheduler picture resync failed",
+				"channel", p.DiscordChannelID,
 				"err", err,
 			)
 		}

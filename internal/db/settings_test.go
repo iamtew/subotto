@@ -112,3 +112,47 @@ func TestValidateAnnounceTemplate(t *testing.T) {
 		t.Fatal("whitespace-only should normalize to empty")
 	}
 }
+
+func TestResyncSchedulerLoadSaveAndWants(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "sched.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	ctx := context.Background()
+
+	got, err := store.LoadResyncScheduler(ctx, 6)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.IntervalHours != 6 || got.Limit != DefaultResyncLimit || got.Scope != ResyncScopeAll {
+		t.Fatalf("env fallback: %+v", got)
+	}
+
+	saved, err := store.SaveResyncScheduler(ctx, ResyncScheduler{
+		IntervalHours: 3,
+		Limit:         25,
+		Scope:         ResyncScopeSelected,
+		Targets: []ResyncTarget{
+			{Kind: ResyncKindContent, ChannelID: "111"},
+			{Kind: ResyncKindPicture, ChannelID: "111"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !saved.Wants(ResyncKindContent, "111") || saved.Wants(ResyncKindContent, "222") {
+		t.Fatalf("wants: %+v", saved)
+	}
+
+	again, err := store.LoadResyncScheduler(ctx, 99)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.IntervalHours != 3 || again.Limit != 25 || again.Scope != ResyncScopeSelected {
+		t.Fatalf("db wins over env: %+v", again)
+	}
+	if len(again.Targets) != 2 {
+		t.Fatalf("targets: %+v", again.Targets)
+	}
+}

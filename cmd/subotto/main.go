@@ -164,18 +164,19 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 	})
 
 	admin, err := web.New(web.Options{
-		Store:          store,
-		YouTube:        yt,
-		Status:         bot,
-		Scheduler:      sched,
-		Discord:        bot,
-		DiscordToken:   cfg.DiscordBotToken,
-		AdminPassword:  cfg.AdminPassword,
-		APIPassword:    cfg.APIPassword,
-		AdminHost:      cfg.AdminHost,
-		AdminPort:      cfg.AdminPort,
-		Webroot:        "webroot",
-		YouTubeChannel: ytChannel,
+		Store:               store,
+		YouTube:             yt,
+		Status:              bot,
+		Scheduler:           sched,
+		Discord:             bot,
+		DiscordToken:        cfg.DiscordBotToken,
+		AdminPassword:       cfg.AdminPassword,
+		APIPassword:         cfg.APIPassword,
+		AdminHost:           cfg.AdminHost,
+		AdminPort:           cfg.AdminPort,
+		Webroot:             "webroot",
+		YouTubeChannel:      ytChannel,
+		ResyncIntervalHours: cfg.ResyncIntervalHours,
 	})
 	if err != nil {
 		slog.Error("failed to create admin UI server", "err", err)
@@ -198,8 +199,8 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 	slog.Info("listening for content + picture listeners — Ctrl+C to stop")
 	slog.Info("Admin UI ready", "url", fmt.Sprintf("http://%s", admin.Addr()), "user", "admin")
 	slog.Info("public slideshow", "latest", fmt.Sprintf("http://%s/slideshow/latest", admin.Addr()))
-	if sched.Enabled() {
-		slog.Info("background resync enabled", "interval_hours", cfg.ResyncIntervalHours)
+	if info := sched.Info(); info.Enabled {
+		slog.Info("background resync enabled", "interval_hours", info.IntervalHours, "resync_limit", info.Limit)
 	}
 
 	stop := make(chan os.Signal, 1)

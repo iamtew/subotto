@@ -766,6 +766,51 @@ main {
   gap: 0.85rem;
 }
 
+.sched-scope {
+  border: 1px solid var(--line, rgba(154, 172, 98, 0.25));
+  padding: 0.7rem 0.9rem;
+  margin: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.sched-scope legend {
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--olive);
+}
+
+.sched-targets {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+}
+
+.sched-targets h3 {
+  margin: 0 0 0.4rem;
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  font-weight: 400;
+}
+
+.sched-check-list {
+  display: grid;
+  gap: 0.25rem;
+  max-height: 16rem;
+  overflow: auto;
+}
+
+.sched-targets.is-all {
+  opacity: 0.45;
+}
+
+#scheduler-glance {
+  margin: 0 0 0.8rem;
+}
+
 #episode-edit-form {
   max-width: 48rem;
 }

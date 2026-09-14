@@ -29,7 +29,7 @@ Parked: bi-weekly schedules, richer show-runner Discord announce.
 - **Pictures:** saves image attachments under `data/pictures/` and serves an OBS slideshow.
 - Both listener types may be live on the **same channel** at once.
 - **Episodes** group content + picture listeners for a show (Admin tab + Streamer.bot GET). Optional **air datetime** (RFC3339 with offset, e.g. `2026-09-20T20:00:00+02:00`) and **spot image** live on the episode (`data/episode-spots/`, public `/media/episodes/{id}/…`).
-- Admin UI from `webroot/`; optional background history re-scan via `RESYNC_INTERVAL_HOURS`.
+- Admin UI from `webroot/`; background history re-scan from the **Scheduler** tab (`RESYNC_INTERVAL_HOURS` is only a bootstrap until you save there).
 
 Reactions on ingest: **💾** added · **♻️** DUPE · **🛑** OLD · **❌** failed.
 
@@ -62,7 +62,7 @@ just auth-youtube
 just run
 ```
 
-Optional: `RESYNC_INTERVAL_HOURS=6` for background re-scans of enabled listeners (`0` = off).
+Optional: `RESYNC_INTERVAL_HOURS=6` until you save the Admin **Scheduler** tab (`0` = off). After the first save, interval / amount / listener list live in SQLite.
 
 ---
 

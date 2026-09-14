@@ -684,6 +684,51 @@
       </section>
     </div>
 
+    <!-- ========== Scheduler (background resync) ========== -->
+    <div class="tab-panel" id="tab-scheduler" role="tabpanel" data-tab="scheduler" hidden>
+      <section class="panel" id="scheduler-section">
+        <div class="panel-head">
+          <h2>RESYNC SCHEDULER</h2>
+          <p>Background history sweep for content + picture listeners · 0 hours = off · first scan waits one full interval after save or boot · cap 500 messages per listener</p>
+        </div>
+        <p id="scheduler-glance" class="muted"></p>
+        <form id="scheduler-form" class="announce-form">
+          <div class="mapping-form">
+            <label>
+              Interval (hours)
+              <input name="interval_hours" id="sched-interval" type="number" min="0" step="1" value="0">
+            </label>
+            <label>
+              Amount
+              <input name="limit" id="sched-limit" type="number" min="1" max="500" value="100">
+            </label>
+          </div>
+          <fieldset class="sched-scope">
+            <legend>Affects</legend>
+            <label class="check">
+              <input type="radio" name="scope" value="all" checked>
+              <span>All enabled listeners</span>
+            </label>
+            <label class="check">
+              <input type="radio" name="scope" value="selected">
+              <span>Selected listeners</span>
+            </label>
+          </fieldset>
+          <div id="sched-targets" class="sched-targets">
+            <div>
+              <h3>Content listeners</h3>
+              <div id="sched-content-list" class="sched-check-list"></div>
+            </div>
+            <div>
+              <h3>Picture listeners</h3>
+              <div id="sched-picture-list" class="sched-check-list"></div>
+            </div>
+          </div>
+          <button type="submit">SAVE SCHEDULER</button>
+        </form>
+      </section>
+    </div>
+
     <!-- ========== Broadcasts (multi-channel Discord sends) ========== -->
     <div class="tab-panel" id="tab-broadcasts" role="tabpanel" data-tab="broadcasts" hidden>
       <section class="panel" id="broadcasts-section">

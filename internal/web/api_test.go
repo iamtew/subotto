@@ -572,3 +572,52 @@ func TestAdminChatMessages(t *testing.T) {
 		t.Fatalf("no catalog: want 503, got %d", rec.Code)
 	}
 }
+
+func TestResyncSchedulerSettingsAPI(t *testing.T) {
+	s, _ := testServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/settings/resync-scheduler", nil)
+	req.SetBasicAuth("admin", "test-pass")
+	rec := httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("get: %d %s", rec.Code, rec.Body.String())
+	}
+	var got db.ResyncScheduler
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.IntervalHours != 0 || got.Limit != db.DefaultResyncLimit || got.Scope != db.ResyncScopeAll {
+		t.Fatalf("default get: %+v", got)
+	}
+
+	body := `{"interval_hours":4,"limit":40,"scope":"selected","targets":[{"kind":"content","channel_id":"111"},{"kind":"picture","channel_id":"111"}]}`
+	req = httptest.NewRequest(http.MethodPut, "/api/settings/resync-scheduler", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetBasicAuth("admin", "test-pass")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("put: %d %s", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/settings/resync-scheduler", nil)
+	req.SetBasicAuth("admin", "test-pass")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.IntervalHours != 4 || got.Limit != 40 || got.Scope != db.ResyncScopeSelected || len(got.Targets) != 2 {
+		t.Fatalf("after put: %+v", got)
+	}
+
+	req = httptest.NewRequest(http.MethodPut, "/api/settings/resync-scheduler", strings.NewReader(`{"interval_hours":1,"limit":10,"scope":"nope"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetBasicAuth("admin", "test-pass")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("bad scope: want 400, got %d %s", rec.Code, rec.Body.String())
+	}
+}

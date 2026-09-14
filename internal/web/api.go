@@ -49,6 +49,8 @@ func (s *Server) registerAPI(mux *http.ServeMux) {
 	mux.Handle("PUT /api/settings/air-messages", s.basicAuth(http.HandlerFunc(s.handlePutListenMessages)))
 	mux.Handle("GET /api/settings/picture-listen-messages", s.basicAuth(http.HandlerFunc(s.handleGetPictureListenMessages)))
 	mux.Handle("PUT /api/settings/picture-listen-messages", s.basicAuth(http.HandlerFunc(s.handlePutPictureListenMessages)))
+	mux.Handle("GET /api/settings/resync-scheduler", s.basicAuth(http.HandlerFunc(s.handleGetResyncScheduler)))
+	mux.Handle("PUT /api/settings/resync-scheduler", s.basicAuth(http.HandlerFunc(s.handlePutResyncScheduler)))
 }
 
 // ---------- JSON helpers ----------
@@ -780,6 +782,39 @@ func (s *Server) handlePutPictureListenMessages(w http.ResponseWriter, r *http.R
 		"start_message": start,
 		"stop_message":  stop,
 	})
+}
+
+func (s *Server) handleGetResyncScheduler(w http.ResponseWriter, r *http.Request) {
+	cfg, err := s.store.LoadResyncScheduler(r.Context(), s.envHours)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, cfg)
+}
+
+func (s *Server) handlePutResyncScheduler(w http.ResponseWriter, r *http.Request) {
+	var body db.ResyncScheduler
+	if err := readJSON(r, &body); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	out, err := s.store.SaveResyncScheduler(r.Context(), body)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if s.scheduler != nil {
+		s.scheduler.Reload()
+	}
+	_ = s.store.LogActivity(r.Context(), "resync_scheduler_updated", map[string]any{
+		"source":         "admin_ui",
+		"interval_hours": out.IntervalHours,
+		"limit":          out.Limit,
+		"scope":          out.Scope,
+		"targets":        len(out.Targets),
+	}, true)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "scheduler": out})
 }
 
 // announcePictureTransition posts OFFLINE then ONLINE in order without blocking Admin HTTP.

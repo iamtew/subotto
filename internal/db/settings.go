@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"unicode/utf16"
@@ -25,6 +26,17 @@ const (
 
 	SettingPictureListenStartMessage = "picture_listen_start_message"
 	SettingPictureListenStopMessage  = "picture_listen_stop_message"
+
+	// Background resync ticker (Admin Scheduler tab). JSON blob.
+	SettingResyncScheduler = "resync_scheduler"
+
+	ResyncScopeAll      = "all"
+	ResyncScopeSelected = "selected"
+	ResyncKindContent   = "content"
+	ResyncKindPicture   = "picture"
+
+	DefaultResyncLimit = 100
+	MaxResyncLimit     = 500
 )
 
 // MaxAnnounceTemplateLength matches Discord's message cap (UTF-16 code units).
@@ -182,4 +194,117 @@ func (d *DB) PictureListenAnnounceMessages(ctx context.Context) (start, stop str
 		return "", "", err
 	}
 	return start, stop, nil
+}
+
+// ResyncTarget is one listener the scheduled resync may scan.
+type ResyncTarget struct {
+	Kind      string `json:"kind"`
+	ChannelID string `json:"channel_id"`
+}
+
+// ResyncScheduler is Admin-owned ticker config (interval, amount, who).
+type ResyncScheduler struct {
+	IntervalHours int            `json:"interval_hours"`
+	Limit         int            `json:"limit"`
+	Scope         string         `json:"scope"`
+	Targets       []ResyncTarget `json:"targets"`
+}
+
+// DefaultResyncScheduler is used when no app_settings row exists yet.
+func DefaultResyncScheduler(envHours int) ResyncScheduler {
+	if envHours < 0 {
+		envHours = 0
+	}
+	return ResyncScheduler{
+		IntervalHours: envHours,
+		Limit:         DefaultResyncLimit,
+		Scope:         ResyncScopeAll,
+		Targets:       []ResyncTarget{},
+	}
+}
+
+// Wants reports whether this config includes an enabled listener of kind/channel.
+func (c ResyncScheduler) Wants(kind, channelID string) bool {
+	if c.Scope != ResyncScopeSelected {
+		return true
+	}
+	for _, t := range c.Targets {
+		if t.Kind == kind && t.ChannelID == channelID {
+			return true
+		}
+	}
+	return false
+}
+
+// NormalizeResyncScheduler fills defaults and drops empty targets.
+func NormalizeResyncScheduler(in ResyncScheduler) (ResyncScheduler, error) {
+	if in.IntervalHours < 0 {
+		return ResyncScheduler{}, fmt.Errorf("interval_hours must be >= 0")
+	}
+	if in.Limit <= 0 {
+		in.Limit = DefaultResyncLimit
+	}
+	if in.Limit > MaxResyncLimit {
+		return ResyncScheduler{}, fmt.Errorf("limit must be 1–%d", MaxResyncLimit)
+	}
+	scope := strings.TrimSpace(strings.ToLower(in.Scope))
+	if scope == "" {
+		scope = ResyncScopeAll
+	}
+	if scope != ResyncScopeAll && scope != ResyncScopeSelected {
+		return ResyncScheduler{}, fmt.Errorf("scope must be %q or %q", ResyncScopeAll, ResyncScopeSelected)
+	}
+	out := ResyncScheduler{
+		IntervalHours: in.IntervalHours,
+		Limit:         in.Limit,
+		Scope:         scope,
+		Targets:       make([]ResyncTarget, 0, len(in.Targets)),
+	}
+	for _, t := range in.Targets {
+		kind := strings.TrimSpace(strings.ToLower(t.Kind))
+		ch := strings.TrimSpace(t.ChannelID)
+		if kind == "" && ch == "" {
+			continue
+		}
+		if kind != ResyncKindContent && kind != ResyncKindPicture {
+			return ResyncScheduler{}, fmt.Errorf("target kind must be %q or %q", ResyncKindContent, ResyncKindPicture)
+		}
+		if ch == "" {
+			return ResyncScheduler{}, fmt.Errorf("target channel_id is required")
+		}
+		out.Targets = append(out.Targets, ResyncTarget{Kind: kind, ChannelID: ch})
+	}
+	return out, nil
+}
+
+// LoadResyncScheduler reads Admin config, or envHours/all/100 when unset.
+func (d *DB) LoadResyncScheduler(ctx context.Context, envHours int) (ResyncScheduler, error) {
+	raw, present, err := d.getSettingPresent(ctx, SettingResyncScheduler)
+	if err != nil {
+		return ResyncScheduler{}, err
+	}
+	if !present || strings.TrimSpace(raw) == "" {
+		return DefaultResyncScheduler(envHours), nil
+	}
+	var in ResyncScheduler
+	if err := json.Unmarshal([]byte(raw), &in); err != nil {
+		return ResyncScheduler{}, fmt.Errorf("resync scheduler settings: %w", err)
+	}
+	return NormalizeResyncScheduler(in)
+}
+
+// SaveResyncScheduler writes the Admin ticker config.
+func (d *DB) SaveResyncScheduler(ctx context.Context, in ResyncScheduler) (ResyncScheduler, error) {
+	out, err := NormalizeResyncScheduler(in)
+	if err != nil {
+		return ResyncScheduler{}, err
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return ResyncScheduler{}, err
+	}
+	if err := d.SetSetting(ctx, SettingResyncScheduler, string(b)); err != nil {
+		return ResyncScheduler{}, err
+	}
+	return out, nil
 }
