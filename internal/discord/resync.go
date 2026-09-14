@@ -24,7 +24,7 @@ const discordPageSize = 100
 // with one new link each would be a lot. Cap keeps us honest.
 const maxResyncLimit = 500
 
-// ResyncSummary is what the CLI prints when a history scan finishes.
+// ResyncSummary is what Admin gets when a history scan finishes.
 type ResyncSummary struct {
 	MessagesScanned int
 	Result          ingest.Result
@@ -60,10 +60,10 @@ func ResyncChannel(
 		return nil, err
 	}
 	if mapping == nil {
-		return nil, fmt.Errorf("no mapping found for channel %s — run just add-mapping first", channelID)
+		return nil, fmt.Errorf("no mapping found for channel %s — start a content listener in Admin first", channelID)
 	}
 	if !mapping.Enabled {
-		return nil, fmt.Errorf("mapping for channel %s is disabled — run just enable-mapping %s first", channelID, channelID)
+		return nil, fmt.Errorf("mapping for channel %s is paused — resume it in Admin first", channelID)
 	}
 
 	notBefore, err := store.ResyncNotBefore(ctx, channelID)

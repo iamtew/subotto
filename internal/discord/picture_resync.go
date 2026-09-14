@@ -13,7 +13,7 @@ import (
 	"subotto/internal/pictures"
 )
 
-// PictureResyncSummary is what the CLI / Admin get when a picture history scan finishes.
+// PictureResyncSummary is what Admin gets when a picture history scan finishes.
 type PictureResyncSummary struct {
 	MessagesScanned int
 	Result          pictures.Result

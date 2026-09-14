@@ -8,6 +8,8 @@
 #
 # Cursor / Git for Windows run recipes with sh, not cmd.exe.
 # Keep recipe bodies POSIX (rm, GOOS=linux go build). powershell.exe is fine to call.
+#
+# Listeners, resync, shows, broadcasts: Admin UI, not Just.
 
 # Default: list all recipes so you can see what's available
 default:
@@ -22,71 +24,6 @@ run:
 # One-time YouTube OAuth (opens browser; needs YOUTUBE_CLIENT_ID/SECRET in .env)
 auth-youtube:
     go run ./cmd/subotto -youtube-auth
-
-# Open a listener (CLI; prefer Admin UI START LISTENER to create playlists).
-# Usage: just add-mapping DISCORD_CHANNEL_ID YOUTUBE_PLAYLIST_ID
-add-mapping channel playlist name="":
-    go run ./cmd/subotto -add-mapping-channel {{channel}} -add-mapping-playlist {{playlist}} -add-mapping-name "{{name}}"
-
-start-listen channel playlist name="":
-    just add-mapping {{channel}} {{playlist}} "{{name}}"
-
-# List live listeners.
-list-mappings:
-    go run ./cmd/subotto -list-mappings
-
-list-listens:
-    just list-mappings
-
-# Resume / pause a listener.
-enable-mapping channel:
-    go run ./cmd/subotto -enable-mapping {{channel}}
-
-enable-listen channel:
-    just enable-mapping {{channel}}
-
-disable-mapping channel:
-    go run ./cmd/subotto -disable-mapping {{channel}}
-
-pause-listen channel:
-    just disable-mapping {{channel}}
-
-# Cease listener (closes epoch; processed_videos stay for dedup).
-delete-mapping channel:
-    go run ./cmd/subotto -delete-mapping {{channel}}
-
-cease-listen channel:
-    just delete-mapping {{channel}}
-
-# ---------- Picture listeners (disk + OBS slideshow) ----------
-
-# Start a picture listener. Usage: just start-picture-listen CHANNEL "Show Name"
-start-picture-listen channel name:
-    go run ./cmd/subotto -add-picture-channel {{channel}} -add-picture-name "{{name}}"
-
-list-picture-listens:
-    go run ./cmd/subotto -list-picture-listens
-
-enable-picture-listen channel:
-    go run ./cmd/subotto -enable-picture {{channel}}
-
-pause-picture-listen channel:
-    go run ./cmd/subotto -disable-picture {{channel}}
-
-cease-picture-listen channel:
-    go run ./cmd/subotto -delete-picture {{channel}}
-
-# Rescan recent Discord messages for image attachments (REST only, no reactions).
-# Usage: just resync-pictures DISCORD_CHANNEL_ID
-# Optional 2nd arg = message limit (default 100, max 500).
-resync-pictures channel limit="100":
-    go run ./cmd/subotto -resync-picture-channel {{channel}} -resync-limit {{limit}}
-
-# Rescan recent Discord messages for YouTube links (REST only, no reactions).
-# Usage: just resync DISCORD_CHANNEL_ID
-# Optional 2nd arg = message limit (default 100, max 500).
-resync channel limit="100":
-    go run ./cmd/subotto -resync-channel {{channel}} -resync-limit {{limit}}
 
 # Build native Windows binary (DEV)
 build:
