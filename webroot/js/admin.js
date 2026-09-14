@@ -525,6 +525,7 @@ function renderStatusEpisodes() {
         <td class="mono">${esc(since)}</td>
         <td><a class="api-get" href="${esc(apiPath)}" target="_blank" rel="noopener">GET</a></td>
         <td class="actions">
+          <button type="button" class="secondary" data-status-act="ep-edit" data-id="${e.id}">Edit</button>
           <button type="button" class="danger" data-status-act="ep-cease" data-id="${e.id}">Cease</button>
         </td>
       </tr>`;
@@ -1192,6 +1193,22 @@ function takeSpotFile(kind, fileList) {
   setSpotFile(kind, f);
 }
 
+function openEpisodeEditor(ep) {
+  document.getElementById("episode-edit-id").value = String(ep.id);
+  document.getElementById("episode-edit-label").value =
+    `${ep.episode_short} · ${ep.show} (immutable)`;
+  document.getElementById("episode-edit-name").value = ep.name || "";
+  document.getElementById("episode-edit-suffix").value = ep.twitch_suffix || "";
+  document.getElementById("episode-edit-namefull").value = ep.name_full_template || "";
+  document.getElementById("episode-edit-airdate").value = ep.air_date || "";
+  setSpotFile("edit", null, ep.spot_image || "");
+  const details = document.getElementById("episode-edit-details");
+  details.open = true;
+  activateTab("episodes");
+  details.scrollIntoView({ block: "start", behavior: "smooth" });
+  document.getElementById("episode-edit-airdate").focus();
+}
+
 function bindSpotDrop(kind) {
   const box = document.getElementById(kind === "edit" ? "episode-edit-spot" : "episode-start-spot");
   const input = document.getElementById(kind === "edit" ? "episode-edit-spot-file" : "episode-start-spot-file");
@@ -1582,17 +1599,7 @@ document.getElementById("episodes-table").addEventListener("click", async (ev) =
     toast("episode not found in list — refresh", true);
     return;
   }
-  document.getElementById("episode-edit-id").value = String(ep.id);
-  document.getElementById("episode-edit-label").value =
-    `${ep.episode_short} · ${ep.show} (immutable)`;
-  document.getElementById("episode-edit-name").value = ep.name || "";
-  document.getElementById("episode-edit-suffix").value = ep.twitch_suffix || "";
-  document.getElementById("episode-edit-namefull").value = ep.name_full_template || "";
-  document.getElementById("episode-edit-airdate").value = ep.air_date || "";
-  setSpotFile("edit", null, ep.spot_image || "");
-  const details = document.getElementById("episode-edit-details");
-  details.open = true;
-  document.getElementById("episode-edit-name").focus();
+  openEpisodeEditor(ep);
 });
 
 document.getElementById("episode-edit-form").addEventListener("submit", async (ev) => {
@@ -2564,6 +2571,17 @@ document.getElementById("tab-status").addEventListener("click", async (ev) => {
 
   if (act === "goto-episodes") {
     activateTab("episodes");
+    return;
+  }
+
+  if (act === "ep-edit") {
+    const id = Number(btn.getAttribute("data-id"));
+    const ep = (cachedEpisodes || []).find((e) => e.id === id);
+    if (!ep) {
+      toast("episode not found in list — refresh", true);
+      return;
+    }
+    openEpisodeEditor(ep);
     return;
   }
 

@@ -468,10 +468,11 @@
       <section class="panel" id="episodes-section">
         <div class="panel-head">
           <h2>LIVE EPISODES</h2>
-          <p>One live episode per show · stop ceases linked listeners · public <code>/api/get/episode/{show_slug}</code></p>
+          <p>Air date + spot image on start or <strong>Edit</strong> · one live episode per show · public <code>/api/get/episode/{show_slug}</code></p>
         </div>
 
-        <form id="episode-start-form" class="mapping-form">
+        <form id="episode-start-form" class="announce-form">
+          <div class="mapping-form">
           <label>
             Template
             <select name="template_id" id="episode-template-select" required>
@@ -490,6 +491,7 @@
             Twitch suffix <span class="optional">opt</span>
             <input name="twitch_suffix" type="text" placeholder="leave blank = template default" autocomplete="off" spellcheck="false">
           </label>
+          </div>
           <div class="episode-identity">
             <label>
               Air date <span class="optional">opt</span>
@@ -509,8 +511,8 @@
         </form>
 
         <details class="ops-details" id="episode-edit-details">
-          <summary>Edit episode</summary>
-          <form id="episode-edit-form" class="mapping-form">
+          <summary>Edit episode (air date, spot, name)</summary>
+          <form id="episode-edit-form" class="announce-form episode-edit-form">
             <input type="hidden" name="id" id="episode-edit-id" value="">
             <p class="panel-note">Show + episode # stay fixed. Changing name re-resolves linked listener labels from the template stubs (playlist title on YouTube when possible; slideshow slug stays put).</p>
             <label>
@@ -529,20 +531,18 @@
               Full name template
               <input name="name_full_template" id="episode-edit-namefull" type="text" placeholder="{{episode_short}} {{name}} | {{show}} | {{twitch_suffix}}" autocomplete="off" spellcheck="false">
             </label>
-            <div class="episode-identity">
-              <label>
-                Air date <span class="optional">opt</span>
-                <input name="air_date" id="episode-edit-airdate" type="date">
-              </label>
-              <div class="spot-drop" id="episode-edit-spot" tabindex="0" data-drop="drop spot image">
-                <input id="episode-edit-spot-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
-                <img class="spot-drop-preview" alt="" hidden>
-                <div class="spot-drop-copy">
-                  <strong>Spot image</strong>
-                  <span class="spot-drop-hint">drop, paste, or click</span>
-                </div>
-                <button type="button" class="secondary spot-drop-pick" id="episode-edit-spot-pick" title="pick image">+</button>
+            <label>
+              Air date <span class="optional">opt</span>
+              <input name="air_date" id="episode-edit-airdate" type="date">
+            </label>
+            <div class="spot-drop" id="episode-edit-spot" tabindex="0" data-drop="drop spot image">
+              <input id="episode-edit-spot-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+              <img class="spot-drop-preview" alt="" hidden>
+              <div class="spot-drop-copy">
+                <strong>Spot image</strong>
+                <span class="spot-drop-hint">drop, paste, or click</span>
               </div>
+              <button type="button" class="secondary spot-drop-pick" id="episode-edit-spot-pick" title="pick image">+</button>
             </div>
             <button type="submit">SAVE EPISODE</button>
           </form>
