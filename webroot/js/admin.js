@@ -7,11 +7,11 @@
    matching #tab-{id} panel in index.html. */
 const TAB_REGISTRY = [
   { id: "status", label: "Status" },
-  { id: "chat", label: "Chat" },
   { id: "episodes", label: "Episodes" },
-  { id: "broadcasts", label: "Broadcasts" },
   { id: "content", label: "Content listeners" },
   { id: "pictures", label: "Picture listeners" },
+  { id: "broadcasts", label: "Broadcasts" },
+  { id: "chat", label: "Chat" },
 ];
 
 /** Overlay size steps: 0.5x … 5x in 0.25 increments (default 1.5). */
