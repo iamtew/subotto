@@ -3,12 +3,15 @@ package web
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"subotto/internal/db"
+	"subotto/internal/discord"
+	"subotto/internal/pictures"
 )
 
 func (s *Server) registerEpisodeAPI(mux *http.ServeMux) {
@@ -17,6 +20,7 @@ func (s *Server) registerEpisodeAPI(mux *http.ServeMux) {
 	mux.Handle("POST /api/episodes", s.basicAuth(http.HandlerFunc(s.handleStartEpisode)))
 	mux.Handle("POST /api/episodes/absorb", s.basicAuth(http.HandlerFunc(s.handleAbsorbEpisode)))
 	mux.Handle("PATCH /api/episodes/{id}", s.basicAuth(http.HandlerFunc(s.handlePatchEpisode)))
+	mux.Handle("POST /api/episodes/{id}/spot", s.basicAuth(http.HandlerFunc(s.handleUploadEpisodeSpot)))
 	mux.Handle("DELETE /api/episodes/{id}", s.basicAuth(http.HandlerFunc(s.handleCeaseEpisode)))
 
 	mux.Handle("GET /api/episode-templates", s.basicAuth(http.HandlerFunc(s.handleListEpisodeTemplates)))
@@ -58,6 +62,8 @@ type episodeDTO struct {
 	TwitchSuffix     string               `json:"twitch_suffix"`
 	NameFullTemplate string               `json:"name_full_template"`
 	EpisodeNameFull  string               `json:"episode_name_full"`
+	AirDate          string               `json:"air_date"`
+	SpotImage        string               `json:"spot_image"`
 	Since            string               `json:"since"`
 	State            string               `json:"state"` // live
 	Listeners        []episodeListenerDTO `json:"listeners"`
@@ -76,6 +82,8 @@ func toEpisodeDTO(e db.Episode, listeners []episodeListenerDTO) episodeDTO {
 		TwitchSuffix:     e.TwitchSuffix,
 		NameFullTemplate: e.NameFullTemplate,
 		EpisodeNameFull:  e.NameFull(),
+		AirDate:          e.AirDate,
+		SpotImage:        e.SpotURL(),
 		Since:            e.ActiveFrom.UTC().Format(time.RFC3339),
 		State:            "live",
 		Listeners:        listeners,
@@ -195,6 +203,7 @@ type startEpisodeBody struct {
 	Episode      int     `json:"episode"`
 	Name         string  `json:"name"`
 	TwitchSuffix *string `json:"twitch_suffix"` // nil = use template default
+	AirDate      string  `json:"air_date"`     // YYYY-MM-DD; empty = unset
 }
 
 func (s *Server) handleStartEpisode(w http.ResponseWriter, r *http.Request) {
@@ -232,7 +241,7 @@ func (s *Server) handleStartEpisode(w http.ResponseWriter, r *http.Request) {
 		suffix = strings.TrimSpace(*body.TwitchSuffix)
 	}
 
-	ep, err := s.store.CreateEpisode(r.Context(), tmpl.Show, body.Episode, name, suffix, tmpl.NameFullTemplate, tmpl.Listeners)
+	ep, err := s.store.CreateEpisode(r.Context(), tmpl.Show, body.Episode, name, suffix, tmpl.NameFullTemplate, body.AirDate, tmpl.Listeners)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
@@ -493,6 +502,7 @@ type patchEpisodeBody struct {
 	Name             *string `json:"name"`
 	TwitchSuffix     *string `json:"twitch_suffix"`
 	NameFullTemplate *string `json:"name_full_template"`
+	AirDate          *string `json:"air_date"`
 }
 
 func (s *Server) handlePatchEpisode(w http.ResponseWriter, r *http.Request) {
@@ -506,12 +516,12 @@ func (s *Server) handlePatchEpisode(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
-	if body.Name == nil && body.TwitchSuffix == nil && body.NameFullTemplate == nil {
-		writeErr(w, http.StatusBadRequest, "provide name, twitch_suffix, and/or name_full_template")
+	if body.Name == nil && body.TwitchSuffix == nil && body.NameFullTemplate == nil && body.AirDate == nil {
+		writeErr(w, http.StatusBadRequest, "provide name, twitch_suffix, name_full_template, and/or air_date")
 		return
 	}
 
-	ep, err := s.store.UpdateEpisodeMutable(r.Context(), id, body.Name, body.TwitchSuffix, body.NameFullTemplate)
+	ep, err := s.store.UpdateEpisodeMutable(r.Context(), id, body.Name, body.TwitchSuffix, body.NameFullTemplate, body.AirDate)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
@@ -531,6 +541,63 @@ func (s *Server) handlePatchEpisode(w http.ResponseWriter, r *http.Request) {
 		"show":       ep.Show,
 		"episode":    ep.Episode,
 		"name":       ep.Name,
+		"source":     "admin_ui",
+	}, true)
+	writeJSON(w, http.StatusOK, toEpisodeDTO(*ep, listeners))
+}
+
+func (s *Server) handleUploadEpisodeSpot(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id < 1 {
+		writeErr(w, http.StatusBadRequest, "invalid episode id")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, discord.MaxChatFileBytes+1<<20)
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	fh, header, err := r.FormFile("file")
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "file is required")
+		return
+	}
+	defer fh.Close()
+	data, err := io.ReadAll(io.LimitReader(fh, discord.MaxChatFileBytes+1))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "read file: "+err.Error())
+		return
+	}
+	if len(data) == 0 {
+		writeErr(w, http.StatusBadRequest, "empty file")
+		return
+	}
+	if len(data) > discord.MaxChatFileBytes {
+		writeErr(w, http.StatusRequestEntityTooLarge, "spot image is over 10 MB")
+		return
+	}
+	ct := header.Header.Get("Content-Type")
+	if !pictures.IsImageContentType(ct) {
+		ct = http.DetectContentType(data)
+	}
+	if !pictures.IsImageContentType(ct) {
+		writeErr(w, http.StatusBadRequest, "spot image must be jpeg, png, webp, or gif")
+		return
+	}
+	ext := pictures.ExtForContentType(ct)
+	ep, err := s.store.SaveEpisodeSpot(r.Context(), id, ext, data)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	listeners, err := s.episodeListenersDTO(r.Context(), ep.ID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	_ = s.store.LogActivity(r.Context(), "episode_spot_updated", map[string]any{
+		"episode_id": ep.ID,
+		"show":       ep.Show,
 		"source":     "admin_ui",
 	}, true)
 	writeJSON(w, http.StatusOK, toEpisodeDTO(*ep, listeners))

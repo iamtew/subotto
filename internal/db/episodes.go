@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -24,6 +26,8 @@ type Episode struct {
 	TwitchSuffix     string
 	NameFullTemplate string
 	Listeners        []EpisodeListenerStub // stub snapshot for rename re-resolve
+	AirDate          string                // YYYY-MM-DD calendar day; empty = unset
+	SpotPath         string                // basename under episode-spots/, e.g. 42.jpg
 	CreatedAt        time.Time
 	ActiveFrom       time.Time
 	ActiveUntil      *time.Time // nil = live
@@ -105,14 +109,34 @@ func (e Episode) NameFull() string {
 	return ResolveEpisodeNameFull(e.NameFullTemplate, e.Show, e.Episode, e.Name, e.TwitchSuffix)
 }
 
+// SpotURL is the public media path, or empty when no still is on file.
+func (e Episode) SpotURL() string {
+	if e.ID < 1 || strings.TrimSpace(e.SpotPath) == "" {
+		return ""
+	}
+	return fmt.Sprintf("/media/episodes/%d/%s", e.ID, filepath.Base(e.SpotPath))
+}
+
+// NormalizeAirDate accepts YYYY-MM-DD or empty. Rejects anything else.
+func NormalizeAirDate(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", nil
+	}
+	if _, err := time.Parse("2006-01-02", s); err != nil {
+		return "", fmt.Errorf("air_date must be YYYY-MM-DD")
+	}
+	return s, nil
+}
+
 const episodeSelectCols = `
 	id, show_name, show_slug, episode_num, name, twitch_suffix, name_full_template,
-	listeners_json, created_at, active_from, active_until
+	listeners_json, air_date, spot_path, created_at, active_from, active_until
 `
 
 // CreateEpisode opens a new live episode. Fails if show_slug already has a live one.
 // stubs are snapshotted so a later name change can re-resolve listener labels.
-func (d *DB) CreateEpisode(ctx context.Context, show string, episode int, name, twitchSuffix, nameFullTemplate string, stubs []EpisodeListenerStub) (*Episode, error) {
+func (d *DB) CreateEpisode(ctx context.Context, show string, episode int, name, twitchSuffix, nameFullTemplate, airDate string, stubs []EpisodeListenerStub) (*Episode, error) {
 	show = strings.TrimSpace(show)
 	name = strings.TrimSpace(name)
 	twitchSuffix = strings.TrimSpace(twitchSuffix)
@@ -136,6 +160,10 @@ func (d *DB) CreateEpisode(ctx context.Context, show string, episode int, name, 
 	if stubs == nil {
 		stubs = []EpisodeListenerStub{}
 	}
+	airDate, err := NormalizeAirDate(airDate)
+	if err != nil {
+		return nil, err
+	}
 	stubsJSON, err := json.Marshal(stubs)
 	if err != nil {
 		return nil, err
@@ -153,9 +181,9 @@ func (d *DB) CreateEpisode(ctx context.Context, show string, episode int, name, 
 	res, err := d.sql.ExecContext(ctx, `
 		INSERT INTO episodes (
 			show_name, show_slug, episode_num, name, twitch_suffix, name_full_template,
-			listeners_json, created_at, active_from, active_until
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
-	`, show, slug, episode, name, twitchSuffix, tmpl, string(stubsJSON), now, now)
+			listeners_json, air_date, spot_path, created_at, active_from, active_until
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, NULL)
+	`, show, slug, episode, name, twitchSuffix, tmpl, string(stubsJSON), airDate, now, now)
 	if err != nil {
 		return nil, fmt.Errorf("insert episode: %w", err)
 	}
@@ -231,8 +259,8 @@ func (d *DB) ListLiveEpisodes(ctx context.Context) ([]Episode, error) {
 	return out, nil
 }
 
-// UpdateEpisodeMutable patches name / twitch_suffix / name_full_template only.
-func (d *DB) UpdateEpisodeMutable(ctx context.Context, id int64, name, twitchSuffix, nameFullTemplate *string) (*Episode, error) {
+// UpdateEpisodeMutable patches name / twitch_suffix / name_full_template / air_date.
+func (d *DB) UpdateEpisodeMutable(ctx context.Context, id int64, name, twitchSuffix, nameFullTemplate, airDate *string) (*Episode, error) {
 	e, err := d.GetEpisodeByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -247,6 +275,7 @@ func (d *DB) UpdateEpisodeMutable(ctx context.Context, id int64, name, twitchSuf
 	newName := e.Name
 	newSuffix := e.TwitchSuffix
 	newTmpl := e.NameFullTemplate
+	newAir := e.AirDate
 	if name != nil {
 		newName = strings.TrimSpace(*name)
 		if newName == "" {
@@ -262,14 +291,67 @@ func (d *DB) UpdateEpisodeMutable(ctx context.Context, id int64, name, twitchSuf
 			newTmpl = DefaultEpisodeNameFullTemplate
 		}
 	}
+	if airDate != nil {
+		newAir, err = NormalizeAirDate(*airDate)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	_, err = d.sql.ExecContext(ctx, `
 		UPDATE episodes
-		SET name = ?, twitch_suffix = ?, name_full_template = ?
+		SET name = ?, twitch_suffix = ?, name_full_template = ?, air_date = ?
 		WHERE id = ? AND active_until IS NULL
-	`, newName, newSuffix, newTmpl, id)
+	`, newName, newSuffix, newTmpl, newAir, id)
 	if err != nil {
 		return nil, fmt.Errorf("update episode: %w", err)
+	}
+	return d.GetEpisodeByID(ctx, id)
+}
+
+// AbsoluteEpisodeSpotPath is filepath.Join(spotsDir, basename). Base() strips slashes.
+func (d *DB) AbsoluteEpisodeSpotPath(storedRel string) (string, error) {
+	name := filepath.Base(strings.TrimSpace(storedRel))
+	if name == "" || name == "." || name == ".." {
+		return "", fmt.Errorf("invalid episode spot path")
+	}
+	return filepath.Join(d.spotsDir, name), nil
+}
+
+// SaveEpisodeSpot writes {id}{ext} and records spot_path. Replaces a previous still.
+func (d *DB) SaveEpisodeSpot(ctx context.Context, id int64, ext string, data []byte) (*Episode, error) {
+	e, err := d.GetEpisodeByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if e == nil {
+		return nil, fmt.Errorf("episode %d not found", id)
+	}
+	if e.ActiveUntil != nil {
+		return nil, fmt.Errorf("episode %d is ceased", id)
+	}
+	ext = strings.ToLower(strings.TrimSpace(ext))
+	if len(ext) < 2 || ext[0] != '.' {
+		return nil, fmt.Errorf("invalid spot image extension")
+	}
+	name := fmt.Sprintf("%d%s", id, ext)
+	abs, err := d.AbsoluteEpisodeSpotPath(name)
+	if err != nil {
+		return nil, err
+	}
+	if e.SpotPath != "" && e.SpotPath != name {
+		if old, err := d.AbsoluteEpisodeSpotPath(e.SpotPath); err == nil {
+			_ = os.Remove(old)
+		}
+	}
+	if err := os.WriteFile(abs, data, 0o644); err != nil {
+		return nil, fmt.Errorf("write episode spot: %w", err)
+	}
+	_, err = d.sql.ExecContext(ctx, `
+		UPDATE episodes SET spot_path = ? WHERE id = ? AND active_until IS NULL
+	`, name, id)
+	if err != nil {
+		return nil, fmt.Errorf("update episode spot_path: %w", err)
 	}
 	return d.GetEpisodeByID(ctx, id)
 }
@@ -637,6 +719,8 @@ func scanEpisode(row scannable) (*Episode, error) {
 		&e.TwitchSuffix,
 		&e.NameFullTemplate,
 		&stubsRaw,
+		&e.AirDate,
+		&e.SpotPath,
 		&createdAt,
 		&activeFrom,
 		&activeUntil,
@@ -645,6 +729,8 @@ func scanEpisode(row scannable) (*Episode, error) {
 		return nil, err
 	}
 	e.Listeners = []EpisodeListenerStub{}
+	e.AirDate = strings.TrimSpace(e.AirDate)
+	e.SpotPath = strings.TrimSpace(e.SpotPath)
 	if strings.TrimSpace(stubsRaw) != "" {
 		dec := json.NewDecoder(strings.NewReader(stubsRaw))
 		dec.DisallowUnknownFields()

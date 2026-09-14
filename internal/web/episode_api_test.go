@@ -1,8 +1,10 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -78,6 +80,12 @@ func TestEpisodeTemplatesAndPublicGet(t *testing.T) {
 	if pub["episode_short"] != "EP20" || pub["state"] != "live" {
 		t.Fatalf("public: %+v", pub)
 	}
+	if _, ok := pub["air_date"]; !ok {
+		t.Fatalf("public missing air_date: %+v", pub)
+	}
+	if _, ok := pub["spot_image"]; !ok {
+		t.Fatalf("public missing spot_image: %+v", pub)
+	}
 	listeners, ok := pub["listeners"].([]any)
 	if !ok || len(listeners) != 2 {
 		t.Fatalf("public listeners: %+v", pub["listeners"])
@@ -145,7 +153,7 @@ func TestAbsorbLiveListeners(t *testing.T) {
 	ctx := context.Background()
 
 	// Destination live episode (start shell with empty stubs via CreateEpisode).
-	epRow, err := store.CreateEpisode(ctx, "Sesh Sofa", 19, "Absorb Me", "LIVE", "", nil)
+	epRow, err := store.CreateEpisode(ctx, "Sesh Sofa", 19, "Absorb Me", "LIVE", "", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -309,5 +317,118 @@ func TestEpisodeRenameSyncsListenerNames(t *testing.T) {
 	}
 	if p.Slug != "rename_pics" {
 		t.Fatalf("slug must stay put, got %q", p.Slug)
+	}
+}
+
+// 1x1 PNG so DetectContentType + image allowlist both pass.
+var png1x1 = []byte{
+	0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+	0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+	0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+	0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xde,
+	0x00, 0x00, 0x00, 0x0c, 0x49, 0x44, 0x41, 0x54,
+	0x08, 0xd7, 0x63, 0xf8, 0xcf, 0xc0, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01,
+	0x5c, 0xc2, 0xd5, 0x57,
+	0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+}
+
+func TestEpisodeAirDateAndSpot(t *testing.T) {
+	s, _ := testServer(t)
+	s.createPlaylistFn = func(ctx context.Context, title, description string) (string, error) {
+		return "PL-x", nil
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/episode-templates", strings.NewReader(`{"show":"Sesh Sofa","listeners":[]}`))
+	req.SetBasicAuth("admin", "test-pass")
+	rec := httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("template: %d %s", rec.Code, rec.Body.String())
+	}
+	var tmplDTO map[string]any
+	_ = json.Unmarshal(rec.Body.Bytes(), &tmplDTO)
+	tmplID := int64(tmplDTO["id"].(float64))
+
+	start := `{"template_id":` + strconv.FormatInt(tmplID, 10) + `,"episode":20,"name":"Creature Park","air_date":"2026-09-20"}`
+	req = httptest.NewRequest(http.MethodPost, "/api/episodes", strings.NewReader(start))
+	req.SetBasicAuth("admin", "test-pass")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("start: %d %s", rec.Code, rec.Body.String())
+	}
+	var ep episodeDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &ep); err != nil {
+		t.Fatal(err)
+	}
+	if ep.AirDate != "2026-09-20" {
+		t.Fatalf("start air_date: %q", ep.AirDate)
+	}
+	if ep.SpotImage != "" {
+		t.Fatalf("spot should be empty, got %q", ep.SpotImage)
+	}
+
+	idPath := "/api/episodes/" + strconv.FormatInt(ep.ID, 10)
+	req = httptest.NewRequest(http.MethodPatch, idPath, strings.NewReader(`{"air_date":"2026-10-01"}`))
+	req.SetBasicAuth("admin", "test-pass")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("patch air: %d %s", rec.Code, rec.Body.String())
+	}
+
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	fw, err := mw.CreateFormFile("file", "spot.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fw.Write(png1x1); err != nil {
+		t.Fatal(err)
+	}
+	if err := mw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req = httptest.NewRequest(http.MethodPost, idPath+"/spot", &buf)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.SetBasicAuth("admin", "test-pass")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("spot: %d %s", rec.Code, rec.Body.String())
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &ep); err != nil {
+		t.Fatal(err)
+	}
+	if ep.SpotImage == "" || !strings.Contains(ep.SpotImage, "/media/episodes/") {
+		t.Fatalf("spot url: %q", ep.SpotImage)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/get/episode/sesh-sofa", nil)
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("public: %d %s", rec.Code, rec.Body.String())
+	}
+	var pub map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &pub); err != nil {
+		t.Fatal(err)
+	}
+	if pub["air_date"] != "2026-10-01" {
+		t.Fatalf("public air_date: %+v", pub)
+	}
+	spot, _ := pub["spot_image"].(string)
+	if !strings.HasPrefix(spot, "/media/episodes/") {
+		t.Fatalf("public spot_image: %+v", pub)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, spot, nil)
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("media: %d", rec.Code)
+	}
+	if rec.Body.Len() < 8 || rec.Body.Bytes()[0] != 0x89 {
+		t.Fatalf("media body is not png")
 	}
 }

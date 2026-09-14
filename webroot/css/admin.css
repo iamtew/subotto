@@ -336,13 +336,15 @@ button.linkish:hover {
   background: var(--bg-input);
 }
 
-.chat-window.drop-hover {
+.chat-window.drop-hover,
+.spot-drop.drop-hover {
   border-color: var(--chartreuse);
   box-shadow: inset 0 0 0 2px var(--chartreuse), 0 0 24px rgba(229, 242, 13, 0.18);
 }
 
-.chat-window.drop-hover::after {
-  content: "drop files to attach";
+.chat-window.drop-hover::after,
+.spot-drop.drop-hover::after {
+  content: attr(data-drop);
   pointer-events: none;
   position: absolute;
   inset: 0;
@@ -857,6 +859,67 @@ label .optional {
   margin-bottom: 0.35rem;
 }
 
+.episode-identity {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.spot-drop {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.75rem;
+  align-items: center;
+  min-height: 5.5rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px dashed var(--line-strong);
+  background: var(--bg-input);
+  cursor: pointer;
+}
+
+.spot-drop-preview {
+  width: 4.4rem;
+  height: 4.4rem;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  background: var(--bg0);
+}
+
+.spot-drop-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.spot-drop-copy strong {
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--olive);
+}
+
+.spot-drop-hint {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.spot-drop-pick {
+  min-width: 2.4rem;
+}
+
+.spot-thumb {
+  width: 2.4rem;
+  height: 2.4rem;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  display: block;
+}
+
 .episode-template-meta .episode-template-suffix,
 .episode-template-meta .episode-template-namefull {
   grid-column: 1 / -1;
@@ -922,6 +985,7 @@ label .optional {
 
 input[type="text"],
 input[type="number"],
+input[type="date"],
 select {
   font-family: var(--font-mono);
   font-size: 0.72rem;

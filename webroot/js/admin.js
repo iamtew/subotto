@@ -1114,6 +1114,103 @@ async function refreshAll() {
 /* ---------- Episodes ---------- */
 
 let cachedEpisodeTemplates = [];
+let startSpotFile = null;
+let editSpotFile = null;
+
+function bindFileDrop(box, onFiles) {
+  if (!box) return;
+  function isFileDrag(ev) {
+    return ev.dataTransfer && [...ev.dataTransfer.types].includes("Files");
+  }
+  box.addEventListener("dragenter", (ev) => {
+    if (!isFileDrag(ev)) return;
+    ev.preventDefault();
+    box.classList.add("drop-hover");
+  });
+  box.addEventListener("dragover", (ev) => {
+    if (!isFileDrag(ev)) return;
+    ev.preventDefault();
+    ev.dataTransfer.dropEffect = "copy";
+  });
+  box.addEventListener("dragleave", (ev) => {
+    if (!box.contains(ev.relatedTarget)) box.classList.remove("drop-hover");
+  });
+  box.addEventListener("drop", (ev) => {
+    ev.preventDefault();
+    box.classList.remove("drop-hover");
+    onFiles(ev.dataTransfer.files);
+  });
+}
+
+async function uploadEpisodeSpot(id, file) {
+  const fd = new FormData();
+  fd.append("file", file);
+  return api("/api/episodes/" + id + "/spot", { method: "POST", body: fd });
+}
+
+function paintSpot(box, file, url) {
+  const img = box.querySelector(".spot-drop-preview");
+  const hint = box.querySelector(".spot-drop-hint");
+  if (box._blob) URL.revokeObjectURL(box._blob);
+  box._blob = "";
+  if (file) {
+    box._blob = URL.createObjectURL(file);
+    img.src = box._blob;
+    img.hidden = false;
+    hint.textContent = file.name;
+    return;
+  }
+  if (url) {
+    img.src = url;
+    img.hidden = false;
+    hint.textContent = "current spot";
+    return;
+  }
+  img.removeAttribute("src");
+  img.hidden = true;
+  hint.textContent = "drop, paste, or click";
+}
+
+function setSpotFile(kind, file, existingUrl) {
+  const box = document.getElementById(kind === "edit" ? "episode-edit-spot" : "episode-start-spot");
+  if (kind === "edit") editSpotFile = file || null;
+  else startSpotFile = file || null;
+  paintSpot(box, file || null, existingUrl || "");
+}
+
+function takeSpotFile(kind, fileList) {
+  const f = fileList && fileList[0];
+  if (!f) return;
+  if (f.size > CHAT_MAX_FILE_BYTES) {
+    toast(f.name + " is over 10 MB", true);
+    return;
+  }
+  if (!String(f.type || "").startsWith("image/")) {
+    toast("spot must be an image", true);
+    return;
+  }
+  setSpotFile(kind, f);
+}
+
+function bindSpotDrop(kind) {
+  const box = document.getElementById(kind === "edit" ? "episode-edit-spot" : "episode-start-spot");
+  const input = document.getElementById(kind === "edit" ? "episode-edit-spot-file" : "episode-start-spot-file");
+  bindFileDrop(box, (files) => takeSpotFile(kind, files));
+  box.addEventListener("paste", (ev) => {
+    const files = ev.clipboardData && ev.clipboardData.files;
+    if (!files || !files.length) return;
+    ev.preventDefault();
+    takeSpotFile(kind, files);
+  });
+  box.addEventListener("click", () => input.click());
+  input.addEventListener("change", (ev) => {
+    takeSpotFile(kind, ev.target.files);
+    ev.target.value = "";
+  });
+}
+
+bindSpotDrop("start");
+bindSpotDrop("edit");
 
 async function loadEpisodes() {
   const tbody = document.querySelector("#episodes-table tbody");
@@ -1137,7 +1234,7 @@ async function loadEpisodes() {
       }
     }
     if (!list.length) {
-      tbody.innerHTML = `<tr><td colspan="7" class="empty">no live episodes</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="9" class="empty">no live episodes</td></tr>`;
       return;
     }
     tbody.innerHTML = list
@@ -1146,10 +1243,15 @@ async function loadEpisodes() {
           .map((l) => `${esc(l.kind)}:${esc(l.name || l.discord_channel_id || l.channel)}`)
           .join(", ");
         const apiPath = e.public_url || `/api/get/episode/${e.show_slug}`;
+        const spot = e.spot_image
+          ? `<img class="spot-thumb" src="${esc(e.spot_image)}" alt="">`
+          : "—";
         return `<tr data-id="${e.id}">
           <td>${esc(e.show)}<br><code class="mono">${esc(e.show_slug)}</code></td>
           <td>${esc(e.episode_short)} · ${esc(e.name)}</td>
           <td class="mono">${esc(e.episode_name_full)}</td>
+          <td class="mono">${esc(e.air_date || "—")}</td>
+          <td>${spot}</td>
           <td>${listeners || "—"}</td>
           <td class="mono">${esc(e.since ? new Date(e.since).toLocaleString() : "—")}</td>
           <td><a class="api-get" href="${esc(apiPath)}" target="_blank" rel="noopener">GET</a></td>
@@ -1162,7 +1264,7 @@ async function loadEpisodes() {
       .join("");
   } catch (err) {
     cachedEpisodes = [];
-    tbody.innerHTML = `<tr><td colspan="7" class="empty">load failed: ${esc(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="empty">load failed: ${esc(err.message)}</td></tr>`;
   }
 }
 
@@ -1379,15 +1481,20 @@ document.getElementById("episode-start-form").addEventListener("submit", async (
     template_id: Number(fd.get("template_id")),
     episode: Number(fd.get("episode")),
     name: String(fd.get("name") || "").trim(),
+    air_date: String(fd.get("air_date") || "").trim(),
   };
   const suffix = String(fd.get("twitch_suffix") || "").trim();
   if (suffix) body.twitch_suffix = suffix;
 
   btn.disabled = true;
   try {
-    await api("/api/episodes", { method: "POST", body: JSON.stringify(body) });
+    const created = await api("/api/episodes", { method: "POST", body: JSON.stringify(body) });
+    if (startSpotFile && created && created.id) {
+      await uploadEpisodeSpot(created.id, startSpotFile);
+    }
     toast("episode started");
     ev.target.reset();
+    setSpotFile("start", null);
     await refreshAll();
   } catch (err) {
     toast(err.message, true);
@@ -1481,6 +1588,8 @@ document.getElementById("episodes-table").addEventListener("click", async (ev) =
   document.getElementById("episode-edit-name").value = ep.name || "";
   document.getElementById("episode-edit-suffix").value = ep.twitch_suffix || "";
   document.getElementById("episode-edit-namefull").value = ep.name_full_template || "";
+  document.getElementById("episode-edit-airdate").value = ep.air_date || "";
+  setSpotFile("edit", null, ep.spot_image || "");
   const details = document.getElementById("episode-edit-details");
   details.open = true;
   document.getElementById("episode-edit-name").focus();
@@ -1497,6 +1606,7 @@ document.getElementById("episode-edit-form").addEventListener("submit", async (e
     name: document.getElementById("episode-edit-name").value.trim(),
     twitch_suffix: document.getElementById("episode-edit-suffix").value.trim(),
     name_full_template: document.getElementById("episode-edit-namefull").value.trim(),
+    air_date: document.getElementById("episode-edit-airdate").value.trim(),
   };
   const btn = ev.target.querySelector('button[type="submit"]');
   btn.disabled = true;
@@ -1505,8 +1615,12 @@ document.getElementById("episode-edit-form").addEventListener("submit", async (e
       method: "PATCH",
       body: JSON.stringify(body),
     });
-    toast("episode name updated · listeners re-resolved");
+    if (editSpotFile) {
+      await uploadEpisodeSpot(id, editSpotFile);
+    }
+    toast("episode updated · listeners re-resolved");
     document.getElementById("episode-edit-details").open = false;
+    setSpotFile("edit", null);
     await refreshAll();
   } catch (err) {
     toast(err.message, true);
@@ -1996,28 +2110,7 @@ document.getElementById("chat-staged").addEventListener("click", (ev) => {
   renderChatStaged();
 });
 (function bindChatDrop() {
-  const box = document.getElementById("chat-window");
-  function isFileDrag(ev) {
-    return ev.dataTransfer && [...ev.dataTransfer.types].includes("Files");
-  }
-  box.addEventListener("dragenter", (ev) => {
-    if (!isFileDrag(ev)) return;
-    ev.preventDefault();
-    box.classList.add("drop-hover");
-  });
-  box.addEventListener("dragover", (ev) => {
-    if (!isFileDrag(ev)) return;
-    ev.preventDefault();
-    ev.dataTransfer.dropEffect = "copy";
-  });
-  box.addEventListener("dragleave", (ev) => {
-    if (!box.contains(ev.relatedTarget)) box.classList.remove("drop-hover");
-  });
-  box.addEventListener("drop", (ev) => {
-    ev.preventDefault();
-    box.classList.remove("drop-hover");
-    addChatFiles(ev.dataTransfer.files);
-  });
+  bindFileDrop(document.getElementById("chat-window"), addChatFiles);
 })();
 document.getElementById("chat-send-form").addEventListener("submit", async (ev) => {
   ev.preventDefault();

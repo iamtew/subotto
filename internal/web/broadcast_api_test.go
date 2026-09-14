@@ -30,7 +30,7 @@ func TestBroadcastCRUDAndFireAuth(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.CreateEpisode(ctx, tmpl.Show, 20, "Creature Park", tmpl.TwitchSuffix, tmpl.NameFullTemplate, nil); err != nil {
+	if _, err := store.CreateEpisode(ctx, tmpl.Show, 20, "Creature Park", tmpl.TwitchSuffix, tmpl.NameFullTemplate, "", nil); err != nil {
 		t.Fatal(err)
 	}
 

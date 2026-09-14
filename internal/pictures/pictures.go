@@ -65,7 +65,8 @@ func IsImageContentType(ct string) bool {
 	return ok
 }
 
-func extForContentType(ct string) string {
+// ExtForContentType maps a MIME type to .jpg/.png/.webp/.gif (else .bin).
+func ExtForContentType(ct string) string {
 	ct = strings.ToLower(strings.TrimSpace(ct))
 	if i := strings.Index(ct, ";"); i >= 0 {
 		ct = strings.TrimSpace(ct[:i])
@@ -163,7 +164,7 @@ func ProcessAttachments(
 			continue
 		}
 
-		ext := extForContentType(att.ContentType)
+		ext := ExtForContentType(att.ContentType)
 		rel := filepath.ToSlash(filepath.Join(listener.Slug, messageID+"_"+att.ID+ext))
 		abs, err := store.AbsolutePicturePath(rel)
 		if err != nil {

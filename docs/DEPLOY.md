@@ -21,10 +21,10 @@ Produces `dist/subotto-linux.zip` with:
 - `deploy/subotto.service` — sample systemd unit  
 - `docs/DEPLOY.md` — this guide  
 
-**Not in the zip:** live `.env` or `data/` (copy those yourself — DB **and** `data/pictures/` if you already collected images).
+**Not in the zip:** live `.env` or `data/` (copy those yourself — DB **and** `data/pictures/` / `data/episode-spots/` if you already collected images).
 
-Public slideshow URLs (no Basic Auth): `/slideshow/latest`, `/slideshow/{slug}`, `/media/pictures/...`.  
-Streamer.bot GETs (no Basic Auth): `GET /api/get/content/{channel-name}`, `GET /api/get/picture/{channel-name}`, and `GET /api/get/episode/{show}` — live listener / episode JSON. Channel name is the Discord name without `#`; Discord must be connected.  
+Public slideshow URLs (no Basic Auth): `/slideshow/latest`, `/slideshow/{slug}`, `/media/pictures/...`, `/media/episodes/{id}/...`.  
+Streamer.bot GETs (no Basic Auth): `GET /api/get/content/{channel-name}`, `GET /api/get/picture/{channel-name}`, and `GET /api/get/episode/{show}` — live listener / episode JSON (`air_date`, `spot_image` on the episode). Channel name is the Discord name without `#`; Discord must be connected.  
 Broadcast fire (Basic Auth): `GET /api/broadcasts/{slug}/fire` — user `api` / `API_PASSWORD` (or `admin` / `ADMIN_PASSWORD`). Sends every message of that named broadcast to its mapped channels.  
 If you put Caddy in front, proxy the whole port (Admin + public slideshow) or expose slideshow paths publicly and keep Admin locked down as you prefer.
 
@@ -48,7 +48,7 @@ You already authorized on Windows; the refresh token lives in SQLite, not in `.e
 | `episodes` / `episode_templates` | Show episodes |
 | `broadcasts` | Named Discord broadcasts |
 
-Also copy **`data/pictures/`** if present — image files for picture listeners live there (next to the DB).
+Also copy **`data/pictures/`** and **`data/episode-spots/`** if present — picture-listener galleries and episode spot stills live next to the DB.
 
 `.env` still holds Discord bot token + YouTube **client** ID/secret. Same Discord/Google apps — no re-registration.
 

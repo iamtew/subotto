@@ -3,6 +3,7 @@ package web
 import (
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ func (s *Server) registerPublic(mux *http.ServeMux) {
 	mux.HandleFunc("GET /slideshow/{slug}", s.handleSlideshowPage)
 	mux.HandleFunc("GET /api/slideshow/{slug}", s.handleSlideshowFeed)
 	mux.HandleFunc("GET /media/pictures/{slug}/{file}", s.handlePictureMedia)
+	mux.HandleFunc("GET /media/episodes/{id}/{file}", s.handleEpisodeSpotMedia)
 	mux.HandleFunc("GET /api/get/episode/{show}", s.handlePublicGetEpisode)
 	mux.HandleFunc("GET /api/get/{kind}/{channel}", s.handlePublicGetListener)
 
@@ -152,6 +154,27 @@ func (s *Server) handlePictureMedia(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Cache briefly — OBS reloads often; reactions are on the JSON feed, not the file.
+	w.Header().Set("Cache-Control", "public, max-age=60")
+	http.ServeFile(w, r, abs)
+}
+
+func (s *Server) handleEpisodeSpotMedia(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	file := filepath.Base(r.PathValue("file"))
+	if err != nil || id < 1 || file == "" || file == "." || file == ".." {
+		http.NotFound(w, r)
+		return
+	}
+	ep, err := s.store.GetEpisodeByID(r.Context(), id)
+	if err != nil || ep == nil || ep.SpotPath == "" || filepath.Base(ep.SpotPath) != file {
+		http.NotFound(w, r)
+		return
+	}
+	abs, err := s.store.AbsoluteEpisodeSpotPath(ep.SpotPath)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
 	w.Header().Set("Cache-Control", "public, max-age=60")
 	http.ServeFile(w, r, abs)
 }

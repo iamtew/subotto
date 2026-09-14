@@ -33,7 +33,7 @@ func TestEpisodeCRUDAndTemplateResolve(t *testing.T) {
 		t.Fatalf("template: %+v", tmpl)
 	}
 
-	ep, err := store.CreateEpisode(ctx, tmpl.Show, 20, "Creature Park", tmpl.TwitchSuffix, tmpl.NameFullTemplate, tmpl.Listeners)
+	ep, err := store.CreateEpisode(ctx, tmpl.Show, 20, "Creature Park", tmpl.TwitchSuffix, tmpl.NameFullTemplate, "2026-09-20", tmpl.Listeners)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestEpisodeCRUDAndTemplateResolve(t *testing.T) {
 	}
 
 	// Second live episode same show must fail.
-	if _, err := store.CreateEpisode(ctx, "Sesh Sofa", 21, "Next", "LIVE", "", nil); err == nil {
+	if _, err := store.CreateEpisode(ctx, "Sesh Sofa", 21, "Next", "LIVE", "", "", nil); err == nil {
 		t.Fatal("expected duplicate live show error")
 	}
 
@@ -76,13 +76,26 @@ func TestEpisodeCRUDAndTemplateResolve(t *testing.T) {
 		t.Fatalf("pics: %v %v", pics, err)
 	}
 
+	if ep.AirDate != "2026-09-20" {
+		t.Fatalf("air date: %+v", ep)
+	}
+
 	name := "Renamed"
-	if _, err := store.UpdateEpisodeMutable(ctx, ep.ID, &name, nil, nil); err != nil {
+	air := "2026-10-01"
+	if _, err := store.UpdateEpisodeMutable(ctx, ep.ID, &name, nil, nil, &air); err != nil {
 		t.Fatal(err)
 	}
 	ep2, _ := store.GetEpisodeByID(ctx, ep.ID)
-	if ep2.Name != "Renamed" || ep2.Show != "Sesh Sofa" || ep2.Episode != 20 {
+	if ep2.Name != "Renamed" || ep2.Show != "Sesh Sofa" || ep2.Episode != 20 || ep2.AirDate != "2026-10-01" {
 		t.Fatalf("mutable update: %+v", ep2)
+	}
+
+	if _, err := store.SaveEpisodeSpot(ctx, ep.ID, ".png", []byte("not-a-real-png")); err != nil {
+		t.Fatal(err)
+	}
+	ep3, _ := store.GetEpisodeByID(ctx, ep.ID)
+	if ep3.SpotPath == "" || ep3.SpotURL() == "" {
+		t.Fatalf("spot: %+v", ep3)
 	}
 
 	if err := store.CeaseEpisode(ctx, ep.ID); err != nil {
@@ -94,7 +107,7 @@ func TestEpisodeCRUDAndTemplateResolve(t *testing.T) {
 	}
 
 	// New episode same show ok after cease.
-	if _, err := store.CreateEpisode(ctx, "Sesh Sofa", 21, "Next", "LIVE", "", nil); err != nil {
+	if _, err := store.CreateEpisode(ctx, "Sesh Sofa", 21, "Next", "LIVE", "", "", nil); err != nil {
 		t.Fatal(err)
 	}
 }

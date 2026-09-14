@@ -22,6 +22,7 @@ type DB struct {
 	sql         *sql.DB
 	path        string // absolute-ish path to the SQLite file
 	picturesDir string // on-disk gallery root: <data dir>/pictures
+	spotsDir    string // episode promo stills: <data dir>/episode-spots
 }
 
 // Open creates the parent directory if needed, opens SQLite, and runs migrations.
@@ -37,6 +38,11 @@ func Open(path string) (*DB, error) {
 	picturesDir := filepath.Join(dir, "pictures")
 	if err := os.MkdirAll(picturesDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create pictures directory %q: %w", picturesDir, err)
+	}
+	// Episode spot images: data/episode-spots/{id}.ext
+	spotsDir := filepath.Join(dir, "episode-spots")
+	if err := os.MkdirAll(spotsDir, 0o755); err != nil {
+		return nil, fmt.Errorf("create episode-spots directory %q: %w", spotsDir, err)
 	}
 
 	// _pragma=foreign_keys(1) turns on foreign keys for this connection.
@@ -54,7 +60,7 @@ func Open(path string) (*DB, error) {
 		return nil, fmt.Errorf("ping sqlite: %w", err)
 	}
 
-	d := &DB{sql: sqlDB, path: path, picturesDir: picturesDir}
+	d := &DB{sql: sqlDB, path: path, picturesDir: picturesDir, spotsDir: spotsDir}
 	if err := d.migrate(); err != nil {
 		_ = sqlDB.Close()
 		return nil, fmt.Errorf("migrate schema: %w", err)
@@ -241,6 +247,8 @@ CREATE TABLE IF NOT EXISTS episodes (
 	twitch_suffix TEXT NOT NULL DEFAULT '',
 	name_full_template TEXT NOT NULL DEFAULT '',
 	listeners_json TEXT NOT NULL DEFAULT '[]',
+	air_date TEXT NOT NULL DEFAULT '',
+	spot_path TEXT NOT NULL DEFAULT '',
 	created_at TEXT NOT NULL DEFAULT (datetime('now')),
 	active_from TEXT NOT NULL DEFAULT (datetime('now')),
 	active_until TEXT
@@ -294,6 +302,16 @@ CREATE TABLE IF NOT EXISTS episode_templates (
 	if !epCols["listeners_json"] {
 		if _, err := d.sql.Exec(`ALTER TABLE episodes ADD COLUMN listeners_json TEXT NOT NULL DEFAULT '[]'`); err != nil {
 			return fmt.Errorf("add episodes.listeners_json: %w", err)
+		}
+	}
+	if !epCols["air_date"] {
+		if _, err := d.sql.Exec(`ALTER TABLE episodes ADD COLUMN air_date TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("add episodes.air_date: %w", err)
+		}
+	}
+	if !epCols["spot_path"] {
+		if _, err := d.sql.Exec(`ALTER TABLE episodes ADD COLUMN spot_path TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("add episodes.spot_path: %w", err)
 		}
 	}
 	return nil
