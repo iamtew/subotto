@@ -325,6 +325,23 @@ func TestCollectedPictures(t *testing.T) {
 	if err != nil || len(list) != 1 || list[0].MessageText != "caption" {
 		t.Fatalf("message backfill: %v %+v", err, list)
 	}
+	if list[0].Ignored {
+		t.Fatalf("new picture should not be ignored: %+v", list[0])
+	}
+	if err := store.SetCollectedPictureIgnored(ctx, list[0].ID, true); err != nil {
+		t.Fatalf("ignore: %v", err)
+	}
+	shown, err := store.ListCollectedPicturesForListener(ctx, pl.ID)
+	if err != nil || len(shown) != 0 {
+		t.Fatalf("slideshow list should omit ignored: %v %+v", err, shown)
+	}
+	all, err := store.ListAllCollectedPicturesForListener(ctx, pl.ID)
+	if err != nil || len(all) != 1 || !all[0].Ignored {
+		t.Fatalf("admin list should keep ignored: %v %+v", err, all)
+	}
+	if err := store.SetCollectedPictureIgnored(ctx, list[0].ID, false); err != nil {
+		t.Fatalf("unignore: %v", err)
+	}
 
 	abs, err := store.AbsolutePicturePath(list[0].StoredPath)
 	if err != nil {

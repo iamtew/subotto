@@ -166,7 +166,8 @@ CREATE TABLE IF NOT EXISTS collected_pictures (
 	content_type TEXT NOT NULL DEFAULT '',
 	message_text TEXT NOT NULL DEFAULT '',
 	collected_at TEXT NOT NULL DEFAULT (datetime('now')),
-	reactions_json TEXT NOT NULL DEFAULT '{}'
+	reactions_json TEXT NOT NULL DEFAULT '{}',
+	ignored INTEGER NOT NULL DEFAULT 0
 );
 `
 	if _, err := d.sql.Exec(schema); err != nil {
@@ -427,20 +428,27 @@ func (d *DB) migratePictureListenerColumns() error {
 	return nil
 }
 
-// migrateCollectedPictureColumns adds Discord caption text on older DBs.
+// migrateCollectedPictureColumns adds caption + ignore flag on older DBs.
 func (d *DB) migrateCollectedPictureColumns() error {
 	cols, err := d.tableColumns("collected_pictures")
 	if err != nil {
 		return err
 	}
-	if cols["message_text"] {
-		return nil
+	if !cols["message_text"] {
+		if _, err := d.sql.Exec(`
+			ALTER TABLE collected_pictures
+			ADD COLUMN message_text TEXT NOT NULL DEFAULT ''
+		`); err != nil {
+			return fmt.Errorf("add message_text: %w", err)
+		}
 	}
-	if _, err := d.sql.Exec(`
-		ALTER TABLE collected_pictures
-		ADD COLUMN message_text TEXT NOT NULL DEFAULT ''
-	`); err != nil {
-		return fmt.Errorf("add message_text: %w", err)
+	if !cols["ignored"] {
+		if _, err := d.sql.Exec(`
+			ALTER TABLE collected_pictures
+			ADD COLUMN ignored INTEGER NOT NULL DEFAULT 0
+		`); err != nil {
+			return fmt.Errorf("add ignored: %w", err)
+		}
 	}
 	return nil
 }

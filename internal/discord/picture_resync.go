@@ -154,7 +154,7 @@ func ResyncPictureChannel(
 				formatSlideshowMessage(session, m), atts, reactionsFromMessage(m),
 			)
 			summary.Result.Merge(r)
-			ensureStatusChrome(ctx, session, channelID, m.ID, m, pictureStatusChrome(r))
+			stampPictureChrome(ctx, session, store, channelID, m.ID, m, r)
 		}
 
 		if hitEpochFloor {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
+	"subotto/internal/db"
 	"subotto/internal/ingest"
 	"subotto/internal/pictures"
 )
@@ -20,6 +21,8 @@ var (
 	chromeSaved  = []string{"💾"}
 	chromeOld    = []string{"🛑", "🇴", "🇱", "🇩"}
 	chromeDupe   = []string{"♻️", "🇩", "🇺", "🇵", "🇪"}
+	// 1-based attachment index on multi-image posts (Discord's blue keycaps).
+	indexKeycaps = []string{"1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"}
 )
 
 // contentStatusChrome picks 💾 / DUPE / OLD / ❌ for a content-listener result.
@@ -31,6 +34,108 @@ func contentStatusChrome(res ingest.Result) []string {
 // pictureStatusChrome picks the same chrome for a picture-listener result.
 func pictureStatusChrome(res pictures.Result) []string {
 	return statusChromeEmojis(res.Failed, res.Saved, res.OriginHits, res.SkippedOld, res.SkippedSame, res.Skipped)
+}
+
+// PictureIgnoreChrome is Admin include/ignore chrome for collected rows on one post.
+// 💾 if any image is still in the slideshow, ❌ if any is ignored, plus blue
+// keycaps for ignored indexes when the post has more than one saved image.
+func PictureIgnoreChrome(pics []db.CollectedPicture) []string {
+	if len(pics) == 0 {
+		return nil
+	}
+	anySaved := false
+	anyIgnored := false
+	for _, p := range pics {
+		if p.Ignored {
+			anyIgnored = true
+		} else {
+			anySaved = true
+		}
+	}
+	var out []string
+	if anySaved {
+		out = append(out, chromeSaved[0])
+	}
+	if anyIgnored {
+		out = append(out, chromeFailed[0])
+	}
+	if len(pics) > 1 {
+		for i, p := range pics {
+			if !p.Ignored || i >= len(indexKeycaps) {
+				continue
+			}
+			out = append(out, indexKeycaps[i])
+		}
+	}
+	return out
+}
+
+func stampPictureChrome(ctx context.Context, s *discordgo.Session, store *db.DB, channelID, messageID string, existing *discordgo.Message, res pictures.Result) {
+	if store != nil {
+		pics, err := store.ListCollectedPicturesByMessage(ctx, channelID, messageID)
+		if err == nil && len(pics) > 0 {
+			syncStatusChrome(ctx, s, channelID, messageID, existing, PictureIgnoreChrome(pics))
+			return
+		}
+	}
+	ensureStatusChrome(ctx, s, channelID, messageID, existing, pictureStatusChrome(res))
+}
+
+// syncStatusChrome adds missing wanted reacts and drops bot-owned 💾/❌/keycaps
+// that are no longer wanted. DUPE/OLD letter chrome is left alone.
+func syncStatusChrome(ctx context.Context, s *discordgo.Session, channelID, messageID string, existing *discordgo.Message, wanted []string) {
+	if s == nil || channelID == "" || messageID == "" {
+		return
+	}
+	for _, emoji := range extraManagedChrome(existing, wanted) {
+		if ctx != nil && ctx.Err() != nil {
+			return
+		}
+		if err := removeMessageReaction(ctx, s, channelID, messageID, emoji); err != nil {
+			slog.Warn("could not remove reaction",
+				"emoji", emoji,
+				"channel", channelID,
+				"message", messageID,
+				"err", err,
+			)
+			return
+		}
+	}
+	ensureStatusChrome(ctx, s, channelID, messageID, existing, wanted)
+}
+
+func extraManagedChrome(msg *discordgo.Message, wanted []string) []string {
+	if msg == nil {
+		return nil
+	}
+	keep := map[string]bool{}
+	for _, e := range wanted {
+		keep[normalizeEmoji(e)] = true
+	}
+	var extra []string
+	for _, r := range msg.Reactions {
+		if r == nil || r.Emoji == nil || !r.Me || r.Emoji.Name == "" {
+			continue
+		}
+		n := normalizeEmoji(r.Emoji.Name)
+		if !isManagedPictureChrome(n) || keep[n] {
+			continue
+		}
+		extra = append(extra, r.Emoji.Name)
+	}
+	return extra
+}
+
+func isManagedPictureChrome(normalized string) bool {
+	if normalized == normalizeEmoji(chromeSaved[0]) || normalized == normalizeEmoji(chromeFailed[0]) {
+		return true
+	}
+	for _, k := range indexKeycaps {
+		if normalized == normalizeEmoji(k) {
+			return true
+		}
+	}
+	return false
 }
 
 // statusChromeEmojis is the single stamp policy for every listener.
@@ -148,4 +253,27 @@ func addMessageReaction(ctx context.Context, s *discordgo.Session, channelID, me
 	case <-time.After(wait):
 	}
 	return s.MessageReactionAdd(channelID, messageID, emoji)
+}
+
+func removeMessageReaction(ctx context.Context, s *discordgo.Session, channelID, messageID, emoji string) error {
+	err := s.MessageReactionRemove(channelID, messageID, emoji, "@me")
+	if err == nil || !isDiscordRateLimit(err) {
+		return err
+	}
+	slog.Warn("discord rate limited while removing reaction — waiting then retrying once",
+		"channel", channelID,
+		"message", messageID,
+		"emoji", emoji,
+	)
+	wait := 2 * time.Second
+	if ctx == nil {
+		time.Sleep(wait)
+		return s.MessageReactionRemove(channelID, messageID, emoji, "@me")
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(wait):
+	}
+	return s.MessageReactionRemove(channelID, messageID, emoji, "@me")
 }

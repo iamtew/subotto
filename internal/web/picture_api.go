@@ -1,7 +1,10 @@
 package web
 
 import (
+	"context"
 	"net/http"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,6 +15,8 @@ import (
 func (s *Server) registerPictureAPI(mux *http.ServeMux) {
 	mux.Handle("GET /api/picture-listens", s.basicAuth(http.HandlerFunc(s.handleListPictureListeners)))
 	mux.Handle("POST /api/picture-listens", s.basicAuth(http.HandlerFunc(s.handleUpsertPictureListener)))
+	mux.Handle("GET /api/picture-listens/{channel}/images", s.basicAuth(http.HandlerFunc(s.handleListPictureImages)))
+	mux.Handle("PATCH /api/picture-listens/{channel}/images/{id}", s.basicAuth(http.HandlerFunc(s.handlePatchPictureImage)))
 	mux.Handle("PATCH /api/picture-listens/{channel}", s.basicAuth(http.HandlerFunc(s.handlePatchPictureListener)))
 	mux.Handle("DELETE /api/picture-listens/{channel}", s.basicAuth(http.HandlerFunc(s.handleDeletePictureListener)))
 	mux.Handle("POST /api/picture-resync", s.basicAuth(http.HandlerFunc(s.handlePictureResync)))
@@ -401,4 +406,102 @@ func (s *Server) handlePictureResync(w http.ResponseWriter, r *http.Request) {
 		"skipped":          summary.Result.Skipped,
 		"failed":           summary.Result.Failed,
 	})
+}
+
+type collectedImageDTO struct {
+	ID          int64  `json:"id"`
+	URL         string `json:"url"`
+	Author      string `json:"author"`
+	Ignored     bool   `json:"ignored"`
+	CollectedAt string `json:"collected_at"`
+}
+
+func (s *Server) handleListPictureImages(w http.ResponseWriter, r *http.Request) {
+	channelID := strings.TrimSpace(r.PathValue("channel"))
+	pl, err := s.store.GetPictureListenerByChannel(r.Context(), channelID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if pl == nil {
+		writeErr(w, http.StatusNotFound, "no picture listener for channel")
+		return
+	}
+	pics, err := s.store.ListAllCollectedPicturesForListener(r.Context(), pl.ID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	out := make([]collectedImageDTO, 0, len(pics))
+	for _, p := range pics {
+		out = append(out, collectedImageDTO{
+			ID:          p.ID,
+			URL:         "/media/pictures/" + filepath.ToSlash(p.StoredPath),
+			Author:      p.AuthorDisplayName,
+			Ignored:     p.Ignored,
+			CollectedAt: p.CollectedAt.UTC().Format(time.RFC3339),
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"images": out})
+}
+
+type pictureIgnoreBody struct {
+	Ignored *bool `json:"ignored"`
+}
+
+func (s *Server) handlePatchPictureImage(w http.ResponseWriter, r *http.Request) {
+	channelID := strings.TrimSpace(r.PathValue("channel"))
+	id, err := strconv.ParseInt(strings.TrimSpace(r.PathValue("id")), 10, 64)
+	if err != nil || id < 1 {
+		writeErr(w, http.StatusBadRequest, "invalid image id")
+		return
+	}
+	pl, err := s.store.GetPictureListenerByChannel(r.Context(), channelID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if pl == nil {
+		writeErr(w, http.StatusNotFound, "no picture listener for channel")
+		return
+	}
+	pic, err := s.store.GetCollectedPicture(r.Context(), id)
+	if err != nil || pic == nil || pic.ListenerID != pl.ID {
+		writeErr(w, http.StatusNotFound, "image not found for this listener")
+		return
+	}
+	var body pictureIgnoreBody
+	if err := readJSON(r, &body); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	if body.Ignored == nil {
+		writeErr(w, http.StatusBadRequest, "ignored is required")
+		return
+	}
+	if err := s.store.SetCollectedPictureIgnored(r.Context(), id, *body.Ignored); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	out := map[string]any{"ok": true, "ignored": *body.Ignored}
+	if err := s.syncPictureIgnoreChrome(r.Context(), channelID, pic.DiscordMessageID); err != nil {
+		out["chrome_error"] = err.Error()
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+type messageChromeSyncer interface {
+	SyncMessageChrome(ctx context.Context, channelID, messageID string, wanted []string) error
+}
+
+func (s *Server) syncPictureIgnoreChrome(ctx context.Context, channelID, messageID string) error {
+	syncer, ok := s.discord.(messageChromeSyncer)
+	if !ok || syncer == nil {
+		return nil
+	}
+	pics, err := s.store.ListCollectedPicturesByMessage(ctx, channelID, messageID)
+	if err != nil {
+		return err
+	}
+	return syncer.SyncMessageChrome(ctx, channelID, messageID, discord.PictureIgnoreChrome(pics))
 }

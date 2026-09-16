@@ -6,6 +6,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
+	"subotto/internal/db"
 	"subotto/internal/ingest"
 	"subotto/internal/pictures"
 )
@@ -45,6 +46,28 @@ func TestContentAndPictureChromeSharePolicy(t *testing.T) {
 	}
 }
 
+func TestPictureIgnoreChrome(t *testing.T) {
+	saved := []db.CollectedPicture{{ID: 1}}
+	if !slices.Equal(PictureIgnoreChrome(saved), chromeSaved) {
+		t.Fatalf("one saved: %v", PictureIgnoreChrome(saved))
+	}
+	ignored := []db.CollectedPicture{{ID: 1, Ignored: true}}
+	if !slices.Equal(PictureIgnoreChrome(ignored), chromeFailed) {
+		t.Fatalf("one ignored: %v", PictureIgnoreChrome(ignored))
+	}
+	got := PictureIgnoreChrome([]db.CollectedPicture{
+		{ID: 1},
+		{ID: 2, Ignored: true},
+	})
+	want := []string{"💾", "❌", "2️⃣"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("two pics ignore second: got %v want %v", got, want)
+	}
+	if PictureIgnoreChrome(nil) != nil {
+		t.Fatal("empty should be nil")
+	}
+}
+
 func TestMissingStatusEmojisSkipsPresent(t *testing.T) {
 	msg := &discordgo.Message{
 		Reactions: []*discordgo.MessageReactions{
@@ -81,5 +104,19 @@ func TestMissingStatusEmojisIgnoresHumanReacts(t *testing.T) {
 	}
 	if got := missingStatusEmojis(msg, chromeSaved); !slices.Equal(got, chromeSaved) {
 		t.Fatalf("human 💾 is not Subotto chrome: %v", got)
+	}
+}
+
+func TestExtraManagedChromeLeavesDupeLetters(t *testing.T) {
+	msg := &discordgo.Message{
+		Reactions: []*discordgo.MessageReactions{
+			{Me: true, Emoji: &discordgo.Emoji{Name: "💾"}},
+			{Me: true, Emoji: &discordgo.Emoji{Name: "♻️"}},
+			{Me: true, Emoji: &discordgo.Emoji{Name: "🇩"}},
+		},
+	}
+	got := extraManagedChrome(msg, chromeFailed)
+	if len(got) != 1 || got[0] != "💾" {
+		t.Fatalf("should drop 💾 only, keep DUPE letters: %v", got)
 	}
 }

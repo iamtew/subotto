@@ -140,6 +140,19 @@ func (b *Bot) Connected() bool {
 	return b.ready.Load()
 }
 
+// SyncMessageChrome restamps 💾 / ❌ / index keycaps on one Discord post.
+func (b *Bot) SyncMessageChrome(ctx context.Context, channelID, messageID string, wanted []string) error {
+	if b == nil || b.session == nil || !b.Connected() {
+		return fmt.Errorf("discord not connected")
+	}
+	msg, err := b.session.ChannelMessage(channelID, messageID)
+	if err != nil {
+		return err
+	}
+	syncStatusChrome(ctx, b.session, channelID, messageID, msg, wanted)
+	return nil
+}
+
 // Open connects to the Discord gateway (one attempt).
 func (b *Bot) Open() error {
 	if err := b.session.Open(); err != nil {
@@ -335,7 +348,7 @@ func (b *Bot) handlePictureListener(ctx context.Context, s *discordgo.Session, m
 		ctx, b.store, pl, m.ID, m.Author.ID, displayNameFromMessage(m.Message),
 		formatSlideshowMessage(s, m.Message), atts, reactions,
 	)
-	ensureStatusChrome(ctx, s, m.ChannelID, m.ID, m.Message, pictureStatusChrome(res))
+	stampPictureChrome(ctx, s, b.store, m.ChannelID, m.ID, m.Message, res)
 }
 
 func (b *Bot) onMessageUpdate(s *discordgo.Session, m *discordgo.MessageUpdate) {

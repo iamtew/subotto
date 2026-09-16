@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -196,6 +197,55 @@ func TestPictureListensAndPublicSlideshow(t *testing.T) {
 		t.Fatalf("show_comment should default on: %+v", feed)
 	}
 
+	pl, err := store.GetPictureListenerByChannel(context.Background(), "222")
+	if err != nil || pl == nil {
+		t.Fatalf("listener: %v %+v", err, pl)
+	}
+	pic, err := store.InsertCollectedPicture(context.Background(), db.CollectedPicture{
+		ListenerID:          pl.ID,
+		DiscordMessageID:    "msg-1",
+		DiscordAttachmentID: "att-1",
+		AuthorDisplayName:   "MeatBag",
+		StoredPath:          pl.Slug + "/msg-1_att-1.jpg",
+		ContentType:         "image/jpeg",
+	})
+	if err != nil {
+		t.Fatalf("insert pic: %v", err)
+	}
+	req = httptest.NewRequest(http.MethodGet, "/api/slideshow/obs_night", nil)
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if err := json.Unmarshal(rec.Body.Bytes(), &feed); err != nil {
+		t.Fatal(err)
+	}
+	if len(feed.Images) != 1 || feed.Images[0].ID != pic.ID {
+		t.Fatalf("feed should include saved pic: %+v", feed.Images)
+	}
+	req = httptest.NewRequest(http.MethodGet, "/api/picture-listens/222/images", nil)
+	req.SetBasicAuth("admin", "test-pass")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list images: %d %s", rec.Code, rec.Body.String())
+	}
+	req = httptest.NewRequest(http.MethodPatch, "/api/picture-listens/222/images/"+strconv.FormatInt(pic.ID, 10), strings.NewReader(`{"ignored":true}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetBasicAuth("admin", "test-pass")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("ignore image: %d %s", rec.Code, rec.Body.String())
+	}
+	req = httptest.NewRequest(http.MethodGet, "/api/slideshow/obs_night", nil)
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if err := json.Unmarshal(rec.Body.Bytes(), &feed); err != nil {
+		t.Fatal(err)
+	}
+	if len(feed.Images) != 0 {
+		t.Fatalf("ignored image should drop from slideshow: %+v", feed.Images)
+	}
+
 	// Public page — no auth.
 	req = httptest.NewRequest(http.MethodGet, "/slideshow/obs_night", nil)
 	rec = httptest.NewRecorder()
@@ -224,7 +274,7 @@ func TestPictureListensAndPublicSlideshow(t *testing.T) {
 	}
 
 	// Seed a picture file + row, then hit media URL publicly.
-	pl, err := store.GetPictureListenerBySlug(context.Background(), "obs_night")
+	pl, err = store.GetPictureListenerBySlug(context.Background(), "obs_night")
 	if err != nil || pl == nil {
 		t.Fatalf("get pl: %v", err)
 	}

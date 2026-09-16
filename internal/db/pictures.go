@@ -88,6 +88,7 @@ type CollectedPicture struct {
 	MessageText          string // Discord message body posted with the image (may be empty)
 	CollectedAt          time.Time
 	Reactions            []ReactionCount // Discord order preserved
+	Ignored              bool            // true = keep on disk, drop from slideshow
 }
 
 // PictureListenerInput is the create/update payload from Admin / CLI.
@@ -679,27 +680,49 @@ func (d *DB) InsertCollectedPicture(ctx context.Context, p CollectedPicture) (*C
 	return d.GetCollectedPicture(ctx, id)
 }
 
+const collectedPictureSelect = `
+	id, listener_id, discord_message_id, discord_attachment_id,
+	author_id, author_display_name, stored_path, content_type,
+	message_text, collected_at, reactions_json, ignored
+`
+
+const collectedPictureSelectAliased = `
+	c.id, c.listener_id, c.discord_message_id, c.discord_attachment_id,
+	c.author_id, c.author_display_name, c.stored_path, c.content_type,
+	c.message_text, c.collected_at, c.reactions_json, c.ignored
+`
+
 // GetCollectedPicture loads one row by id.
 func (d *DB) GetCollectedPicture(ctx context.Context, id int64) (*CollectedPicture, error) {
 	row := d.sql.QueryRowContext(ctx, `
-		SELECT id, listener_id, discord_message_id, discord_attachment_id,
-		       author_id, author_display_name, stored_path, content_type,
-		       message_text, collected_at, reactions_json
+		SELECT `+collectedPictureSelect+`
 		FROM collected_pictures WHERE id = ?
 	`, id)
 	return scanCollectedPicture(row)
 }
 
-// ListCollectedPicturesForListener returns images for a slideshow feed (oldest first).
+// ListCollectedPicturesForListener returns slideshow images (oldest first, ignored omitted).
 func (d *DB) ListCollectedPicturesForListener(ctx context.Context, listenerID int64) ([]CollectedPicture, error) {
-	rows, err := d.sql.QueryContext(ctx, `
-		SELECT id, listener_id, discord_message_id, discord_attachment_id,
-		       author_id, author_display_name, stored_path, content_type,
-		       message_text, collected_at, reactions_json
+	return d.listCollectedPictures(ctx, `
+		SELECT `+collectedPictureSelect+`
+		FROM collected_pictures
+		WHERE listener_id = ? AND ignored = 0
+		ORDER BY id ASC
+	`, listenerID)
+}
+
+// ListAllCollectedPicturesForListener returns every saved image including ignored ones.
+func (d *DB) ListAllCollectedPicturesForListener(ctx context.Context, listenerID int64) ([]CollectedPicture, error) {
+	return d.listCollectedPictures(ctx, `
+		SELECT `+collectedPictureSelect+`
 		FROM collected_pictures
 		WHERE listener_id = ?
 		ORDER BY id ASC
 	`, listenerID)
+}
+
+func (d *DB) listCollectedPictures(ctx context.Context, query string, args ...any) ([]CollectedPicture, error) {
+	rows, err := d.sql.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list collected pictures: %w", err)
 	}
@@ -722,38 +745,35 @@ func (d *DB) ListCollectedPicturesForListener(ctx context.Context, listenerID in
 	return out, nil
 }
 
+// SetCollectedPictureIgnored toggles whether an image appears in the slideshow.
+func (d *DB) SetCollectedPictureIgnored(ctx context.Context, id int64, ignored bool) error {
+	res, err := d.sql.ExecContext(ctx, `
+		UPDATE collected_pictures SET ignored = ? WHERE id = ?
+	`, boolToInt(ignored), id)
+	if err != nil {
+		return fmt.Errorf("set picture ignored: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("collected picture %d not found", id)
+	}
+	return nil
+}
+
 // ListCollectedPicturesByMessage returns all saved attachments for a Discord message
 // across any listener (used when reactions change).
 func (d *DB) ListCollectedPicturesByMessage(ctx context.Context, channelID, messageID string) ([]CollectedPicture, error) {
-	rows, err := d.sql.QueryContext(ctx, `
-		SELECT c.id, c.listener_id, c.discord_message_id, c.discord_attachment_id,
-		       c.author_id, c.author_display_name, c.stored_path, c.content_type,
-		       c.message_text, c.collected_at, c.reactions_json
+	return d.listCollectedPictures(ctx, `
+		SELECT `+collectedPictureSelectAliased+`
 		FROM collected_pictures c
 		INNER JOIN picture_listeners p ON p.id = c.listener_id
 		WHERE p.discord_channel_id = ? AND c.discord_message_id = ?
 		  AND p.active_until IS NULL
+		ORDER BY c.id ASC
 	`, channelID, messageID)
-	if err != nil {
-		return nil, fmt.Errorf("list pictures by message: %w", err)
-	}
-	defer rows.Close()
-
-	var out []CollectedPicture
-	for rows.Next() {
-		p, err := scanCollectedPicture(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, *p)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	if out == nil {
-		out = []CollectedPicture{}
-	}
-	return out, nil
 }
 
 // UpdatePictureReactions sets reactions_json for every collected row of a message
@@ -898,6 +918,7 @@ func scanCollectedPicture(row scannable) (*CollectedPicture, error) {
 		p            CollectedPicture
 		collectedAt  string
 		reactionsRaw string
+		ignored      int
 	)
 	err := row.Scan(
 		&p.ID,
@@ -911,12 +932,14 @@ func scanCollectedPicture(row scannable) (*CollectedPicture, error) {
 		&p.MessageText,
 		&collectedAt,
 		&reactionsRaw,
+		&ignored,
 	)
 	if err != nil {
 		return nil, err
 	}
 	p.CollectedAt = parseSQLiteTime(collectedAt)
 	p.Reactions = parseReactionsJSON(reactionsRaw)
+	p.Ignored = ignored == 1
 	return &p, nil
 }
 

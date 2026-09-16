@@ -50,6 +50,8 @@ const API_CATALOG = [
       { method: "POST", path: "/api/picture-listens", note: "Start or upsert a picture listener." },
       { method: "PATCH", path: "/api/picture-listens/{channel}", note: "Pause / resume / edit a picture listener." },
       { method: "DELETE", path: "/api/picture-listens/{channel}", note: "Cease a picture listener epoch." },
+      { method: "GET", path: "/api/picture-listens/{channel}/images", note: "Collected slideshow images (including ignored)." },
+      { method: "PATCH", path: "/api/picture-listens/{channel}/images/{id}", note: "Ignore or restore one image in the slideshow." },
       { method: "POST", path: "/api/picture-resync", note: "Replay Discord history into on-disk pictures." },
       { method: "GET", path: "/api/discord/guilds", note: "Servers the bot can see." },
       { method: "GET", path: "/api/discord/guilds/{guild}/channels", note: "Text channels in one server." },
@@ -1171,6 +1173,7 @@ async function loadPictureListens() {
           <td class="api-cell">${apiCell}</td>
           <td class="actions">
             <button type="button" class="secondary" data-pact="settings" data-channel="${ch}">Settings</button>
+            <button type="button" class="secondary" data-pact="images" data-channel="${ch}">Images</button>
             <button type="button" class="secondary" data-pact="toggle" data-channel="${ch}" data-enabled="${p.enabled}">
               ${p.enabled ? "Pause" : "Resume"}
             </button>
@@ -2856,7 +2859,7 @@ document.getElementById("picture-listens-table").addEventListener("click", async
   if (!btn || btn.disabled) return;
   const channel = btn.getAttribute("data-channel");
   const act = btn.getAttribute("data-pact");
-  if (act === "settings" || act === "resync") {
+  if (act === "settings" || act === "resync" || act === "images") {
     // Navigation-only — no network mutate yet.
   } else {
     btn.disabled = true;
@@ -2889,6 +2892,9 @@ document.getElementById("picture-listens-table").addEventListener("click", async
       return;
     } else if (act === "settings") {
       openPictureSettings(channel);
+      return;
+    } else if (act === "images") {
+      openPictureImages(channel);
       return;
     }
     await refreshAll();
@@ -2935,6 +2941,87 @@ function closePictureSettings() {
   document.getElementById("picture-settings-panel").hidden = true;
   document.getElementById("picture-settings-channel").value = "";
 }
+
+async function openPictureImages(channelID) {
+  const p = cachedPictureListens.find((row) => row.discord_channel_id === channelID);
+  if (!p) {
+    toast("picture listener not found — refresh and try again", true);
+    return;
+  }
+  closePictureSettings();
+  const panel = document.getElementById("picture-images-panel");
+  document.getElementById("picture-images-channel").value = p.discord_channel_id;
+  const ch = channelLabel(p);
+  document.getElementById("picture-images-target").textContent =
+    (p.name || "unnamed") + " · " + (p.slug || "") + " · " + ch;
+  panel.hidden = false;
+  panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  await loadPictureImagesGrid(p.discord_channel_id);
+}
+
+function closePictureImages() {
+  document.getElementById("picture-images-panel").hidden = true;
+  document.getElementById("picture-images-channel").value = "";
+  document.getElementById("picture-images-grid").innerHTML = "";
+}
+
+async function loadPictureImagesGrid(channelID) {
+  const grid = document.getElementById("picture-images-grid");
+  grid.innerHTML = `<p class="empty">loading…</p>`;
+  try {
+    const data = await api("/api/picture-listens/" + encodeURIComponent(channelID) + "/images");
+    const rows = data.images || [];
+    if (!rows.length) {
+      grid.innerHTML = `<p class="empty">no pictures yet</p>`;
+      return;
+    }
+    grid.innerHTML = rows
+      .map((img) => {
+        const ignored = !!img.ignored;
+        const mark = ignored ? "❌" : "💾";
+        return `<button type="button" class="pic-thumb${ignored ? " is-ignored" : ""}" data-image-id="${esc(String(img.id))}" data-ignored="${ignored ? "1" : "0"}" title="${ignored ? "ignored — click to restore" : "in slideshow — click to ignore"}">
+          <img src="${esc(img.url)}" alt="${esc(img.author || "")}">
+          <span class="pic-thumb-mark" aria-hidden="true">${mark}</span>
+        </button>`;
+      })
+      .join("");
+  } catch (err) {
+    grid.innerHTML = `<p class="empty">failed: ${esc(err.message)}</p>`;
+  }
+}
+
+document.getElementById("picture-images-close").addEventListener("click", () => {
+  closePictureImages();
+});
+
+document.getElementById("picture-images-grid").addEventListener("click", async (ev) => {
+  const btn = ev.target.closest("button.pic-thumb");
+  if (!btn || btn.disabled) return;
+  const channel = document.getElementById("picture-images-channel").value;
+  const id = btn.getAttribute("data-image-id");
+  const ignored = btn.getAttribute("data-ignored") === "1";
+  if (!channel || !id) return;
+  btn.disabled = true;
+  try {
+    const data = await api(
+      "/api/picture-listens/" + encodeURIComponent(channel) + "/images/" + encodeURIComponent(id),
+      { method: "PATCH", body: JSON.stringify({ ignored: !ignored }) }
+    );
+    const nowIgnored = !!data.ignored;
+    btn.classList.toggle("is-ignored", nowIgnored);
+    btn.setAttribute("data-ignored", nowIgnored ? "1" : "0");
+    btn.title = nowIgnored ? "ignored — click to restore" : "in slideshow — click to ignore";
+    const mark = btn.querySelector(".pic-thumb-mark");
+    if (mark) mark.textContent = nowIgnored ? "❌" : "💾";
+    if (data.chrome_error) {
+      toast("image updated, Discord react failed: " + data.chrome_error, true);
+    }
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 document.getElementById("picture-settings-cancel").addEventListener("click", () => {
   closePictureSettings();
