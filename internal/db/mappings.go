@@ -78,7 +78,7 @@ func (d *DB) UpsertMapping(ctx context.Context, channelID, guildID, playlistID, 
 	}
 
 	if existing != nil {
-		// Close previous epoch so resync lookback can stop at this boundary.
+		// Close previous epoch so Admin lists only the live mapping.
 		if _, err := d.sql.ExecContext(ctx, `
 			UPDATE channel_mappings
 			SET active_until = ?, enabled = 0
@@ -190,30 +190,27 @@ func (d *DB) DeleteMapping(ctx context.Context, channelID string) error {
 }
 
 // ResyncNotBefore returns the earliest Discord message time a resync should
-// consider for this channel's *current* mapping.
+// consider: the current mapping's active_from (listener start).
 //
-// If a previous epoch exists, we do not look further back than when that epoch
-// ended (same instant the new one started). First mapping on a channel: zero
-// time → resync may walk by message limit only.
+// No live mapping: zero time.
 func (d *DB) ResyncNotBefore(ctx context.Context, channelID string) (time.Time, error) {
 	channelID = strings.TrimSpace(channelID)
-	var until sql.NullString
+	var from sql.NullString
 	err := d.sql.QueryRowContext(ctx, `
-		SELECT active_until FROM channel_mappings
-		WHERE discord_channel_id = ? AND active_until IS NOT NULL
-		ORDER BY active_until DESC, id DESC
+		SELECT active_from FROM channel_mappings
+		WHERE discord_channel_id = ? AND active_until IS NULL
 		LIMIT 1
-	`, channelID).Scan(&until)
+	`, channelID).Scan(&from)
 	if err == sql.ErrNoRows {
 		return time.Time{}, nil
 	}
 	if err != nil {
 		return time.Time{}, err
 	}
-	if !until.Valid || strings.TrimSpace(until.String) == "" {
+	if !from.Valid || strings.TrimSpace(from.String) == "" {
 		return time.Time{}, nil
 	}
-	return parseSQLiteTime(until.String), nil
+	return parseSQLiteTime(from.String), nil
 }
 
 type scannable interface {

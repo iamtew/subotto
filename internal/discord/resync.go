@@ -129,10 +129,10 @@ func ResyncChannel(
 		}
 
 		for _, m := range msgs {
-			// Newest-first: once we cross the previous epoch boundary, stop.
+			// Newest-first: once we cross this listener's start, stop.
 			if !notBefore.IsZero() && m.Timestamp.Before(notBefore) {
 				hitEpochFloor = true
-				slog.Info("resync reached previous mapping boundary",
+				slog.Info("resync reached listener start",
 					"channel", channelID,
 					"not_before", notBefore.UTC().Format(time.RFC3339),
 					"message_time", m.Timestamp.UTC().Format(time.RFC3339),

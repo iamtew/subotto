@@ -522,30 +522,27 @@ func (d *DB) DeletePictureListener(ctx context.Context, channelID string) error 
 }
 
 // PictureResyncNotBefore returns the earliest Discord message time a picture
-// resync should consider for this channel's *current* picture listener.
+// resync should consider: the current listener's active_from (start).
 //
-// If a previous picture-listener epoch exists, we do not look further back than
-// when that epoch ended. First picture listener on a channel: zero time →
-// resync may walk by message limit only.
+// No live picture listener: zero time.
 func (d *DB) PictureResyncNotBefore(ctx context.Context, channelID string) (time.Time, error) {
 	channelID = strings.TrimSpace(channelID)
-	var until sql.NullString
+	var from sql.NullString
 	err := d.sql.QueryRowContext(ctx, `
-		SELECT active_until FROM picture_listeners
-		WHERE discord_channel_id = ? AND active_until IS NOT NULL
-		ORDER BY active_until DESC, id DESC
+		SELECT active_from FROM picture_listeners
+		WHERE discord_channel_id = ? AND active_until IS NULL
 		LIMIT 1
-	`, channelID).Scan(&until)
+	`, channelID).Scan(&from)
 	if err == sql.ErrNoRows {
 		return time.Time{}, nil
 	}
 	if err != nil {
 		return time.Time{}, err
 	}
-	if !until.Valid || strings.TrimSpace(until.String) == "" {
+	if !from.Valid || strings.TrimSpace(from.String) == "" {
 		return time.Time{}, nil
 	}
-	return parseSQLiteTime(until.String), nil
+	return parseSQLiteTime(from.String), nil
 }
 
 // CountPictureListeners returns how many *active* picture listeners exist.

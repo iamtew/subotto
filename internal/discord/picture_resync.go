@@ -23,8 +23,7 @@ type PictureResyncSummary struct {
 // and saves image attachments through pictures.ProcessAttachments.
 //
 // Status chrome is stamped the same way as live ingest (current 💾 / DUPE /
-// OLD / ❌, stale bot reacts dropped). Stops at the previous picture-listener epoch
-// boundary when one exists.
+// OLD / ❌, stale bot reacts dropped). Stops at this picture listener's start.
 func ResyncPictureChannel(
 	ctx context.Context,
 	token string,
@@ -119,7 +118,7 @@ func ResyncPictureChannel(
 		for _, m := range msgs {
 			if !notBefore.IsZero() && m.Timestamp.Before(notBefore) {
 				hitEpochFloor = true
-				slog.Info("picture resync reached previous listener boundary",
+				slog.Info("picture resync reached listener start",
 					"channel", channelID,
 					"not_before", notBefore.UTC().Format(time.RFC3339),
 					"message_time", m.Timestamp.UTC().Format(time.RFC3339),

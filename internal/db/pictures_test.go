@@ -392,10 +392,10 @@ func TestPictureResyncNotBefore(t *testing.T) {
 
 	nb, err := store.PictureResyncNotBefore(ctx, "chan-pr")
 	if err != nil || !nb.IsZero() {
-		t.Fatalf("first epoch should have zero floor: %v %v", nb, err)
+		t.Fatalf("no listener should have zero floor: %v %v", nb, err)
 	}
 
-	_, err = store.UpsertPictureListener(ctx, PictureListenerInput{
+	p1, err := store.UpsertPictureListener(ctx, PictureListenerInput{
 		DiscordChannelID: "chan-pr",
 		Name:             "epoch_one",
 		Enabled:          true,
@@ -406,10 +406,14 @@ func TestPictureResyncNotBefore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("start 1: %v", err)
 	}
+	nb1, err := store.PictureResyncNotBefore(ctx, "chan-pr")
+	if err != nil || nb1.IsZero() || !nb1.Equal(p1.ActiveFrom) {
+		t.Fatalf("first listener floor should be active_from %v, got %v err=%v", p1.ActiveFrom, nb1, err)
+	}
 	if err := store.DeletePictureListener(ctx, "chan-pr"); err != nil {
 		t.Fatalf("cease: %v", err)
 	}
-	_, err = store.UpsertPictureListener(ctx, PictureListenerInput{
+	p2, err := store.UpsertPictureListener(ctx, PictureListenerInput{
 		DiscordChannelID: "chan-pr",
 		Name:             "epoch_two",
 		Enabled:          true,
@@ -422,7 +426,7 @@ func TestPictureResyncNotBefore(t *testing.T) {
 	}
 
 	nb2, err := store.PictureResyncNotBefore(ctx, "chan-pr")
-	if err != nil || nb2.IsZero() {
-		t.Fatalf("expected epoch floor after prior cease: %v err=%v", nb2, err)
+	if err != nil || nb2.IsZero() || !nb2.Equal(p2.ActiveFrom) {
+		t.Fatalf("new listener floor should be active_from %v, got %v err=%v", p2.ActiveFrom, nb2, err)
 	}
 }

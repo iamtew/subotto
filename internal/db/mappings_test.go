@@ -105,13 +105,12 @@ func TestMappingEpochReplaceAndLookback(t *testing.T) {
 		t.Fatalf("upsert1: %v", err)
 	}
 
-	// First epoch: no previous boundary.
 	nb, err := store.ResyncNotBefore(ctx, "chan-x")
 	if err != nil {
 		t.Fatalf("notBefore1: %v", err)
 	}
-	if !nb.IsZero() {
-		t.Fatalf("first mapping should have no lookback floor, got %v", nb)
+	if nb.IsZero() || !nb.Equal(m1.ActiveFrom) {
+		t.Fatalf("first mapping floor should be active_from %v, got %v", m1.ActiveFrom, nb)
 	}
 
 	m2, err := store.UpsertMapping(ctx, "chan-x", "g", "pl-new", "fortnight-2", true)
@@ -138,7 +137,7 @@ func TestMappingEpochReplaceAndLookback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("notBefore2: %v", err)
 	}
-	if nb2.IsZero() {
-		t.Fatal("second epoch must have a lookback floor from previous active_until")
+	if nb2.IsZero() || !nb2.Equal(m2.ActiveFrom) {
+		t.Fatalf("second epoch floor should be active_from %v, got %v", m2.ActiveFrom, nb2)
 	}
 }
