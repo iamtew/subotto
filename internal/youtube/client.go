@@ -34,14 +34,18 @@ func NewClient(ctx context.Context, store *db.DB, clientID, clientSecret, redire
 	}
 
 	cfg := OAuthConfig(clientID, clientSecret, redirectURL)
-	base := cfg.TokenSource(ctx, tok)
+	// oauth2 TokenSource / NewClient die when this ctx is canceled. Admin
+	// Reload uses r.Context(); after the callback returns that ctx is dead
+	// and the next playlist add fails refreshing the access token.
+	life := context.Background()
+	base := cfg.TokenSource(life, tok)
 	src := &savingTokenSource{
 		src:   oauth2.ReuseTokenSource(tok, base),
 		store: store,
 	}
 
-	httpClient := oauth2.NewClient(ctx, src)
-	svc, err := ytapi.NewService(ctx, option.WithHTTPClient(httpClient))
+	httpClient := oauth2.NewClient(life, src)
+	svc, err := ytapi.NewService(life, option.WithHTTPClient(httpClient))
 	if err != nil {
 		return nil, fmt.Errorf("create youtube service: %w", err)
 	}

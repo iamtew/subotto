@@ -318,7 +318,7 @@ func (b *Bot) handleContentListener(ctx context.Context, s *discordgo.Session, m
 	}
 
 	res := ingest.ProcessContent(ctx, b.store, b.yt, mapping, m.ChannelID, m.ID, m.Content)
-	ensureStatusChrome(ctx, s, m.ChannelID, m.ID, m.Message, contentStatusChrome(res))
+	syncStatusChrome(ctx, s, m.ChannelID, m.ID, m.Message, contentStatusChrome(res))
 }
 
 func (b *Bot) handlePictureListener(ctx context.Context, s *discordgo.Session, m *discordgo.MessageCreate) {

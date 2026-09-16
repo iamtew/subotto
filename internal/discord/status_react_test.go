@@ -107,7 +107,26 @@ func TestMissingStatusEmojisIgnoresHumanReacts(t *testing.T) {
 	}
 }
 
-func TestExtraManagedChromeLeavesDupeLetters(t *testing.T) {
+func TestExtraManagedChromeSwapsSavedAndFailed(t *testing.T) {
+	failed := &discordgo.Message{
+		Reactions: []*discordgo.MessageReactions{
+			{Me: true, Emoji: &discordgo.Emoji{Name: "❌"}},
+		},
+	}
+	if got := extraManagedChrome(failed, chromeSaved); !slices.Equal(got, []string{"❌"}) {
+		t.Fatalf("💾 should drop previous ❌: %v", got)
+	}
+	saved := &discordgo.Message{
+		Reactions: []*discordgo.MessageReactions{
+			{Me: true, Emoji: &discordgo.Emoji{Name: "💾"}},
+		},
+	}
+	if got := extraManagedChrome(saved, chromeFailed); !slices.Equal(got, []string{"💾"}) {
+		t.Fatalf("❌ should drop previous 💾: %v", got)
+	}
+}
+
+func TestExtraManagedChromeDropsStaleDupe(t *testing.T) {
 	msg := &discordgo.Message{
 		Reactions: []*discordgo.MessageReactions{
 			{Me: true, Emoji: &discordgo.Emoji{Name: "💾"}},
@@ -116,7 +135,24 @@ func TestExtraManagedChromeLeavesDupeLetters(t *testing.T) {
 		},
 	}
 	got := extraManagedChrome(msg, chromeFailed)
-	if len(got) != 1 || got[0] != "💾" {
-		t.Fatalf("should drop 💾 only, keep DUPE letters: %v", got)
+	want := []string{"💾", "♻️", "🇩"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("status chrome is exclusive: got %v want %v", got, want)
+	}
+}
+
+func TestExtraManagedChromeKeepsWantedIgnoreSet(t *testing.T) {
+	msg := &discordgo.Message{
+		Reactions: []*discordgo.MessageReactions{
+			{Me: true, Emoji: &discordgo.Emoji{Name: "💾"}},
+			{Me: true, Emoji: &discordgo.Emoji{Name: "❌"}},
+			{Me: true, Emoji: &discordgo.Emoji{Name: "2️⃣"}},
+			{Me: true, Emoji: &discordgo.Emoji{Name: "🇩"}},
+		},
+	}
+	wanted := []string{"💾", "❌", "2️⃣"}
+	got := extraManagedChrome(msg, wanted)
+	if !slices.Equal(got, []string{"🇩"}) {
+		t.Fatalf("keep ignore chrome, drop leftover DUPE: %v", got)
 	}
 }

@@ -34,7 +34,7 @@ type ResyncSummary struct {
 // gateway) and feeds each one through ingest.ProcessContent.
 //
 // Status chrome (💾 / DUPE / OLD / ❌) is part of the contract: resync stamps
-// any missing reacts so Meat Bag can see the bot working on history too.
+// the current status and drops stale bot reacts from an earlier run.
 func ResyncChannel(
 	ctx context.Context,
 	token string,
@@ -145,7 +145,7 @@ func ResyncChannel(
 			}
 			r := ingest.ProcessContent(ctx, store, yt, mapping, channelID, m.ID, m.Content)
 			summary.Result.Merge(r)
-			ensureStatusChrome(ctx, session, channelID, m.ID, m, contentStatusChrome(r))
+			syncStatusChrome(ctx, session, channelID, m.ID, m, contentStatusChrome(r))
 		}
 
 		if hitEpochFloor {

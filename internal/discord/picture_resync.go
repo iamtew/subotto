@@ -22,8 +22,8 @@ type PictureResyncSummary struct {
 // ResyncPictureChannel walks recent messages in a Discord channel (REST only)
 // and saves image attachments through pictures.ProcessAttachments.
 //
-// Status chrome is stamped the same way as live ingest (missing 💾 / DUPE /
-// OLD / ❌ get filled in). Stops at the previous picture-listener epoch
+// Status chrome is stamped the same way as live ingest (current 💾 / DUPE /
+// OLD / ❌, stale bot reacts dropped). Stops at the previous picture-listener epoch
 // boundary when one exists.
 func ResyncPictureChannel(
 	ctx context.Context,

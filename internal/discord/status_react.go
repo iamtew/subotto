@@ -78,13 +78,17 @@ func stampPictureChrome(ctx context.Context, s *discordgo.Session, store *db.DB,
 			return
 		}
 	}
-	ensureStatusChrome(ctx, s, channelID, messageID, existing, pictureStatusChrome(res))
+	wanted := pictureStatusChrome(res)
+	if len(wanted) == 0 {
+		return
+	}
+	syncStatusChrome(ctx, s, channelID, messageID, existing, wanted)
 }
 
-// syncStatusChrome adds missing wanted reacts and drops bot-owned 💾/❌/keycaps
-// that are no longer wanted. DUPE/OLD letter chrome is left alone.
+// syncStatusChrome adds missing wanted reacts and drops bot-owned status
+// chrome (💾 / ❌ / DUPE / OLD / keycaps) that is no longer wanted.
 func syncStatusChrome(ctx context.Context, s *discordgo.Session, channelID, messageID string, existing *discordgo.Message, wanted []string) {
-	if s == nil || channelID == "" || messageID == "" {
+	if s == nil || channelID == "" || messageID == "" || len(wanted) == 0 {
 		return
 	}
 	for _, emoji := range extraManagedChrome(existing, wanted) {
@@ -118,7 +122,7 @@ func extraManagedChrome(msg *discordgo.Message, wanted []string) []string {
 			continue
 		}
 		n := normalizeEmoji(r.Emoji.Name)
-		if !isManagedPictureChrome(n) || keep[n] {
+		if !isManagedStatusChrome(n) || keep[n] {
 			continue
 		}
 		extra = append(extra, r.Emoji.Name)
@@ -126,13 +130,12 @@ func extraManagedChrome(msg *discordgo.Message, wanted []string) []string {
 	return extra
 }
 
-func isManagedPictureChrome(normalized string) bool {
-	if normalized == normalizeEmoji(chromeSaved[0]) || normalized == normalizeEmoji(chromeFailed[0]) {
-		return true
-	}
-	for _, k := range indexKeycaps {
-		if normalized == normalizeEmoji(k) {
-			return true
+func isManagedStatusChrome(normalized string) bool {
+	for _, group := range [][]string{chromeSaved, chromeFailed, chromeOld, chromeDupe, indexKeycaps} {
+		for _, e := range group {
+			if normalized == normalizeEmoji(e) {
+				return true
+			}
 		}
 	}
 	return false
