@@ -381,19 +381,19 @@ html, body {
   -webkit-user-drag: none;
 }
 
-/* Opposite-corner HUD: muted index + ring fill timed to the slide interval. */
+/* Opposite-corner HUD: X/Y + ring fill timed to the slide interval. */
 .progress {
   --credit-scale: 1.5;
   --progress-ms: 8s;
   position: absolute;
   z-index: 4;
-  margin: 0.35rem;
+  margin: 1.1rem;
   display: flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.5rem;
   pointer-events: none;
-  color: rgba(190, 190, 190, 0.55);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
+  color: #fff;
+  text-shadow: 0 1px 2px #000, 0 0 6px #000, 0 2px 8px #000;
   font-size: calc(clamp(0.8rem, 1.8vw, 1.1rem) * var(--credit-scale));
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -410,19 +410,21 @@ html, body {
 .progress.br { bottom: 0; right: 0; }
 
 .progress-ring {
-  width: calc(1.25rem * var(--credit-scale));
-  height: calc(1.25rem * var(--credit-scale));
+  width: calc(1.45rem * var(--credit-scale));
+  height: calc(1.45rem * var(--credit-scale));
   display: block;
+  overflow: visible;
+  filter: drop-shadow(0 1px 2px #000) drop-shadow(0 0 3px #000);
 }
 
 .progress-ring-bg {
-  stroke: rgba(190, 190, 190, 0.22);
-  stroke-width: 3;
+  stroke: rgba(255, 255, 255, 0.35);
+  stroke-width: 6.5;
 }
 
 .progress-ring-fg {
-  stroke: rgba(210, 210, 210, 0.7);
-  stroke-width: 3;
+  stroke: #fff;
+  stroke-width: 6.5;
   stroke-linecap: round;
   /* r=16 → circumference ~100.53 */
   stroke-dasharray: 100.53;
