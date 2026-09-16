@@ -51,6 +51,7 @@ func (s *Server) registerAPI(mux *http.ServeMux) {
 	mux.Handle("PUT /api/settings/picture-listen-messages", s.basicAuth(http.HandlerFunc(s.handlePutPictureListenMessages)))
 	mux.Handle("GET /api/settings/resync-scheduler", s.basicAuth(http.HandlerFunc(s.handleGetResyncScheduler)))
 	mux.Handle("PUT /api/settings/resync-scheduler", s.basicAuth(http.HandlerFunc(s.handlePutResyncScheduler)))
+	mux.Handle("GET /api/youtube/auth", s.basicAuth(http.HandlerFunc(s.handleYouTubeAuthStart)))
 }
 
 // ---------- JSON helpers ----------

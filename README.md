@@ -50,7 +50,7 @@ Reactions on ingest: **💾** added · **♻️** DUPE · **🛑** OLD · **❌*
 1. Copy `.env.example` → `.env` and fill in tokens (set a real `ADMIN_PASSWORD`; optional `API_PASSWORD` for Streamer.bot broadcast fire).
 2. Google Cloud: enable YouTube Data API v3, create OAuth client, add redirect  
    `http://localhost:50770/oauth/callback`.
-3. `just auth-youtube` once (browser login; refresh token saved in SQLite).
+3. `just auth-youtube` once (browser login; refresh token saved in SQLite). After that, Admin **Status → Authorize YouTube** can re-auth without stopping the bot.
 4. `just run` (do **not** run auth and the bot on port **50770** at the same time).
 5. Open `http://localhost:50770` — user `admin`, password = `ADMIN_PASSWORD`.
 6. Start a content listener, paste a YouTube link → expect **💾** + playlist update.
@@ -78,7 +78,7 @@ Optional: `RESYNC_INTERVAL_HOURS=6` until you save the Admin **Scheduler** tab (
 | Web UI files     | `webroot/`                        | Next to the binary                     |
 | Secrets          | `.env`                            | `.env` or environment variables        |
 
-Full PROD walkthrough (headless cutover, SSH-tunnel re-auth, backup): [docs/DEPLOY.md](docs/DEPLOY.md).
+Full PROD walkthrough (headless cutover, Admin YouTube re-auth, backup): [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ---
 

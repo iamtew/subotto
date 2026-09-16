@@ -4,7 +4,7 @@
 // Meat Bag: Admin is http://localhost:50770 (Basic Auth: admin / ADMIN_PASSWORD).
 // Broadcast fire also accepts api / API_PASSWORD on GET /api/broadcasts/{slug}/fire.
 // Public (no password): /slideshow/..., /api/slideshow/..., /api/get/{content|picture}/{channel},
-// /api/get/episode/{show}.
+// /api/get/episode/{show}, GET /oauth/callback (Google YouTube OAuth).
 package web
 
 import (
@@ -15,7 +15,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
+
+	"golang.org/x/oauth2"
 
 	"subotto/internal/db"
 	"subotto/internal/discord"
@@ -62,8 +65,22 @@ type Server struct {
 	addr        string
 	httpServer  *http.Server
 	startedAt   time.Time
-	youtubeName string // optional; filled by Ping at boot if available
+	youtubeName string // optional; filled by Ping at boot / after Admin OAuth
 	envHours    int    // RESYNC_INTERVAL_HOURS until Admin saves scheduler row
+
+	ytClientID     string
+	ytClientSecret string
+	ytRedirectURL  string
+
+	oauthMu      sync.Mutex
+	oauthPending struct {
+		state string
+		until time.Time
+	}
+
+	// exchangeFn / youtubePing let tests stub Google (no live OAuth).
+	exchangeFn  func(ctx context.Context, code string) (*oauth2.Token, error)
+	youtubePing func(ctx context.Context) (string, error)
 
 	// createPlaylistFn lets tests stub YouTube playlist create (episode start).
 	createPlaylistFn func(ctx context.Context, title, description string) (string, error)
@@ -73,19 +90,22 @@ type Server struct {
 
 // Options configures the Admin server.
 type Options struct {
-	Store          *db.DB
-	YouTube        *youtube.Client
-	Status         StatusProvider
-	Scheduler      SchedulerStatus
-	Discord        DiscordCatalog
-	DiscordToken   string
-	AdminPassword  string
-	APIPassword    string // optional; user "api" for broadcast fire
-	AdminHost      string
-	AdminPort      int
-	Webroot        string // folder with index.html / css / js; default ./webroot
+	Store               *db.DB
+	YouTube             *youtube.Client
+	Status              StatusProvider
+	Scheduler           SchedulerStatus
+	Discord             DiscordCatalog
+	DiscordToken        string
+	AdminPassword       string
+	APIPassword         string // optional; user "api" for broadcast fire
+	AdminHost           string
+	AdminPort           int
+	Webroot             string // folder with index.html / css / js; default ./webroot
 	YouTubeChannel      string // display name from Ping, may be empty
 	ResyncIntervalHours int    // .env bootstrap for GET until Admin saves
+	YouTubeClientID     string
+	YouTubeClientSecret string
+	YouTubeRedirectURL  string
 }
 
 // New builds an Admin server (does not listen yet — call Start).
@@ -118,19 +138,22 @@ func New(opts Options) (*Server, error) {
 	}
 
 	s := &Server{
-		store:       opts.Store,
-		yt:          opts.YouTube,
-		status:      opts.Status,
-		scheduler:   opts.Scheduler,
-		discord:     opts.Discord,
-		discordTok:  opts.DiscordToken,
-		password:    password,
-		apiPassword: opts.APIPassword,
-		webroot:     abs,
-		addr:        net.JoinHostPort(host, fmt.Sprintf("%d", port)),
-		startedAt:   time.Now().UTC(),
-		youtubeName: opts.YouTubeChannel,
-		envHours:    opts.ResyncIntervalHours,
+		store:          opts.Store,
+		yt:             opts.YouTube,
+		status:         opts.Status,
+		scheduler:      opts.Scheduler,
+		discord:        opts.Discord,
+		discordTok:     opts.DiscordToken,
+		password:       password,
+		apiPassword:    opts.APIPassword,
+		webroot:        abs,
+		addr:           net.JoinHostPort(host, fmt.Sprintf("%d", port)),
+		startedAt:      time.Now().UTC(),
+		youtubeName:    opts.YouTubeChannel,
+		envHours:       opts.ResyncIntervalHours,
+		ytClientID:     opts.YouTubeClientID,
+		ytClientSecret: opts.YouTubeClientSecret,
+		ytRedirectURL:  opts.YouTubeRedirectURL,
 	}
 
 	mux := http.NewServeMux()

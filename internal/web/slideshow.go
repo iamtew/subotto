@@ -20,6 +20,7 @@ func (s *Server) registerPublic(mux *http.ServeMux) {
 	mux.HandleFunc("GET /media/episodes/{id}/{file}", s.handleEpisodeSpotMedia)
 	mux.HandleFunc("GET /api/get/episode/{show}", s.handlePublicGetEpisode)
 	mux.HandleFunc("GET /api/get/{kind}/{channel}", s.handlePublicGetListener)
+	mux.HandleFunc("GET /oauth/callback", s.handleYouTubeOAuthCallback)
 
 	// OBS page assets (no auth).
 	staticDir := filepath.Join(s.webroot, "slideshow")

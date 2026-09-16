@@ -26,6 +26,7 @@ const API_CATALOG = [
       { method: "GET", path: "/api/get/picture/{channel}", note: "Live picture listener by Discord channel name (slideshow URL, since, state)." },
       { method: "GET", path: "/api/get/episode/{show}", note: "Live show episode by show slug (listeners, spot, placeholders)." },
       { method: "GET", path: "/api/slideshow/{slug}", note: "Picture slideshow feed JSON for one listener slug." },
+      { method: "GET", path: "/oauth/callback", note: "Google OAuth redirect (no Basic Auth). Caddy must not lock this path." },
     ],
   },
   {
@@ -40,6 +41,7 @@ const API_CATALOG = [
     blurb: "Basic Auth user admin / ADMIN_PASSWORD. Same login as this UI.",
     routes: [
       { method: "GET", path: "/api/status", note: "Wire health: Discord, YouTube, listener counts, scheduler, API password." },
+      { method: "GET", path: "/api/youtube/auth", note: "Start YouTube OAuth (browser redirect to Google). Use Authorize YouTube on Status." },
       { method: "GET", path: "/api/activity", note: "Recent ops log." },
       { method: "GET", path: "/api/listens", note: "All content listeners (channel → YouTube playlist)." },
       { method: "POST", path: "/api/listens", note: "Start or upsert a content listener." },
@@ -567,9 +569,14 @@ function renderStatusHealth() {
     ? `<span class="state-on">UP</span>`
     : `<span class="state-off">DOWN</span>
        <button type="button" class="secondary" data-status-act="reconnect">Reconnect</button>`;
-  const yt = s.youtube_authorized
-    ? `<span class="state-on">AUTHORIZED</span>${s.youtube_channel ? ` · ${esc(s.youtube_channel)}` : ""}`
-    : `<span class="state-off">MISSING TOKEN</span>`;
+  const ytOk = !!(s.youtube_authorized && s.youtube_channel);
+  let yt = `<span class="state-off">MISSING TOKEN</span>`;
+  if (ytOk) {
+    yt = `<span class="state-on">AUTHORIZED</span> · ${esc(s.youtube_channel)}`;
+  } else if (s.youtube_authorized) {
+    yt = `<span class="state-off">EXPIRED / REVOKED</span>`;
+  }
+  yt += ` <a class="secondary" href="/api/youtube/auth">Authorize YouTube</a>`;
   let sched = `<span class="state-off">OFF</span>`;
   if (s.scheduler_enabled) {
     const hours = s.resync_interval_hours || "?";
@@ -1033,7 +1040,7 @@ async function loadStatus() {
     const picTot = s.picture_listens_total ?? 0;
     host.replaceChildren(
       discordStatusPill(!!s.discord_connected),
-      pill(s.youtube_authorized ? "youtube ok" : "youtube missing", !!s.youtube_authorized),
+      pill((s.youtube_authorized && s.youtube_channel) ? "youtube ok" : (s.youtube_authorized ? "youtube expired" : "youtube missing"), !!(s.youtube_authorized && s.youtube_channel)),
       pill(`content ${on}/${tot}`, true),
       pill(`pics ${picOn}/${picTot}`, true),
       pill(`log ${s.activity_total}`, "muted")
@@ -3141,6 +3148,15 @@ document.getElementById("picture-resync-form").addEventListener("submit", async 
 document.getElementById("picture-resync-channel").addEventListener("change", (ev) => {
   lastPictureResyncChannel = ev.target.value || "";
 });
+
+(function toastYouTubeOAuthReturn() {
+  const params = new URLSearchParams(location.search);
+  const yt = params.get("youtube");
+  if (!yt) return;
+  if (yt === "ok") toast("YouTube authorized");
+  else toast("YouTube authorization failed", true);
+  history.replaceState({}, "", location.pathname);
+})();
 
 initTabs();
 renderApiCatalog();

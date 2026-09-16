@@ -2,7 +2,7 @@
 //
 // Meat Bag:
 //   - `just run` — Discord bot + Admin UI + YouTube (needs tokens + auth-youtube)
-//   - `just auth-youtube` — one-time Google OAuth
+//   - `just auth-youtube` — DEV Google OAuth (Admin Status can re-auth too)
 //   - Admin UI at http://localhost:50770 (user admin / ADMIN_PASSWORD)
 package main
 
@@ -106,23 +106,20 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 		slog.Error("YouTube OAuth client id/secret required", "missing", strings.Join(cfg.MissingYouTubeSecrets(), ", "))
 		os.Exit(1)
 	}
+	// Same Client pointer for Discord, scheduler, and Admin so OAuth Reload
+	// picks up a new refresh token without a process restart.
+	yt := &youtube.Client{}
+	ytChannel := ""
 	hasTok, err := youtube.HasStoredToken(ctx, store)
 	if err != nil {
 		slog.Error("failed to check youtube token", "err", err)
 		os.Exit(1)
 	}
 	if !hasTok {
-		slog.Error("no YouTube token yet — run `just auth-youtube` first")
-		os.Exit(1)
-	}
-
-	yt, err := youtube.NewClient(ctx, store, cfg.YouTubeClientID, cfg.YouTubeClientSecret, cfg.YouTubeRedirectURL)
-	if err != nil {
-		slog.Error("failed to create youtube client", "err", err)
-		os.Exit(1)
-	}
-	ytChannel := ""
-	if title, err := yt.Ping(ctx); err != nil {
+		slog.Warn("no YouTube token yet — authorize in Admin (Status → Authorize YouTube)")
+	} else if err := yt.Reload(ctx, store, cfg.YouTubeClientID, cfg.YouTubeClientSecret, cfg.YouTubeRedirectURL); err != nil {
+		slog.Warn("YouTube client not ready", "err", err)
+	} else if title, err := yt.Ping(ctx); err != nil {
 		slog.Warn("YouTube ping failed", "err", err)
 	} else {
 		ytChannel = title
@@ -177,6 +174,9 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 		Webroot:             "webroot",
 		YouTubeChannel:      ytChannel,
 		ResyncIntervalHours: cfg.ResyncIntervalHours,
+		YouTubeClientID:     cfg.YouTubeClientID,
+		YouTubeClientSecret: cfg.YouTubeClientSecret,
+		YouTubeRedirectURL:  cfg.YouTubeRedirectURL,
 	})
 	if err != nil {
 		slog.Error("failed to create admin UI server", "err", err)

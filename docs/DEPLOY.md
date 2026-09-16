@@ -26,14 +26,14 @@ Produces `dist/subotto-linux.zip` with:
 Public slideshow URLs (no Basic Auth): `/slideshow/latest`, `/slideshow/{slug}`, `/media/pictures/...`, `/media/episodes/{id}/...`.  
 Streamer.bot GETs (no Basic Auth): `GET /api/get/content/{channel-name}`, `GET /api/get/picture/{channel-name}`, and `GET /api/get/episode/{show}` — live listener / episode JSON (`air_datetime` RFC3339 with offset, `spot_image` on the episode). Channel name is the Discord name without `#`; Discord must be connected.  
 Broadcast fire (Basic Auth): `GET /api/broadcasts/{slug}/fire` — user `api` / `API_PASSWORD` (or `admin` / `ADMIN_PASSWORD`). Sends every message of that named broadcast to its mapped channels.  
-If you put Caddy in front, proxy the whole port (Admin + public slideshow) or expose slideshow paths publicly and keep Admin locked down as you prefer.
+YouTube re-auth (Admin): `GET /api/youtube/auth` (Basic Auth) → Google → public `GET /oauth/callback` (no password). Caddy must proxy `/oauth/callback` without extra auth.  
+If you put Caddy in front, proxy the whole port (Admin + public slideshow + OAuth callback) or expose slideshow paths publicly and keep Admin locked down as you prefer — **except** `/oauth/callback`, which Google must reach unauthenticated.
 
 ---
 
 ## 2. First cutover (headless) — copy DB once
 
-YouTube login is a **browser** OAuth dance. A VPS with no desktop cannot complete `auth-youtube` alone.  
-You already authorized on Windows; the refresh token lives in SQLite, not in `.env`.
+YouTube login is a **browser** OAuth dance. After Subotto is running, re-auth from Admin (Status → **Authorize YouTube**) — no desktop on the VPS required. The refresh token still lives in SQLite, not in `.env`.
 
 ### What’s in `data/subotto.db`
 
@@ -61,7 +61,7 @@ Also copy **`data/pictures/`** and **`data/episode-spots/`** if present — pict
    - `ADMIN_HOST=127.0.0.1` when Caddy (or another proxy) terminates TLS in front of Admin  
    - Optional stronger `ADMIN_PASSWORD`  
    - Optional `API_PASSWORD` for Streamer.bot broadcast fire (`api` user)  
-   - Leave `YOUTUBE_REDIRECT_URL=http://localhost:50770/oauth/callback` if you are not re-authing on the box  
+   - `YOUTUBE_REDIRECT_URL` = the public HTTPS callback registered in Google Console (must match **exactly**, path `/oauth/callback`). Leave localhost only if you will use the SSH-tunnel fallback in §3.  
 5. `chmod +x subotto-linux`
 6. **Stop Windows `just run`** (one Discord gateway per bot token).
 7. Smoke in foreground: `./subotto-linux` — Discord up, Admin login, paste a link → 💾.
@@ -71,51 +71,44 @@ Do **not** delete PROD `data/` later just to “feel fresh” — that throws aw
 
 ---
 
-## 3. Headless YouTube re-auth (SSH tunnel)
+## 3. YouTube re-auth (Admin UI)
 
-Use this when the DB is empty, the token is lost, or you switch Google accounts.  
-No desktop on the VPS required — the **laptop** browser does the consent; SSH forwards the callback.
+Use this when the token is expired/revoked (`invalid_grant`), the DB is empty, or you switch Google accounts. Subotto stays running — no `-youtube-auth`, no service stop.
 
 ### Prerequisites
 
-- `YOUTUBE_REDIRECT_URL=http://localhost:50770/oauth/callback` in PROD `.env` (or change both the env value and the tunnel port together).
-- Subotto **must not** already be listening on `:50770` (stop the service / kill the binary).
-- Keep the SSH tunnel up until the success page appears.
+- `YOUTUBE_REDIRECT_URL` in PROD `.env` is the **public** HTTPS URL Google will call, path `/oauth/callback`.
+- That same URI is listed on the OAuth client in Google Cloud Console (Web application type).
+- Caddy (or Nginx) proxies `/oauth/callback` to Subotto **without** Basic Auth / extra login. Google cannot send `admin` credentials.
 
 ### Cookbook
 
-1. **On the laptop** (Windows OpenSSH or similar):
-
-   ```text
-   ssh -L 50770:127.0.0.1:50770 user@your-vps
-   ```
-
-   Leave this session open.
-
-2. **On the VPS** (second SSH session), from the app directory:
-
-   ```text
-   ./subotto-linux -youtube-auth
-   ```
-
-   Opening a desktop browser on the server may fail — ignore that. The process still listens and **prints a Google URL** in the log.
-
-3. **On the laptop**, paste that URL into a normal browser. Sign in with the Google account that owns the playlists.
-
-4. Google redirects to `http://localhost:50770/oauth/callback` on the **laptop**. The tunnel forwards that hit to the VPS process, which saves the refresh token into `data/subotto.db`.
-
-5. Confirm a log line that the YouTube token was saved. Stop the auth process (Ctrl+C). Start the normal Subotto service again.
+1. Open Admin in a normal browser (already logged in as `admin`).
+2. Status tab → **Authorize YouTube**. The tab goes to Google.
+3. Sign in with the Google account that owns the playlists.
+4. Google redirects to your public callback; Subotto saves the refresh token and hot-reloads the YouTube client (no restart).
+5. You land back on Admin with a toast. Status should show **AUTHORIZED** and the channel name.
 
 ### Pitfalls
 
 | Problem | Fix |
 |---------|-----|
-| “listen on :50770 … already running?” | Stop systemd / the main binary before `-youtube-auth` |
-| Redirect / connection refused on laptop | Tunnel not up, wrong port, or auth process exited early |
+| Redirect URI mismatch | Console URI must equal `YOUTUBE_REDIRECT_URL` character-for-character |
+| Callback 401 from Caddy | Do not put edge auth on `/oauth/callback` |
+| “invalid or expired OAuth state” | Start again from Admin (state lasts 10 minutes, one-shot) |
 | Wrong Google account | Use the account that owns the target playlists |
-| Tunnel closed mid-flow | Re-run from step 1 |
 
 Day-to-day playlist writes do **not** need a browser after the token is saved.
+
+### Fallback: SSH tunnel + `-youtube-auth`
+
+Only if the redirect URL is still `http://localhost:50770/oauth/callback` (no public callback).
+
+1. Stop Subotto (it owns `:50770`).
+2. Laptop: `ssh -L 50770:127.0.0.1:50770 user@your-vps`
+3. VPS: `./subotto-linux -youtube-auth`
+4. Paste the printed Google URL on the laptop; complete consent.
+5. Restart the normal service.
 
 ---
 
@@ -159,7 +152,7 @@ ADMIN_HOST=127.0.0.1
 ADMIN_PORT=50770
 ```
 
-Point Caddy (or Nginx) at `http://127.0.0.1:50770`. TLS, hostnames, and edge auth are up to the operator — Subotto still uses Basic Auth (`admin` / `ADMIN_PASSWORD`).
+Point Caddy (or Nginx) at `http://127.0.0.1:50770`. TLS, hostnames, and edge auth are up to the operator — Subotto still uses Basic Auth (`admin` / `ADMIN_PASSWORD`). Leave **`/oauth/callback` public** at the edge so Google’s redirect can complete Admin YouTube auth.
 
 ---
 
@@ -180,7 +173,7 @@ If you prefer online backups later, use SQLite’s `.backup` / `sqlite3` backup 
 
 - [ ] `subotto-linux` runs; logs look healthy  
 - [ ] Admin login works (via Caddy or direct)  
-- [ ] YouTube token present (no “run auth-youtube” error on ingest)  
+- [ ] YouTube token present (Admin Status **AUTHORIZED**, or re-auth via **Authorize YouTube**)  
 - [ ] At least one enabled listener  
 - [ ] Paste a YouTube link → **💾** (or expected ♻️ / 🛑)  
 - [ ] Windows DEV bot is **not** running with the same token  

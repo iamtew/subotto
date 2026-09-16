@@ -7,4 +7,4 @@ Subotto Linux drop
 4. Full guide: docs/DEPLOY.md
 5. Optional systemd: deploy/subotto.service
 
-Do not run -youtube-auth on a headless VPS without the SSH tunnel steps in docs/DEPLOY.md.
+Do not run -youtube-auth on a headless VPS unless you still use the SSH-tunnel fallback in docs/DEPLOY.md §3. Prefer Admin Status → Authorize YouTube when YOUTUBE_REDIRECT_URL is a public HTTPS callback.

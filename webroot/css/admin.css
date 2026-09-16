@@ -1253,14 +1253,30 @@ button:active {
   transform: translateY(1px);
 }
 
-button.secondary {
+button.secondary,
+a.secondary {
   background: transparent;
   color: var(--olive);
   border-color: var(--dusty);
   box-shadow: none;
 }
 
-button.secondary:hover {
+a.secondary {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 400;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--dusty);
+  border-radius: var(--radius);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+button.secondary:hover,
+a.secondary:hover {
   border-color: var(--olive);
   color: var(--chartreuse);
   box-shadow: 0 0 12px rgba(154, 172, 98, 0.2);

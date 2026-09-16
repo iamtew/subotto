@@ -85,8 +85,8 @@ func SaveToken(ctx context.Context, store *db.DB, tok *oauth2.Token) error {
 	return nil
 }
 
-// ErrNotAuthorized means Meat Bag still needs to run `just auth-youtube`.
-var ErrNotAuthorized = errors.New("youtube not authorized: run `just auth-youtube` once")
+// ErrNotAuthorized means Meat Bag still needs Admin → Authorize YouTube (or `just auth-youtube`).
+var ErrNotAuthorized = errors.New("youtube not authorized: use Admin → Authorize YouTube, or `just auth-youtube`")
 
 // AuthorizeInteractive runs the one-time browser OAuth flow.
 //

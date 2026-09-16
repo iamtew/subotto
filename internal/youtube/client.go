@@ -19,7 +19,9 @@ import (
 )
 
 // Client is a thin wrapper around the official YouTube Data API service.
+// Reload swaps the inner service in place so Discord + scheduler keep the same pointer.
 type Client struct {
+	mu      sync.Mutex
 	service *ytapi.Service
 }
 
@@ -44,6 +46,37 @@ func NewClient(ctx context.Context, store *db.DB, clientID, clientSecret, redire
 		return nil, fmt.Errorf("create youtube service: %w", err)
 	}
 	return &Client{service: svc}, nil
+}
+
+// Reload rebuilds the API service from the token currently in SQLite.
+// Meat Bag: Admin OAuth writes a new refresh token, then this picks it up
+// without restarting Subotto. Empty Client (boot with no token yet) is OK.
+func (c *Client) Reload(ctx context.Context, store *db.DB, clientID, clientSecret, redirectURL string) error {
+	if c == nil {
+		return errors.New("youtube client is nil")
+	}
+	fresh, err := NewClient(ctx, store, clientID, clientSecret, redirectURL)
+	if err != nil {
+		return err
+	}
+	c.mu.Lock()
+	c.service = fresh.service
+	c.mu.Unlock()
+	return nil
+}
+
+// svc snapshots the current Google service pointer.
+func (c *Client) svc() (*ytapi.Service, error) {
+	if c == nil {
+		return nil, errors.New("youtube client is nil")
+	}
+	c.mu.Lock()
+	svc := c.service
+	c.mu.Unlock()
+	if svc == nil {
+		return nil, errors.New("youtube client is nil")
+	}
+	return svc, nil
 }
 
 // savingTokenSource persists refreshed tokens back into SQLite.
@@ -83,8 +116,9 @@ func (s *savingTokenSource) Token() (*oauth2.Token, error) {
 // couple of times with a short pause. Daily quota exceeded is NOT retried —
 // waiting a few seconds will not refill the quota bucket.
 func (c *Client) AddVideoToPlaylist(ctx context.Context, playlistID, videoID string) error {
-	if c == nil || c.service == nil {
-		return errors.New("youtube client is nil")
+	svc, err := c.svc()
+	if err != nil {
+		return err
 	}
 	playlistID = strings.TrimSpace(playlistID)
 	videoID = strings.TrimSpace(videoID)
@@ -105,7 +139,7 @@ func (c *Client) AddVideoToPlaylist(ctx context.Context, playlistID, videoID str
 	const maxAttempts = 3
 	var lastErr error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		_, err := c.service.PlaylistItems.Insert([]string{"snippet"}, item).Context(ctx).Do()
+		_, err := svc.PlaylistItems.Insert([]string{"snippet"}, item).Context(ctx).Do()
 		if err == nil {
 			return nil
 		}
@@ -135,8 +169,9 @@ func (c *Client) AddVideoToPlaylist(ctx context.Context, playlistID, videoID str
 // Privacy is "public" so Discord ONLINE notices can link the playlist for everyone.
 // This is voluntary association with your own Google account.
 func (c *Client) CreatePlaylist(ctx context.Context, title, description string) (playlistID string, err error) {
-	if c == nil || c.service == nil {
-		return "", errors.New("youtube client is nil")
+	svc, err := c.svc()
+	if err != nil {
+		return "", err
 	}
 	title = strings.TrimSpace(title)
 	if title == "" {
@@ -159,7 +194,7 @@ func (c *Client) CreatePlaylist(ctx context.Context, title, description string) 
 	const maxAttempts = 3
 	var lastErr error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		resp, err := c.service.Playlists.Insert([]string{"snippet", "status"}, pl).Context(ctx).Do()
+		resp, err := svc.Playlists.Insert([]string{"snippet", "status"}, pl).Context(ctx).Do()
 		if err == nil {
 			if resp == nil || resp.Id == "" {
 				return "", errors.New("youtube created playlist but returned no id")
@@ -189,8 +224,9 @@ func (c *Client) CreatePlaylist(ctx context.Context, title, description string) 
 // UpdatePlaylistTitle renames an existing playlist the authorized account owns.
 // Meat Bag: your listen epoch can keep the same playlist ID while you fix the title.
 func (c *Client) UpdatePlaylistTitle(ctx context.Context, playlistID, title string) error {
-	if c == nil || c.service == nil {
-		return errors.New("youtube client is nil")
+	svc, err := c.svc()
+	if err != nil {
+		return err
 	}
 	playlistID = strings.TrimSpace(playlistID)
 	title = strings.TrimSpace(title)
@@ -198,7 +234,7 @@ func (c *Client) UpdatePlaylistTitle(ctx context.Context, playlistID, title stri
 		return errors.New("playlistID and title are required")
 	}
 
-	list, err := c.service.Playlists.List([]string{"snippet"}).Id(playlistID).Context(ctx).Do()
+	list, err := svc.Playlists.List([]string{"snippet"}).Id(playlistID).Context(ctx).Do()
 	if err != nil {
 		return wrapAPIError(err, playlistID, "")
 	}
@@ -212,7 +248,7 @@ func (c *Client) UpdatePlaylistTitle(ctx context.Context, playlistID, title stri
 	const maxAttempts = 3
 	var lastErr error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		_, err := c.service.Playlists.Update([]string{"snippet"}, pl).Context(ctx).Do()
+		_, err := svc.Playlists.Update([]string{"snippet"}, pl).Context(ctx).Do()
 		if err == nil {
 			slog.Info("renamed youtube playlist", "playlist", playlistID, "title", title)
 			return nil
@@ -234,7 +270,11 @@ func (c *Client) UpdatePlaylistTitle(ctx context.Context, playlistID, title stri
 // Ping checks that the token works by listing the authorized channel.
 // Useful after OAuth so Meat Bag knows authorization succeeded.
 func (c *Client) Ping(ctx context.Context) (channelTitle string, err error) {
-	resp, err := c.service.Channels.List([]string{"snippet"}).Mine(true).Context(ctx).Do()
+	svc, err := c.svc()
+	if err != nil {
+		return "", err
+	}
+	resp, err := svc.Channels.List([]string{"snippet"}).Mine(true).Context(ctx).Do()
 	if err != nil {
 		return "", wrapAPIError(err, "", "")
 	}
@@ -255,7 +295,7 @@ func wrapAPIError(err error, playlistID, videoID string) error {
 		reason := firstReason(gerr)
 		switch gerr.Code {
 		case 401:
-			return fmt.Errorf("youtube auth failed (401): token missing/expired/revoked — run `just auth-youtube` again: %w", err)
+			return fmt.Errorf("youtube auth failed (401): token missing/expired/revoked — re-auth in Admin (Status → Authorize YouTube): %w", err)
 		case 403:
 			switch reason {
 			case "quotaExceeded", "dailyLimitExceeded":

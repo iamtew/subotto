@@ -25,8 +25,8 @@ func TestWrapAPIErrorAuth(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !strings.Contains(err.Error(), "auth-youtube") {
-		t.Fatalf("expected auth-youtube hint, got: %v", err)
+	if !strings.Contains(err.Error(), "Authorize YouTube") {
+		t.Fatalf("expected Admin re-auth hint, got: %v", err)
 	}
 }
 
