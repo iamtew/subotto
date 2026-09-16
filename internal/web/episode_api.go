@@ -447,6 +447,7 @@ func (s *Server) startEpisodeStub(ctx context.Context, ep *db.Episode, stub db.E
 			Slug:              slug,
 			Enabled:           true,
 			ShowCredit:        true,
+			ShowComment:       true,
 			ShowReactions:     true,
 			ReactionsAnimated: true,
 		})
@@ -668,6 +669,7 @@ func (s *Server) syncEpisodeListenersFromStubs(ctx context.Context, ep *db.Episo
 				IntervalSeconds:    p.IntervalSeconds,
 				Shuffle:            p.Shuffle,
 				ShowCredit:         p.ShowCredit,
+				ShowComment:        p.ShowComment,
 				ShowReactions:      p.ShowReactions,
 				ReactionsAnimated:  p.ReactionsAnimated,
 				ReactionMultiplier: p.ReactionMultiplier,

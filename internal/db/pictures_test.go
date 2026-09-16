@@ -171,6 +171,7 @@ func TestPictureListenerCRUD(t *testing.T) {
 		CreditCorner:     "br",
 		IntervalSeconds:  12,
 		ShowCredit:       false,
+		ShowComment:      true,
 		ShowReactions:    true,
 	})
 	if err != nil {
@@ -178,6 +179,9 @@ func TestPictureListenerCRUD(t *testing.T) {
 	}
 	if p2.ID != p.ID || p2.CreditCorner != "br" || p2.IntervalSeconds != 12 || p2.ShowCredit {
 		t.Fatalf("in-place update failed: %+v", p2)
+	}
+	if !p2.ShowComment {
+		t.Fatalf("show_comment should stay on: %+v", p2)
 	}
 
 	// New slug on same channel → close epoch, open new.

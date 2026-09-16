@@ -2912,6 +2912,7 @@ function openPictureSettings(channelID) {
   document.getElementById("picture-settings-transition").value = p.transition || "fade";
   document.getElementById("picture-settings-shuffle").checked = !!p.shuffle;
   document.getElementById("picture-settings-credit").checked = p.show_credit !== false;
+  document.getElementById("picture-settings-comment").checked = p.show_comment !== false;
   document.getElementById("picture-settings-reactions").checked = p.show_reactions !== false;
   document.getElementById("picture-settings-animated").checked = p.reactions_animated !== false;
   document.getElementById("picture-settings-multiplier").innerHTML =
@@ -2958,6 +2959,7 @@ document.getElementById("picture-settings-form").addEventListener("submit", asyn
         transition: fd.get("transition") || "fade",
         shuffle: fd.get("shuffle") === "on",
         show_credit: fd.get("show_credit") === "on",
+        show_comment: fd.get("show_comment") === "on",
         show_reactions: fd.get("show_reactions") === "on",
         reactions_animated: fd.get("reactions_animated") === "on",
         reaction_multiplier: Number(fd.get("reaction_multiplier") || 1),

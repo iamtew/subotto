@@ -69,6 +69,7 @@ type slideshowFeedDTO struct {
 	IntervalSeconds    int                 `json:"interval_seconds"`
 	Shuffle            bool                `json:"shuffle"`
 	ShowCredit         bool                `json:"show_credit"`
+	ShowComment        bool                `json:"show_comment"`
 	ShowReactions      bool                `json:"show_reactions"`
 	ReactionsAnimated  bool                `json:"reactions_animated"`
 	ReactionMultiplier int                 `json:"reaction_multiplier"`
@@ -128,6 +129,7 @@ func (s *Server) handleSlideshowFeed(w http.ResponseWriter, r *http.Request) {
 		IntervalSeconds:    pl.IntervalSeconds,
 		Shuffle:            pl.Shuffle,
 		ShowCredit:         pl.ShowCredit,
+		ShowComment:        pl.ShowComment,
 		ShowReactions:      pl.ShowReactions,
 		ReactionsAnimated:  pl.ReactionsAnimated,
 		ReactionMultiplier: pl.ReactionMultiplier,

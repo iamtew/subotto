@@ -29,6 +29,7 @@ type pictureListenerDTO struct {
 	IntervalSeconds    int    `json:"interval_seconds"`
 	Shuffle            bool   `json:"shuffle"`
 	ShowCredit         bool   `json:"show_credit"`
+	ShowComment        bool   `json:"show_comment"`
 	ShowReactions      bool   `json:"show_reactions"`
 	ReactionsAnimated  bool   `json:"reactions_animated"`
 	ReactionMultiplier int     `json:"reaction_multiplier"`
@@ -54,6 +55,7 @@ func toPictureListenerDTO(p db.PictureListener, count int) pictureListenerDTO {
 		IntervalSeconds:    p.IntervalSeconds,
 		Shuffle:            p.Shuffle,
 		ShowCredit:         p.ShowCredit,
+		ShowComment:        p.ShowComment,
 		ShowReactions:      p.ShowReactions,
 		ReactionsAnimated:  p.ReactionsAnimated,
 		ReactionMultiplier: p.ReactionMultiplier,
@@ -110,6 +112,7 @@ type pictureUpsertBody struct {
 	IntervalSeconds  *int   `json:"interval_seconds"`
 	Shuffle          *bool  `json:"shuffle"`
 	ShowCredit       *bool  `json:"show_credit"`
+	ShowComment      *bool  `json:"show_comment"`
 	ShowReactions    *bool  `json:"show_reactions"`
 	ReactionsAnimated  *bool    `json:"reactions_animated"`
 	ReactionMultiplier *int     `json:"reaction_multiplier"`
@@ -134,6 +137,10 @@ func (s *Server) pictureInputFromBody(body pictureUpsertBody) db.PictureListener
 	showCredit := true
 	if body.ShowCredit != nil {
 		showCredit = *body.ShowCredit
+	}
+	showComment := true
+	if body.ShowComment != nil {
+		showComment = *body.ShowComment
 	}
 	showReactions := true
 	if body.ShowReactions != nil {
@@ -165,6 +172,7 @@ func (s *Server) pictureInputFromBody(body pictureUpsertBody) db.PictureListener
 		IntervalSeconds:    interval,
 		Shuffle:            shuffle,
 		ShowCredit:         showCredit,
+		ShowComment:        showComment,
 		ShowReactions:      showReactions,
 		ReactionsAnimated:  animated,
 		ReactionMultiplier: mult,
@@ -249,7 +257,7 @@ func (s *Server) handlePatchPictureListener(w http.ResponseWriter, r *http.Reque
 	if body.Enabled != nil &&
 		body.Name == "" && body.Slug == "" && body.CreditCorner == "" &&
 		body.IntervalSeconds == nil && body.Shuffle == nil &&
-		body.ShowCredit == nil && body.ShowReactions == nil &&
+		body.ShowCredit == nil && body.ShowComment == nil && body.ShowReactions == nil &&
 		body.ReactionsAnimated == nil &&
 		body.ReactionMultiplier == nil && body.CreditScale == nil && body.ReactionScale == nil &&
 		body.Transition == "" {
@@ -273,6 +281,7 @@ func (s *Server) handlePatchPictureListener(w http.ResponseWriter, r *http.Reque
 		IntervalSeconds:    existing.IntervalSeconds,
 		Shuffle:            existing.Shuffle,
 		ShowCredit:         existing.ShowCredit,
+		ShowComment:        existing.ShowComment,
 		ShowReactions:      existing.ShowReactions,
 		ReactionsAnimated:  existing.ReactionsAnimated,
 		ReactionMultiplier: existing.ReactionMultiplier,
@@ -300,6 +309,9 @@ func (s *Server) handlePatchPictureListener(w http.ResponseWriter, r *http.Reque
 	}
 	if body.ShowCredit != nil {
 		in.ShowCredit = *body.ShowCredit
+	}
+	if body.ShowComment != nil {
+		in.ShowComment = *body.ShowComment
 	}
 	if body.ShowReactions != nil {
 		in.ShowReactions = *body.ShowReactions

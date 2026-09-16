@@ -10,7 +10,9 @@
   const nameEl = document.getElementById("credit-name");
   const reactionsEl = document.getElementById("credit-reactions");
   const commentEl = document.getElementById("comment");
-  const commentTextEl = document.getElementById("comment-text");
+  const progressEl = document.getElementById("progress");
+  const progressCountEl = document.getElementById("progress-count");
+  const progressFg = document.getElementById("progress-fg");
   const floaterStage = document.getElementById("floater-stage");
   const emptyEl = document.getElementById("empty");
 
@@ -196,8 +198,8 @@
     const corner = cornerCode();
     creditEl.classList.remove("tl", "tr", "bl", "br");
     creditEl.classList.add(corner);
-    commentEl.classList.remove("tl", "tr", "bl", "br");
-    commentEl.classList.add(oppositeCorner(corner));
+    progressEl.classList.remove("tl", "tr", "bl", "br");
+    progressEl.classList.add(oppositeCorner(corner));
 
     const cs = Number(feed.credit_scale);
     const rs = Number(feed.reaction_scale);
@@ -205,7 +207,7 @@
     const reactionScale = rs > 0 ? rs : 1.5;
     creditEl.style.setProperty("--credit-scale", String(creditScale));
     creditEl.style.setProperty("--reaction-scale", String(reactionScale));
-    commentEl.style.setProperty("--credit-scale", String(creditScale));
+    progressEl.style.setProperty("--credit-scale", String(creditScale));
     floaterStage.style.setProperty("--reaction-scale", String(reactionScale));
   }
 
@@ -248,13 +250,15 @@
     }
   }
 
-  function paintKeyFor(img, reactions, showCredit, showReact, animated, mult) {
+  function paintKeyFor(img, reactions, showCredit, showComment, showReact, animated, mult) {
     return (
       String(img.id) +
       "|" +
       img.url +
       "|" +
       (showCredit ? "1" : "0") +
+      "|" +
+      (showComment ? "1" : "0") +
       "|" +
       (showReact ? "1" : "0") +
       "|" +
@@ -341,17 +345,21 @@
     transitionTimer = setTimeout(finishTransition, TRANSITION_MS + 40);
   }
 
-  function applyOverlay(img, reactions, showCredit, showReact, animated, mult) {
-    const message = (img.message || "").trim();
+  function applyOverlay(img, reactions, showCredit, showComment, showReact, animated, mult) {
+    const message = showComment ? (img.message || "").trim() : "";
     if (message) {
-      renderComment(commentTextEl, message);
+      renderComment(commentEl, message);
       commentEl.hidden = false;
     } else {
-      commentTextEl.textContent = "";
+      commentEl.textContent = "";
       commentEl.hidden = true;
     }
 
-    if (!showCredit && !showReact) {
+    progressCountEl.textContent = (index + 1) + "/" + order.length;
+    progressEl.hidden = false;
+
+    // Keep the card up if there is a comment even when author/reactions are off.
+    if (!showCredit && !showReact && !message) {
       creditEl.hidden = true;
       clearFloaters(false);
       clearStaticReactions();
@@ -391,11 +399,12 @@
     if (!img) return;
 
     const showCredit = !!feed.show_credit;
+    const showComment = feed.show_comment !== false;
     const showReact = !!feed.show_reactions;
     const reactions = showReact ? normalizeReactions(img.reactions) : [];
     const animated = reactionsAnimated();
     const mult = Math.max(1, Math.min(25, Number(feed.reaction_multiplier) || 1));
-    const key = paintKeyFor(img, reactions, showCredit, showReact, animated, mult);
+    const key = paintKeyFor(img, reactions, showCredit, showComment, showReact, animated, mult);
 
     if (key === paintedKey) {
       if (activeEl.getAttribute("src") === img.url) activeEl.hidden = false;
@@ -415,7 +424,7 @@
       pendingKey = "";
 
       if (!urlChanged) {
-        applyOverlay(img, reactions, showCredit, showReact, animated, mult);
+        applyOverlay(img, reactions, showCredit, showComment, showReact, animated, mult);
         return;
       }
 
@@ -423,7 +432,8 @@
       if (transitioning) snapFinishTransition();
 
       paintedUrl = url;
-      applyOverlay(img, reactions, showCredit, showReact, animated, mult);
+      applyOverlay(img, reactions, showCredit, showComment, showReact, animated, mult);
+      restartAdvance(true);
 
       const tx = transitionType();
       const firstPaint = !activeEl.getAttribute("src");
@@ -857,20 +867,40 @@
     showAt(index + 1);
   }
 
+  function intervalSec() {
+    return Math.max(1, Number(feed && feed.interval_seconds) || 8);
+  }
+
+  function restartRing(sec) {
+    progressFg.classList.remove("is-running");
+    progressEl.style.setProperty("--progress-ms", sec * 1000 + "ms");
+    void progressFg.getBoundingClientRect();
+    progressFg.classList.add("is-running");
+  }
+
   function stopAdvanceTimer() {
     if (timer) {
-      clearInterval(timer);
+      clearTimeout(timer);
       timer = null;
     }
     armedIntervalSec = null;
+    progressFg.classList.remove("is-running");
+  }
+
+  function restartAdvance(resetRing) {
+    const sec = intervalSec();
+    if (timer) clearTimeout(timer);
+    armedIntervalSec = sec;
+    timer = setTimeout(next, sec * 1000);
+    if (resetRing) restartRing(sec);
   }
 
   function ensureAdvanceTimer() {
-    const sec = Math.max(1, Number(feed.interval_seconds) || 8);
-    if (timer && armedIntervalSec === sec) return;
-    if (timer) clearInterval(timer);
-    armedIntervalSec = sec;
-    timer = setInterval(next, sec * 1000);
+    const sec = intervalSec();
+    // First arm happens in paint commit so the ring starts with the picture.
+    if (!timer) return;
+    if (armedIntervalSec === sec) return;
+    restartAdvance(true);
   }
 
   function showEmpty(on) {
@@ -882,6 +912,7 @@
       inactiveEl.hidden = true;
       creditEl.hidden = true;
       commentEl.hidden = true;
+      progressEl.hidden = true;
       floaterStage.hidden = true;
       paintedUrl = "";
     }

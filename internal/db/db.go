@@ -143,6 +143,7 @@ CREATE TABLE IF NOT EXISTS picture_listeners (
 	interval_seconds INTEGER NOT NULL DEFAULT 8,
 	shuffle INTEGER NOT NULL DEFAULT 0,
 	show_credit INTEGER NOT NULL DEFAULT 1,
+	show_comment INTEGER NOT NULL DEFAULT 1,
 	show_reactions INTEGER NOT NULL DEFAULT 1,
 	reactions_animated INTEGER NOT NULL DEFAULT 1,
 	reaction_multiplier INTEGER NOT NULL DEFAULT 1,
@@ -413,6 +414,14 @@ func (d *DB) migratePictureListenerColumns() error {
 			ADD COLUMN transition TEXT NOT NULL DEFAULT 'fade'
 		`); err != nil {
 			return fmt.Errorf("add transition: %w", err)
+		}
+	}
+	if !cols["show_comment"] {
+		if _, err := d.sql.Exec(`
+			ALTER TABLE picture_listeners
+			ADD COLUMN show_comment INTEGER NOT NULL DEFAULT 1
+		`); err != nil {
+			return fmt.Errorf("add show_comment: %w", err)
 		}
 	}
 	return nil

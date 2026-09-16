@@ -192,6 +192,9 @@ func TestPictureListensAndPublicSlideshow(t *testing.T) {
 	if feed.Slug != "obs_night" || feed.CreditCorner != "tl" || feed.IntervalSeconds != 5 {
 		t.Fatalf("bad feed: %+v", feed)
 	}
+	if !feed.ShowComment {
+		t.Fatalf("show_comment should default on: %+v", feed)
+	}
 
 	// Public page — no auth.
 	req = httptest.NewRequest(http.MethodGet, "/slideshow/obs_night", nil)

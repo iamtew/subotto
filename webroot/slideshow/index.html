@@ -19,12 +19,19 @@
           <div id="credit-name" class="credit-name"></div>
           <div id="credit-reactions" class="credit-reactions" hidden></div>
         </div>
+        <!-- Discord message sits under the author row in the same card. -->
+        <div id="comment" class="comment-text" hidden></div>
       </div>
     </div>
-    <div id="comment" class="credit comment tr" hidden style="--credit-scale: 1.5;">
-      <div class="credit-card">
-        <div id="comment-text" class="credit-name comment-text"></div>
-      </div>
+    <!-- Opposite corner: muted X/Y + ring that fills until the next slide. -->
+    <div id="progress" class="progress tr" hidden style="--credit-scale: 1.5; --progress-ms: 8000ms;">
+      <span id="progress-count"></span>
+      <svg class="progress-ring" viewBox="0 0 36 36" aria-hidden="true">
+        <g transform="rotate(-90 18 18)">
+          <circle class="progress-ring-bg" cx="18" cy="18" r="16" fill="none"></circle>
+          <circle id="progress-fg" class="progress-ring-fg" cx="18" cy="18" r="16" fill="none"></circle>
+        </g>
+      </svg>
     </div>
     <div id="empty" class="empty" hidden>waiting for pictures…</div>
   </div>

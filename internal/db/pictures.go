@@ -37,7 +37,7 @@ const (
 
 const pictureSelectCols = `
 	id, discord_channel_id, guild_id, name, slug, enabled,
-	credit_corner, interval_seconds, shuffle, show_credit, show_reactions,
+	credit_corner, interval_seconds, shuffle, show_credit, show_comment, show_reactions,
 	reactions_animated, reaction_multiplier, credit_scale, reaction_scale,
 	transition,
 	created_at, active_from, active_until
@@ -63,6 +63,7 @@ type PictureListener struct {
 	IntervalSeconds  int
 	Shuffle          bool
 	ShowCredit       bool
+	ShowComment        bool // Discord message text under the author card
 	ShowReactions      bool
 	ReactionsAnimated  bool // true = fountain floaters; false = static stack by author
 	ReactionMultiplier int // 1–25; copies of each reaction = count * multiplier (animated only)
@@ -100,6 +101,7 @@ type PictureListenerInput struct {
 	IntervalSeconds  int
 	Shuffle          bool
 	ShowCredit       bool
+	ShowComment        bool
 	ShowReactions      bool
 	ReactionsAnimated  bool
 	ReactionMultiplier int
@@ -296,6 +298,7 @@ func (d *DB) UpsertPictureListener(ctx context.Context, in PictureListenerInput)
 	enabledInt := boolToInt(in.Enabled)
 	shuffleInt := boolToInt(in.Shuffle)
 	showCreditInt := boolToInt(in.ShowCredit)
+	showCommentInt := boolToInt(in.ShowComment)
 	showReactionsInt := boolToInt(in.ShowReactions)
 	animatedInt := boolToInt(in.ReactionsAnimated)
 	mult := NormalizeReactionMultiplier(in.ReactionMultiplier)
@@ -315,12 +318,12 @@ func (d *DB) UpsertPictureListener(ctx context.Context, in PictureListenerInput)
 			UPDATE picture_listeners
 			SET guild_id = ?, name = ?, enabled = ?,
 			    credit_corner = ?, interval_seconds = ?, shuffle = ?,
-			    show_credit = ?, show_reactions = ?, reactions_animated = ?,
+			    show_credit = ?, show_comment = ?, show_reactions = ?, reactions_animated = ?,
 			    reaction_multiplier = ?, credit_scale = ?, reaction_scale = ?,
 			    transition = ?
 			WHERE id = ? AND active_until IS NULL
 		`, in.GuildID, name, enabledInt, corner, interval, shuffleInt,
-			showCreditInt, showReactionsInt, animatedInt, mult, creditScale, reactionScale,
+			showCreditInt, showCommentInt, showReactionsInt, animatedInt, mult, creditScale, reactionScale,
 			transition, existing.ID)
 		if err != nil {
 			return nil, fmt.Errorf("update picture listener: %w", err)
@@ -350,13 +353,13 @@ func (d *DB) UpsertPictureListener(ctx context.Context, in PictureListenerInput)
 	_, err = d.sql.ExecContext(ctx, `
 		INSERT INTO picture_listeners (
 			discord_channel_id, guild_id, name, slug, enabled,
-			credit_corner, interval_seconds, shuffle, show_credit, show_reactions,
+			credit_corner, interval_seconds, shuffle, show_credit, show_comment, show_reactions,
 			reactions_animated, reaction_multiplier, credit_scale, reaction_scale,
 			transition,
 			created_at, active_from, active_until
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
 	`, channelID, in.GuildID, name, slug, enabledInt,
-		corner, interval, shuffleInt, showCreditInt, showReactionsInt, animatedInt, mult,
+		corner, interval, shuffleInt, showCreditInt, showCommentInt, showReactionsInt, animatedInt, mult,
 		creditScale, reactionScale, transition, now, now)
 	if err != nil {
 		return nil, fmt.Errorf("insert picture listener: %w", err)
@@ -478,12 +481,12 @@ func (d *DB) UpdatePictureListenerSettings(ctx context.Context, channelID string
 		UPDATE picture_listeners
 		SET name = ?, enabled = ?,
 		    credit_corner = ?, interval_seconds = ?, shuffle = ?,
-		    show_credit = ?, show_reactions = ?, reactions_animated = ?,
+		    show_credit = ?, show_comment = ?, show_reactions = ?, reactions_animated = ?,
 		    reaction_multiplier = ?, credit_scale = ?, reaction_scale = ?,
 		    transition = ?
 		WHERE id = ? AND active_until IS NULL
 	`, name, boolToInt(in.Enabled), corner, interval, boolToInt(in.Shuffle),
-		boolToInt(in.ShowCredit), boolToInt(in.ShowReactions), boolToInt(in.ReactionsAnimated),
+		boolToInt(in.ShowCredit), boolToInt(in.ShowComment), boolToInt(in.ShowReactions), boolToInt(in.ReactionsAnimated),
 		mult, creditScale, reactionScale, transition, existing.ID)
 	if err != nil {
 		return nil, fmt.Errorf("update picture listener settings: %w", err)
@@ -839,6 +842,7 @@ func scanPictureListener(row scannable) (*PictureListener, error) {
 		enabled     int
 		shuffle     int
 		showCredit  int
+		showComment int
 		showReact   int
 		animated    int
 		createdAt   string
@@ -856,6 +860,7 @@ func scanPictureListener(row scannable) (*PictureListener, error) {
 		&p.IntervalSeconds,
 		&shuffle,
 		&showCredit,
+		&showComment,
 		&showReact,
 		&animated,
 		&p.ReactionMultiplier,
@@ -872,6 +877,7 @@ func scanPictureListener(row scannable) (*PictureListener, error) {
 	p.Enabled = enabled == 1
 	p.Shuffle = shuffle == 1
 	p.ShowCredit = showCredit == 1
+	p.ShowComment = showComment == 1
 	p.ShowReactions = showReact == 1
 	p.ReactionsAnimated = animated == 1
 	p.ReactionMultiplier = NormalizeReactionMultiplier(p.ReactionMultiplier)
