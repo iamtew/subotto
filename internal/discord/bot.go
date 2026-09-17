@@ -17,6 +17,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
+	"subotto/internal/ai"
 	"subotto/internal/db"
 	"subotto/internal/ingest"
 	"subotto/internal/pictures"
@@ -38,6 +39,7 @@ type Bot struct {
 	session *discordgo.Session
 	store   *db.DB
 	yt      *youtube.Client
+	ai      *ai.Client
 	guildID string // optional filter; empty = all guilds the bot is in
 	ready   atomic.Bool
 
@@ -53,7 +55,7 @@ type Bot struct {
 
 // New creates a Discord session with the intents Subotto needs.
 // Message Content Intent must be enabled in the Discord Developer Portal.
-func New(token string, store *db.DB, yt *youtube.Client, guildID string) (*Bot, error) {
+func New(token string, store *db.DB, yt *youtube.Client, guildID string, aiClient *ai.Client) (*Bot, error) {
 	token = strings.TrimSpace(token)
 	if token == "" {
 		return nil, fmt.Errorf("DISCORD_BOT_TOKEN is empty")
@@ -77,6 +79,7 @@ func New(token string, store *db.DB, yt *youtube.Client, guildID string) (*Bot, 
 		session: session,
 		store:   store,
 		yt:      yt,
+		ai:      aiClient,
 		guildID: strings.TrimSpace(guildID),
 	}
 	// Start "down" so Maintain's grace clock begins if Open never succeeds.
@@ -305,6 +308,7 @@ func (b *Bot) onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) 
 	ctx := context.Background()
 	b.handleContentListener(ctx, s, m)
 	b.handlePictureListener(ctx, s, m)
+	b.handleHeshHelper(ctx, s, m)
 }
 
 func (b *Bot) handleContentListener(ctx context.Context, s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -470,4 +474,3 @@ func reactionsFromMessage(m *discordgo.Message) []db.ReactionCount {
 	}
 	return out
 }
-

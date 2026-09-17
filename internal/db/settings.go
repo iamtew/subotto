@@ -30,6 +30,11 @@ const (
 	// Background resync ticker (Admin Scheduler tab). JSON blob.
 	SettingResyncScheduler = "resync_scheduler"
 
+	// Hesh Helper system prompt (Admin AI tab). Missing/empty → default.
+	SettingAISystemPrompt = "ai_system_prompt"
+	// Hesh Helper Discord replies. Missing → enabled.
+	SettingAIEnabled = "ai_enabled"
+
 	ResyncScopeAll      = "all"
 	ResyncScopeSelected = "selected"
 	ResyncKindContent   = "content"
@@ -58,6 +63,9 @@ Slideshow: ` + "`/slideshow/{{slug}}`"
 // DefaultPictureListenStopMessage is posted when a picture listener goes OFFLINE.
 const DefaultPictureListenStopMessage = `## Picture collection has been stopped!
 Thank you for your participation to ***{{name}}*** 💚`
+
+// DefaultAISystemPrompt is used until Meat Bag saves their own copy in Admin.
+const DefaultAISystemPrompt = `You are Hesh Helper, Subotto's skateboarding-aware Discord sidekick. Keep replies short (1–3 sentences), witty, and friendly. Talk skating, the show, and casual chat. Do not dump long lists unless asked.`
 
 // Deprecated aliases so older call sites compile during the rename.
 const (
@@ -307,4 +315,42 @@ func (d *DB) SaveResyncScheduler(ctx context.Context, in ResyncScheduler) (Resyn
 		return ResyncScheduler{}, err
 	}
 	return out, nil
+}
+
+// AISystemPrompt returns the saved Hesh Helper prompt, or the built-in default
+// when the key is missing or the saved value is empty.
+func (d *DB) AISystemPrompt(ctx context.Context) (string, error) {
+	v, present, err := d.getSettingPresent(ctx, SettingAISystemPrompt)
+	if err != nil {
+		return "", err
+	}
+	if !present || strings.TrimSpace(v) == "" {
+		return DefaultAISystemPrompt, nil
+	}
+	return strings.TrimSpace(v), nil
+}
+
+// AIEnabled is whether Discord mention/reply chat is on. Missing key → true.
+func (d *DB) AIEnabled(ctx context.Context) (bool, error) {
+	v, present, err := d.getSettingPresent(ctx, SettingAIEnabled)
+	if err != nil {
+		return false, err
+	}
+	if !present {
+		return true, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "0", "false", "off", "no":
+		return false, nil
+	default:
+		return true, nil
+	}
+}
+
+func (d *DB) SetAIEnabled(ctx context.Context, on bool) error {
+	val := "0"
+	if on {
+		val = "1"
+	}
+	return d.SetSetting(ctx, SettingAIEnabled, val)
 }

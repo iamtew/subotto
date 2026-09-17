@@ -679,6 +679,20 @@ button.linkish:hover {
   margin: 0;
 }
 
+.hesh-chat-log {
+  flex: none;
+  min-height: 12rem;
+  max-height: 22rem;
+  border: 1px solid var(--line);
+  background: var(--bg-input);
+}
+
+.hesh-chat-compose {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  border-top: none;
+  padding: 0.55rem 0 0;
+}
+
 .form-actions {
   display: flex;
   flex-wrap: wrap;

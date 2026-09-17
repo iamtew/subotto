@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"subotto/internal/ai"
 	"subotto/internal/config"
 	"subotto/internal/db"
 	"subotto/internal/discord"
@@ -137,12 +138,19 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 		slog.Info("channel mappings loaded", "count", mappings)
 	}
 
+	aiClient := ai.New(cfg.OpenRouterAPIKey, cfg.OpenRouterModel)
+	if aiClient.Configured() {
+		slog.Info("hesh helper ready", "model", aiClient.Model())
+	} else {
+		slog.Info("hesh helper disabled — set OPENROUTER_API_KEY in .env")
+	}
+
 	if err := store.LogActivity(ctx, "startup", map[string]any{"message": "Phase 8 boot", "phase": 8}, true); err != nil {
 		slog.Error("failed to write startup activity", "err", err)
 		os.Exit(1)
 	}
 
-	bot, err := discord.New(cfg.DiscordBotToken, store, yt, cfg.DiscordGuildID)
+	bot, err := discord.New(cfg.DiscordBotToken, store, yt, cfg.DiscordGuildID, aiClient)
 	if err != nil {
 		slog.Error("failed to create discord bot", "err", err)
 		os.Exit(1)
@@ -177,6 +185,7 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 		YouTubeClientID:     cfg.YouTubeClientID,
 		YouTubeClientSecret: cfg.YouTubeClientSecret,
 		YouTubeRedirectURL:  cfg.YouTubeRedirectURL,
+		AI:                  aiClient,
 	})
 	if err != nil {
 		slog.Error("failed to create admin UI server", "err", err)

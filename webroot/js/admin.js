@@ -12,6 +12,7 @@ const TAB_REGISTRY = [
   { id: "pictures", label: "Picture listeners" },
   { id: "scheduler", label: "Scheduler" },
   { id: "broadcasts", label: "Broadcasts" },
+  { id: "ai", label: "AI" },
   { id: "chat", label: "Chat" },
   { id: "api", label: "API" },
 ];
@@ -82,6 +83,9 @@ const API_CATALOG = [
       { method: "GET", path: "/api/broadcasts/{id}", note: "One broadcast by numeric id." },
       { method: "PATCH", path: "/api/broadcasts/{id}", note: "Update a broadcast." },
       { method: "DELETE", path: "/api/broadcasts/{id}", note: "Delete a broadcast." },
+      { method: "GET", path: "/api/ai", note: "Hesh Helper model, key configured?, enabled?, saved system prompt." },
+      { method: "PUT", path: "/api/ai", note: "Save the Hesh Helper system prompt and/or enabled flag." },
+      { method: "POST", path: "/api/ai/chat", note: "Test chat using the saved system prompt." },
     ],
   },
   {
@@ -182,6 +186,51 @@ function activateTab(id) {
   if (id === "scheduler") {
     loadSchedulerTab();
   }
+  if (id === "ai") {
+    loadAITab();
+  }
+}
+
+let heshChatLines = [];
+
+async function loadAITab() {
+  const status = document.getElementById("ai-status");
+  if (!status) return;
+  try {
+    const data = await api("/api/ai");
+    const model = data.model || "—";
+    const key = data.configured ? "API key set" : "API key missing (set OPENROUTER_API_KEY)";
+    const on = data.enabled !== false;
+    status.textContent = "Model: " + model + " · " + key + " · Discord " + (on ? "on" : "off");
+    document.getElementById("ai-system-prompt").value = data.system_prompt || "";
+    document.getElementById("ai-chat-send").disabled = !data.configured;
+    syncAIEnabledToggle(on);
+  } catch (err) {
+    status.textContent = err.message;
+  }
+}
+
+function syncAIEnabledToggle(on) {
+  const btn = document.getElementById("ai-enabled-toggle");
+  if (!btn) return;
+  btn.textContent = on ? "Disable" : "Enable";
+  btn.setAttribute("data-enabled", on ? "true" : "false");
+}
+
+function renderHeshChat() {
+  const log = document.getElementById("ai-chat-log");
+  if (!log) return;
+  if (!heshChatLines.length) {
+    log.innerHTML = `<p class="empty">send a message to try the model</p>`;
+    return;
+  }
+  log.innerHTML = heshChatLines
+    .map((line) => {
+      const mine = line.who === "you" ? " mine" : "";
+      return `<div class="chat-msg${mine}"><span class="who">${esc(line.who)}</span><div class="body">${esc(line.text)}</div></div>`;
+    })
+    .join("");
+  log.scrollTop = log.scrollHeight;
 }
 
 /* ---------- Digital camo backdrop (noise → quantized pixels, no tile) ---------- */
@@ -3228,6 +3277,78 @@ document.getElementById("tab-status").addEventListener("click", async (ev) => {
   } finally {
     if (btn.isConnected) btn.disabled = false;
   }
+});
+
+document.getElementById("ai-enabled-toggle").addEventListener("click", async (ev) => {
+  const btn = ev.currentTarget;
+  const on = btn.getAttribute("data-enabled") !== "false";
+  btn.disabled = true;
+  try {
+    await api("/api/ai", {
+      method: "PUT",
+      body: JSON.stringify({ enabled: !on }),
+    });
+    toast(!on ? "Hesh Helper enabled" : "Hesh Helper disabled");
+    await loadAITab();
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("ai-prompt-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const btn = ev.target.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  try {
+    await api("/api/ai", {
+      method: "PUT",
+      body: JSON.stringify({
+        system_prompt: document.getElementById("ai-system-prompt").value,
+      }),
+    });
+    toast("system prompt saved");
+    await loadAITab();
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("ai-chat-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const input = document.getElementById("ai-chat-input");
+  const msg = (input.value || "").trim();
+  if (!msg) {
+    toast("type a message first", true);
+    return;
+  }
+  const btn = document.getElementById("ai-chat-send");
+  btn.disabled = true;
+  heshChatLines.push({ who: "you", text: msg });
+  renderHeshChat();
+  input.value = "";
+  try {
+    const data = await api("/api/ai/chat", {
+      method: "POST",
+      body: JSON.stringify({ message: msg }),
+    });
+    heshChatLines.push({ who: "hesh", text: data.reply || "" });
+    renderHeshChat();
+  } catch (err) {
+    heshChatLines.push({ who: "error", text: err.message });
+    renderHeshChat();
+    toast(err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("ai-chat-clear").addEventListener("click", () => {
+  heshChatLines = [];
+  renderHeshChat();
 });
 
 document.getElementById("api-password-toggle").addEventListener("click", () => {

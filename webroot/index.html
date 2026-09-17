@@ -809,6 +809,44 @@
       </section>
     </div>
 
+    <!-- ========== Hesh Helper (OpenRouter) ========== -->
+    <div class="tab-panel" id="tab-ai" role="tabpanel" data-tab="ai" hidden>
+      <section class="panel">
+        <div class="panel-head">
+          <h2>HESH HELPER</h2>
+          <p>OpenRouter chat · Discord <code>@Subotto</code> or reply-to-bot · no conversation memory yet</p>
+        </div>
+        <div class="form-actions">
+          <button type="button" id="ai-enabled-toggle">Disable</button>
+        </div>
+        <p id="ai-status" class="panel-note">loading…</p>
+        <form id="ai-prompt-form" class="announce-form">
+          <label>
+            System prompt
+            <textarea name="system_prompt" id="ai-system-prompt" rows="8" spellcheck="true"></textarea>
+          </label>
+          <div class="form-actions">
+            <button type="submit">SAVE PROMPT</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>TEST CHAT</h2>
+          <p>Uses the <strong>saved</strong> system prompt · local transcript only</p>
+        </div>
+        <div id="ai-chat-log" class="chat-log hesh-chat-log" aria-live="polite">
+          <p class="empty">send a message to try the model</p>
+        </div>
+        <form id="ai-chat-form" class="chat-compose hesh-chat-compose">
+          <textarea id="ai-chat-input" rows="2" maxlength="2000" placeholder="say something…"></textarea>
+          <button type="submit" id="ai-chat-send">SEND</button>
+          <button type="button" class="secondary" id="ai-chat-clear">Clear</button>
+        </form>
+      </section>
+    </div>
+
     <!-- ========== API (docs + password for Streamer.bot) ========== -->
     <div class="tab-panel" id="tab-api" role="tabpanel" data-tab="api" hidden>
       <section class="panel" id="api-password-section">

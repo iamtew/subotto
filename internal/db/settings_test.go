@@ -156,3 +156,69 @@ func TestResyncSchedulerLoadSaveAndWants(t *testing.T) {
 		t.Fatalf("targets: %+v", again.Targets)
 	}
 }
+
+func TestAISystemPromptDefaultAndSave(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "ai-settings.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	ctx := context.Background()
+
+	got, err := store.AISystemPrompt(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != DefaultAISystemPrompt {
+		t.Fatalf("default: %q", got)
+	}
+
+	if err := store.SetSetting(ctx, SettingAISystemPrompt, "keep it short"); err != nil {
+		t.Fatal(err)
+	}
+	got, err = store.AISystemPrompt(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "keep it short" {
+		t.Fatalf("saved: %q", got)
+	}
+
+	if err := store.SetSetting(ctx, SettingAISystemPrompt, "   "); err != nil {
+		t.Fatal(err)
+	}
+	got, err = store.AISystemPrompt(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != DefaultAISystemPrompt {
+		t.Fatalf("empty should fall back, got %q", got)
+	}
+}
+
+func TestAIEnabledDefaultAndSave(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "ai-enabled.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	ctx := context.Background()
+
+	on, err := store.AIEnabled(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !on {
+		t.Fatal("default should be enabled")
+	}
+	if err := store.SetAIEnabled(ctx, false); err != nil {
+		t.Fatal(err)
+	}
+	on, err = store.AIEnabled(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if on {
+		t.Fatal("expected disabled")
+	}
+}

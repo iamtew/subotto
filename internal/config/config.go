@@ -39,6 +39,10 @@ type Config struct {
 	// Optional behaviour
 	LogLevel            string // debug, info, warn, error
 	ResyncIntervalHours int    // 0 = disabled
+
+	// Hesh Helper (OpenRouter). Empty key = AI off.
+	OpenRouterAPIKey string
+	OpenRouterModel  string
 }
 
 // Load reads optional .env, then environment variables, then applies defaults.
@@ -59,6 +63,8 @@ func Load() (*Config, error) {
 		AdminHost:           envOr("ADMIN_HOST", "0.0.0.0"),
 		DatabasePath:        envOr("DATABASE_PATH", "./data/subotto.db"),
 		LogLevel:            strings.ToLower(envOr("LOG_LEVEL", "info")),
+		OpenRouterAPIKey:    strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY")),
+		OpenRouterModel:     envOr("OPENROUTER_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free"),
 	}
 
 	port, err := strconv.Atoi(envOr("ADMIN_PORT", "50770"))

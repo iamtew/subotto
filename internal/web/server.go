@@ -20,6 +20,7 @@ import (
 
 	"golang.org/x/oauth2"
 
+	"subotto/internal/ai"
 	"subotto/internal/db"
 	"subotto/internal/discord"
 	"subotto/internal/scheduler"
@@ -86,6 +87,8 @@ type Server struct {
 	createPlaylistFn func(ctx context.Context, title, description string) (string, error)
 	// announceFn lets tests stub Discord channel posts (broadcast fire).
 	announceFn func(ctx context.Context, token, channelID, content string) error
+
+	ai *ai.Client
 }
 
 // Options configures the Admin server.
@@ -106,6 +109,7 @@ type Options struct {
 	YouTubeClientID     string
 	YouTubeClientSecret string
 	YouTubeRedirectURL  string
+	AI                  *ai.Client
 }
 
 // New builds an Admin server (does not listen yet — call Start).
@@ -154,6 +158,7 @@ func New(opts Options) (*Server, error) {
 		ytClientID:     opts.YouTubeClientID,
 		ytClientSecret: opts.YouTubeClientSecret,
 		ytRedirectURL:  opts.YouTubeRedirectURL,
+		ai:             opts.AI,
 	}
 
 	mux := http.NewServeMux()
@@ -162,6 +167,7 @@ func New(opts Options) (*Server, error) {
 	s.registerPictureAPI(mux)
 	s.registerEpisodeAPI(mux)
 	s.registerBroadcastAPI(mux)
+	s.registerAIAPI(mux)
 	// Static Admin files last — "/" catches everything else under webroot (auth’d).
 	fileServer := http.FileServer(http.Dir(s.webroot))
 	mux.Handle("/", s.basicAuth(fileServer))

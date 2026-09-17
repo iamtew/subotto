@@ -17,6 +17,7 @@ Shipped in code:
 - **Picture listeners** — Discord channel → on-disk images + public OBS `/slideshow/...`
 - **Show episodes** — templates + start/cease + absorb live listeners + public `/api/get/episode/{show}` (`air_datetime`, `spot_image`)
 - **Broadcasts** — named multi-channel Discord sends (Admin Fire or `GET /api/broadcasts/{slug}/fire` with Basic Auth `api` / `API_PASSWORD`)
+- **Hesh Helper** — Discord mention / reply-to-bot chat via OpenRouter (Admin **AI** tab for the system prompt + test chat)
 
 Parked: bi-weekly schedules, richer show-runner Discord announce.
 
@@ -47,7 +48,7 @@ Reactions on ingest: **💾** added · **♻️** DUPE · **🛑** OLD · **❌*
 
 ## DEV setup (Windows)
 
-1. Copy `.env.example` → `.env` and fill in tokens (set a real `ADMIN_PASSWORD`; optional `API_PASSWORD` for Streamer.bot broadcast fire).
+1. Copy `.env.example` → `.env` and fill in tokens (set a real `ADMIN_PASSWORD`; optional `API_PASSWORD` for Streamer.bot broadcast fire; optional `OPENROUTER_API_KEY` for Hesh Helper).
 2. Google Cloud: enable YouTube Data API v3, create OAuth client, add redirect  
    `http://localhost:50770/oauth/callback`.
 3. `just auth-youtube` once (browser login; refresh token saved in SQLite). After that, Admin **Status → Authorize YouTube** can re-auth without stopping the bot.
