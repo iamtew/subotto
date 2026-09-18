@@ -138,9 +138,16 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 		slog.Info("channel mappings loaded", "count", mappings)
 	}
 
-	aiClient := ai.New(cfg.OpenRouterAPIKey, cfg.OpenRouterModel)
+	aiClient := ai.New(cfg.OpenRouterAPIKey)
 	if aiClient.Configured() {
-		slog.Info("hesh helper ready", "model", aiClient.Model())
+		catalog, err := store.LoadAIModels(ctx, cfg.OpenRouterModel)
+		model := ai.DefaultModel
+		if err != nil {
+			slog.Error("hesh helper model load failed", "err", err)
+		} else {
+			model = catalog.Model
+		}
+		slog.Info("hesh helper ready", "model", model)
 	} else {
 		slog.Info("hesh helper disabled — set OPENROUTER_API_KEY in .env")
 	}
@@ -150,7 +157,7 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 		os.Exit(1)
 	}
 
-	bot, err := discord.New(cfg.DiscordBotToken, store, yt, cfg.DiscordGuildID, aiClient)
+	bot, err := discord.New(cfg.DiscordBotToken, store, yt, cfg.DiscordGuildID, aiClient, cfg.OpenRouterModel)
 	if err != nil {
 		slog.Error("failed to create discord bot", "err", err)
 		os.Exit(1)
@@ -186,6 +193,7 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 		YouTubeClientSecret: cfg.YouTubeClientSecret,
 		YouTubeRedirectURL:  cfg.YouTubeRedirectURL,
 		AI:                  aiClient,
+		OpenRouterModel:     cfg.OpenRouterModel,
 	})
 	if err != nil {
 		slog.Error("failed to create admin UI server", "err", err)

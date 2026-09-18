@@ -13,7 +13,7 @@ import (
 
 func TestAIGetPutAndChatUnconfigured(t *testing.T) {
 	s, _ := testServer(t)
-	s.ai = ai.New("", ai.DefaultModel)
+	s.ai = ai.New("")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai", nil)
 	req.SetBasicAuth("admin", "test-pass")
@@ -42,6 +42,13 @@ func TestAIGetPutAndChatUnconfigured(t *testing.T) {
 	}
 	if samp != ai.DefaultSampling() {
 		t.Fatalf("sampling default: %#v", got["sampling"])
+	}
+	if got["model"] != ai.DefaultModel {
+		t.Fatalf("model default: %#v", got["model"])
+	}
+	models, _ := got["models"].([]any)
+	if len(models) != 2 || models[1] != ai.DefaultFlashModel {
+		t.Fatalf("models default: %#v", got["models"])
 	}
 
 	off := httptest.NewRequest(http.MethodPut, "/api/ai", strings.NewReader(`{"enabled":false}`))
@@ -120,7 +127,7 @@ func TestAIGetPutAndChatUnconfigured(t *testing.T) {
 
 func TestAIPutSampling(t *testing.T) {
 	s, _ := testServer(t)
-	s.ai = ai.New("", ai.DefaultModel)
+	s.ai = ai.New("")
 
 	put := httptest.NewRequest(http.MethodPut, "/api/ai", strings.NewReader(`{"sampling":{"temperature":0.25,"top_k":8}}`))
 	put.SetBasicAuth("admin", "test-pass")
@@ -159,5 +166,68 @@ func TestAIPutSampling(t *testing.T) {
 	}
 	if samp.Temperature != 0.25 || samp.TopK != 8 {
 		t.Fatalf("get sampling: %+v", samp)
+	}
+}
+
+func TestAIPutModels(t *testing.T) {
+	s, _ := testServer(t)
+	s.ai = ai.New("")
+
+	put := httptest.NewRequest(http.MethodPut, "/api/ai", strings.NewReader(`{"model":"deepseek/deepseek-v4-flash-0731:free"}`))
+	put.SetBasicAuth("admin", "test-pass")
+	put.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, put)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("put model: %d %s", rec.Code, rec.Body.String())
+	}
+	var got map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["model"] != ai.DefaultFlashModel {
+		t.Fatalf("selected: %#v", got["model"])
+	}
+
+	add := httptest.NewRequest(http.MethodPut, "/api/ai", strings.NewReader(`{"model":"acme/foo","models":["nvidia/nemotron-3-ultra-550b-a55b:free","deepseek/deepseek-v4-flash-0731:free","acme/foo"]}`))
+	add.SetBasicAuth("admin", "test-pass")
+	add.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, add)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("add: %d %s", rec.Code, rec.Body.String())
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["model"] != "acme/foo" {
+		t.Fatalf("added: %#v", got)
+	}
+	models, _ := got["models"].([]any)
+	if len(models) != 3 {
+		t.Fatalf("catalog: %#v", models)
+	}
+
+	get := httptest.NewRequest(http.MethodGet, "/api/ai", nil)
+	get.SetBasicAuth("admin", "test-pass")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, get)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("get: %d %s", rec.Code, rec.Body.String())
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["model"] != "acme/foo" {
+		t.Fatalf("get model: %#v", got["model"])
+	}
+
+	empty := httptest.NewRequest(http.MethodPut, "/api/ai", strings.NewReader(`{"models":[]}`))
+	empty.SetBasicAuth("admin", "test-pass")
+	empty.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, empty)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("empty catalog: %d %s", rec.Code, rec.Body.String())
 	}
 }

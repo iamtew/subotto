@@ -731,6 +731,15 @@ button.linkish:hover {
   grid-column: 1 / -1;
 }
 
+.ai-model-actions {
+  margin: 0 0 0.85rem;
+}
+
+.ai-model-actions input[type="text"] {
+  flex: 1 1 16rem;
+  min-width: 12rem;
+}
+
 .settings-target {
   margin: 0.35rem 0 0;
   color: var(--muted);

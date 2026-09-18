@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -68,6 +69,7 @@ type Server struct {
 	startedAt   time.Time
 	youtubeName string // optional; filled by Ping at boot / after Admin OAuth
 	envHours    int    // RESYNC_INTERVAL_HOURS until Admin saves scheduler row
+	envAIModel  string // OPENROUTER_MODEL until Admin saves ai_models
 
 	ytClientID     string
 	ytClientSecret string
@@ -106,6 +108,7 @@ type Options struct {
 	Webroot             string // folder with index.html / css / js; default ./webroot
 	YouTubeChannel      string // display name from Ping, may be empty
 	ResyncIntervalHours int    // .env bootstrap for GET until Admin saves
+	OpenRouterModel     string // .env bootstrap until Admin saves ai_models
 	YouTubeClientID     string
 	YouTubeClientSecret string
 	YouTubeRedirectURL  string
@@ -155,6 +158,7 @@ func New(opts Options) (*Server, error) {
 		startedAt:      time.Now().UTC(),
 		youtubeName:    opts.YouTubeChannel,
 		envHours:       opts.ResyncIntervalHours,
+		envAIModel:     strings.TrimSpace(opts.OpenRouterModel),
 		ytClientID:     opts.YouTubeClientID,
 		ytClientSecret: opts.YouTubeClientSecret,
 		ytRedirectURL:  opts.YouTubeRedirectURL,

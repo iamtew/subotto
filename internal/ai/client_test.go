@@ -34,9 +34,9 @@ func TestChatRoundTrip(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	c := New("test-key", "")
+	c := New("test-key")
 	c.baseURL = srv.URL
-	got, err := c.Chat(context.Background(), "you are hesh", "hello", Sampling{})
+	got, err := c.Chat(context.Background(), "you are hesh", "hello", DefaultModel, Sampling{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,22 +51,22 @@ func TestChatContextTimeout(t *testing.T) {
 		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"late"}}]}`))
 	}))
 	t.Cleanup(srv.Close)
-	c := New("test-key", DefaultModel)
+	c := New("test-key")
 	c.baseURL = srv.URL
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
-	_, err := c.Chat(ctx, "sys", "hi", Sampling{})
+	_, err := c.Chat(ctx, "sys", "hi", DefaultModel, Sampling{})
 	if err == nil || !strings.Contains(err.Error(), "timed out") {
 		t.Fatalf("err=%v", err)
 	}
 }
 
 func TestChatUnconfigured(t *testing.T) {
-	c := New("", DefaultModel)
+	c := New("")
 	if c.Configured() {
 		t.Fatal("empty key should not be configured")
 	}
-	if _, err := c.Chat(context.Background(), "sys", "hi", Sampling{}); err == nil {
+	if _, err := c.Chat(context.Background(), "sys", "hi", DefaultModel, Sampling{}); err == nil {
 		t.Fatal("expected error")
 	}
 }
@@ -77,9 +77,9 @@ func TestChatHTTPError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"error":{"message":"nope"}}`))
 	}))
 	t.Cleanup(srv.Close)
-	c := New("test-key", DefaultModel)
+	c := New("test-key")
 	c.baseURL = srv.URL
-	_, err := c.Chat(context.Background(), "sys", "hi", Sampling{})
+	_, err := c.Chat(context.Background(), "sys", "hi", DefaultModel, Sampling{})
 	if err == nil || !strings.Contains(err.Error(), "nope") {
 		t.Fatalf("err=%v", err)
 	}
@@ -94,9 +94,9 @@ func TestChatHTTPUnauthorized(t *testing.T) {
 		_, _ = w.Write([]byte(`{"error":{"message":"invalid key"}}`))
 	}))
 	t.Cleanup(srv.Close)
-	c := New("test-key", DefaultModel)
+	c := New("test-key")
 	c.baseURL = srv.URL
-	_, err := c.Chat(context.Background(), "sys", "hi", Sampling{})
+	_, err := c.Chat(context.Background(), "sys", "hi", DefaultModel, Sampling{})
 	if err == nil || !strings.Contains(err.Error(), "invalid key") {
 		t.Fatalf("err=%v", err)
 	}
@@ -115,9 +115,9 @@ func TestChatSamplingOmitsZeros(t *testing.T) {
 		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"ok"}}]}`))
 	}))
 	t.Cleanup(srv.Close)
-	c := New("test-key", DefaultModel)
+	c := New("test-key")
 	c.baseURL = srv.URL
-	if _, err := c.Chat(context.Background(), "sys", "hi", DefaultSampling()); err != nil {
+	if _, err := c.Chat(context.Background(), "sys", "hi", DefaultModel, DefaultSampling()); err != nil {
 		t.Fatal(err)
 	}
 	for _, key := range []string{"max_tokens", "top_k", "min_p", "top_a"} {
@@ -129,7 +129,7 @@ func TestChatSamplingOmitsZeros(t *testing.T) {
 		t.Fatalf("defaults: %#v", payload)
 	}
 
-	if _, err := c.Chat(context.Background(), "sys", "hi", Sampling{
+	if _, err := c.Chat(context.Background(), "sys", "hi", DefaultFlashModel, Sampling{
 		MaxTokens:         128,
 		Temperature:       0.2,
 		TopP:              0.8,
@@ -147,5 +147,8 @@ func TestChatSamplingOmitsZeros(t *testing.T) {
 	}
 	if payload["min_p"] != 0.05 || payload["top_a"] != 0.1 || payload["temperature"] != 0.2 {
 		t.Fatalf("floats: %#v", payload)
+	}
+	if payload["model"] != DefaultFlashModel {
+		t.Fatalf("model: %#v", payload["model"])
 	}
 }

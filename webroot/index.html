@@ -820,6 +820,15 @@
           <button type="button" id="ai-enabled-toggle">Disable</button>
         </div>
         <p id="ai-status" class="panel-note">loading…</p>
+        <label>
+          Model
+          <select id="ai-model"></select>
+        </label>
+        <div class="form-actions ai-model-actions">
+          <input type="text" id="ai-model-new" maxlength="200" placeholder="openrouter/model-id" autocomplete="off">
+          <button type="button" id="ai-model-add">Add</button>
+          <button type="button" class="secondary" id="ai-model-remove">Remove</button>
+        </div>
         <form id="ai-prompt-form" class="announce-form">
           <label>
             System prompt

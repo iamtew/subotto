@@ -83,8 +83,8 @@ const API_CATALOG = [
       { method: "GET", path: "/api/broadcasts/{id}", note: "One broadcast by numeric id." },
       { method: "PATCH", path: "/api/broadcasts/{id}", note: "Update a broadcast." },
       { method: "DELETE", path: "/api/broadcasts/{id}", note: "Delete a broadcast." },
-      { method: "GET", path: "/api/ai", note: "Hesh Helper model, key configured?, enabled?, saved system prompt, sampling." },
-      { method: "PUT", path: "/api/ai", note: "Save the Hesh Helper system prompt, sampling sliders, and/or enabled flag." },
+      { method: "GET", path: "/api/ai", note: "Hesh Helper model catalog, key configured?, enabled?, saved system prompt, sampling." },
+      { method: "PUT", path: "/api/ai", note: "Save system prompt, sampling, enabled flag, and/or model catalog." },
       { method: "POST", path: "/api/ai/chat", note: "Test chat using the saved system prompt." },
       { method: "GET", path: "/api/ai/logs", note: "Hesh Helper request log (filter: all / warning / error / critical)." },
     ],
@@ -205,6 +205,7 @@ async function loadAITab() {
     status.textContent = "Model: " + model + " · " + key + " · Discord " + (on ? "on" : "off");
     document.getElementById("ai-system-prompt").value = data.system_prompt || "";
     fillAISampling(data.sampling || {});
+    fillAIModels(data);
     document.getElementById("ai-chat-send").disabled = !data.configured;
     syncAIEnabledToggle(on);
   } catch (err) {
@@ -254,6 +255,36 @@ function bindAISampling() {
     input.addEventListener("input", () => syncAISamplingOutput(input));
     syncAISamplingOutput(input);
   });
+}
+
+function fillAIModels(data) {
+  const sel = document.getElementById("ai-model");
+  const removeBtn = document.getElementById("ai-model-remove");
+  if (!sel) return;
+  const models = Array.isArray(data.models) ? data.models : [];
+  const active = data.model || "";
+  sel.innerHTML = "";
+  models.forEach((id) => {
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = id;
+    sel.appendChild(opt);
+  });
+  if (active) sel.value = active;
+  if (removeBtn) removeBtn.disabled = models.length < 2;
+}
+
+function aiModelList() {
+  return Array.from(document.querySelectorAll("#ai-model option")).map((o) => o.value);
+}
+
+async function saveAIModels(payload, okMsg) {
+  await api("/api/ai", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+  toast(okMsg);
+  await loadAITab();
 }
 
 function fmtAILogWhat(e) {
@@ -3379,6 +3410,51 @@ document.getElementById("tab-status").addEventListener("click", async (ev) => {
     toast(err.message || "status action failed", true);
   } finally {
     if (btn.isConnected) btn.disabled = false;
+  }
+});
+
+document.getElementById("ai-model").addEventListener("change", async () => {
+  const sel = document.getElementById("ai-model");
+  if (!sel || !sel.value) return;
+  try {
+    await saveAIModels({ model: sel.value }, "model saved");
+  } catch (err) {
+    toast(err.message, true);
+    await loadAITab();
+  }
+});
+
+document.getElementById("ai-model-add").addEventListener("click", async () => {
+  const input = document.getElementById("ai-model-new");
+  const id = (input.value || "").trim();
+  if (!id) {
+    toast("type a model id first", true);
+    return;
+  }
+  const models = aiModelList();
+  if (!models.includes(id)) models.push(id);
+  try {
+    await saveAIModels({ models, model: id }, "model added");
+    input.value = "";
+  } catch (err) {
+    toast(err.message, true);
+  }
+});
+
+document.getElementById("ai-model-remove").addEventListener("click", async () => {
+  const sel = document.getElementById("ai-model");
+  const id = sel && sel.value ? sel.value : "";
+  if (!id) return;
+  const models = aiModelList().filter((m) => m !== id);
+  if (!models.length) {
+    toast("keep at least one model", true);
+    return;
+  }
+  if (!confirm("Remove model “" + id + "” from the list?")) return;
+  try {
+    await saveAIModels({ models, model: models[0] }, "model removed");
+  } catch (err) {
+    toast(err.message, true);
   }
 });
 

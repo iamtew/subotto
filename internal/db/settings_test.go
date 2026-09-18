@@ -299,3 +299,48 @@ func TestAISamplingDefaultRoundTripAndClamp(t *testing.T) {
 		t.Fatalf("partial json should keep defaults: %+v", partial)
 	}
 }
+
+func TestAIModelsDefaultBootstrapAndSave(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "ai-models.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	ctx := context.Background()
+
+	got, err := store.LoadAIModels(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := ai.DefaultCatalog("")
+	if got.Model != want.Model || len(got.Models) != 2 {
+		t.Fatalf("default: %+v", got)
+	}
+
+	boot, err := store.LoadAIModels(ctx, "acme/foo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if boot.Model != "acme/foo" || len(boot.Models) != 3 {
+		t.Fatalf("env bootstrap: %+v", boot)
+	}
+
+	saved, err := store.SaveAIModels(ctx, ai.ModelCatalog{
+		Model:  "deepseek/deepseek-v4-flash-0731:free",
+		Models: []string{ai.DefaultModel, ai.DefaultFlashModel},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := store.LoadAIModels(ctx, "acme/foo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.Model != saved.Model || len(again.Models) != 2 {
+		t.Fatalf("saved should ignore env: %+v", again)
+	}
+
+	if _, err := store.SaveAIModels(ctx, ai.ModelCatalog{}); err == nil {
+		t.Fatal("empty catalog")
+	}
+}

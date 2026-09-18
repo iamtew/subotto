@@ -43,7 +43,6 @@ func HTTPStatus(err error) int {
 }
 
 const (
-	DefaultModel   = "nvidia/nemotron-3-ultra-550b-a55b:free"
 	defaultBaseURL = "https://openrouter.ai/api/v1"
 	// ChatTimeout is the Discord + Admin + HTTP budget for one OpenRouter turn.
 	ChatTimeout = 60 * time.Second
@@ -52,20 +51,14 @@ const (
 // Client is a tiny chat-completions caller.
 type Client struct {
 	key     string
-	model   string
 	baseURL string
 	http    *http.Client
 }
 
 // New builds a client. Empty key means Configured() is false (AI stays off).
-func New(key, model string) *Client {
-	model = strings.TrimSpace(model)
-	if model == "" {
-		model = DefaultModel
-	}
+func New(key string) *Client {
 	return &Client{
 		key:     strings.TrimSpace(key),
-		model:   model,
 		baseURL: defaultBaseURL,
 		http:    &http.Client{Timeout: ChatTimeout},
 	}
@@ -74,14 +67,6 @@ func New(key, model string) *Client {
 // Configured is true when an API key is present.
 func (c *Client) Configured() bool {
 	return c != nil && c.key != ""
-}
-
-// Model is the OpenRouter model id from env (read-only in Admin).
-func (c *Client) Model() string {
-	if c == nil || c.model == "" {
-		return DefaultModel
-	}
-	return c.model
 }
 
 type chatRequest struct {
@@ -115,7 +100,7 @@ type chatResponse struct {
 }
 
 // Chat sends one user turn plus a system prompt. No conversation memory.
-func (c *Client) Chat(ctx context.Context, systemPrompt, userMessage string, sampling Sampling) (string, error) {
+func (c *Client) Chat(ctx context.Context, systemPrompt, userMessage, model string, sampling Sampling) (string, error) {
 	if !c.Configured() {
 		return "", apiErr(0, "OPENROUTER_API_KEY is not set")
 	}
@@ -124,9 +109,13 @@ func (c *Client) Chat(ctx context.Context, systemPrompt, userMessage string, sam
 	if userMessage == "" {
 		return "", fmt.Errorf("message is empty")
 	}
+	model = strings.TrimSpace(model)
+	if model == "" {
+		model = DefaultModel
+	}
 
 	reqBody := chatRequest{
-		Model: c.model,
+		Model: model,
 		Messages: []chatMessage{
 			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: userMessage},

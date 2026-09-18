@@ -42,6 +42,8 @@ type Bot struct {
 	ai      *ai.Client
 	guildID string // optional filter; empty = all guilds the bot is in
 	ready   atomic.Bool
+	// envAIModel bootstraps the catalog until Admin saves ai_models.
+	envAIModel string
 
 	// reconnectMu serializes forced Close+Open (Admin button + watchdog).
 	reconnectMu sync.Mutex
@@ -55,7 +57,7 @@ type Bot struct {
 
 // New creates a Discord session with the intents Subotto needs.
 // Message Content Intent must be enabled in the Discord Developer Portal.
-func New(token string, store *db.DB, yt *youtube.Client, guildID string, aiClient *ai.Client) (*Bot, error) {
+func New(token string, store *db.DB, yt *youtube.Client, guildID string, aiClient *ai.Client, envAIModel string) (*Bot, error) {
 	token = strings.TrimSpace(token)
 	if token == "" {
 		return nil, fmt.Errorf("DISCORD_BOT_TOKEN is empty")
@@ -76,11 +78,12 @@ func New(token string, store *db.DB, yt *youtube.Client, guildID string, aiClien
 		discordgo.IntentsGuildMessageReactions
 
 	b := &Bot{
-		session: session,
-		store:   store,
-		yt:      yt,
-		ai:      aiClient,
-		guildID: strings.TrimSpace(guildID),
+		session:    session,
+		store:      store,
+		yt:         yt,
+		ai:         aiClient,
+		guildID:    strings.TrimSpace(guildID),
+		envAIModel: strings.TrimSpace(envAIModel),
 	}
 	// Start "down" so Maintain's grace clock begins if Open never succeeds.
 	b.markDown("boot")

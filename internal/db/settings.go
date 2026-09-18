@@ -38,6 +38,8 @@ const (
 	SettingAIEnabled = "ai_enabled"
 	// Hesh Helper OpenRouter sampling knobs (Admin AI sliders). JSON blob.
 	SettingAISampling = "ai_sampling"
+	// Hesh Helper active model + catalog (Admin AI tab). JSON blob.
+	SettingAIModels = "ai_models"
 
 	ResyncScopeAll      = "all"
 	ResyncScopeSelected = "selected"
@@ -384,6 +386,42 @@ func (d *DB) SaveAISampling(ctx context.Context, in ai.Sampling) (ai.Sampling, e
 	}
 	if err := d.SetSetting(ctx, SettingAISampling, string(b)); err != nil {
 		return ai.Sampling{}, err
+	}
+	return out, nil
+}
+
+// LoadAIModels reads the Admin OpenRouter catalog. envModel is used only when the key is missing.
+func (d *DB) LoadAIModels(ctx context.Context, envModel string) (ai.ModelCatalog, error) {
+	raw, present, err := d.getSettingPresent(ctx, SettingAIModels)
+	if err != nil {
+		return ai.ModelCatalog{}, err
+	}
+	if !present || strings.TrimSpace(raw) == "" {
+		return ai.DefaultCatalog(envModel), nil
+	}
+	var in ai.ModelCatalog
+	if err := json.Unmarshal([]byte(raw), &in); err != nil {
+		return ai.ModelCatalog{}, fmt.Errorf("ai model settings: %w", err)
+	}
+	out, err := ai.NormalizeCatalog(in)
+	if err != nil {
+		return ai.ModelCatalog{}, fmt.Errorf("ai model settings: %w", err)
+	}
+	return out, nil
+}
+
+// SaveAIModels clamps and writes the Admin OpenRouter catalog.
+func (d *DB) SaveAIModels(ctx context.Context, in ai.ModelCatalog) (ai.ModelCatalog, error) {
+	out, err := ai.NormalizeCatalog(in)
+	if err != nil {
+		return ai.ModelCatalog{}, err
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return ai.ModelCatalog{}, err
+	}
+	if err := d.SetSetting(ctx, SettingAIModels, string(b)); err != nil {
+		return ai.ModelCatalog{}, err
 	}
 	return out, nil
 }

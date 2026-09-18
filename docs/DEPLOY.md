@@ -61,7 +61,7 @@ Also copy **`data/pictures/`** and **`data/episode-spots/`** if present — pict
    - `ADMIN_HOST=127.0.0.1` when Caddy (or another proxy) terminates TLS in front of Admin  
    - Optional stronger `ADMIN_PASSWORD`  
    - Optional `API_PASSWORD` for Streamer.bot broadcast fire (`api` user)  
-   - Optional `OPENROUTER_API_KEY` / `OPENROUTER_MODEL` for Hesh Helper (empty key = AI off). The system prompt and sampling sliders are stored in SQLite `app_settings`, not `.env`.  
+   - Optional `OPENROUTER_API_KEY` for Hesh Helper (empty key = AI off). The model catalog, system prompt, and sampling sliders are stored in SQLite `app_settings`, not `.env` (`OPENROUTER_MODEL` is first-load bootstrap only).  
    - `YOUTUBE_REDIRECT_URL` = the public HTTPS callback registered in Google Console (must match **exactly**, path `/oauth/callback`). Leave localhost only if you will use the SSH-tunnel fallback in §3.  
 5. `chmod +x subotto-linux`
 6. **Stop Windows `just run`** (one Discord gateway per bot token).

@@ -31,6 +31,8 @@ type aiSettingsBody struct {
 	SystemPrompt *string          `json:"system_prompt"`
 	Enabled      *bool            `json:"enabled"`
 	Sampling     *json.RawMessage `json:"sampling"`
+	Model        *string          `json:"model"`
+	Models       *[]string        `json:"models"`
 }
 
 func (s *Server) handlePutAI(w http.ResponseWriter, r *http.Request) {
@@ -39,7 +41,7 @@ func (s *Server) handlePutAI(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
-	if body.SystemPrompt == nil && body.Enabled == nil && body.Sampling == nil {
+	if body.SystemPrompt == nil && body.Enabled == nil && body.Sampling == nil && body.Model == nil && body.Models == nil {
 		writeErr(w, http.StatusBadRequest, "nothing to save")
 		return
 	}
@@ -74,6 +76,24 @@ func (s *Server) handlePutAI(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = s.store.LogActivity(r.Context(), "ai_sampling_updated", map[string]any{"source": "admin_ui"}, true)
 	}
+	if body.Model != nil || body.Models != nil {
+		cur, err := s.store.LoadAIModels(r.Context(), s.envAIModel)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if body.Models != nil {
+			cur.Models = *body.Models
+		}
+		if body.Model != nil {
+			cur.Model = *body.Model
+		}
+		if _, err := s.store.SaveAIModels(r.Context(), cur); err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		_ = s.store.LogActivity(r.Context(), "ai_models_updated", map[string]any{"source": "admin_ui"}, true)
+	}
 	s.writeAISettings(w, r)
 }
 
@@ -93,15 +113,16 @@ func (s *Server) writeAISettings(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	model := ""
-	configured := false
-	if s.ai != nil {
-		model = s.ai.Model()
-		configured = s.ai.Configured()
+	catalog, err := s.store.LoadAIModels(r.Context(), s.envAIModel)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
 	}
+	configured := s.ai != nil && s.ai.Configured()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":            true,
-		"model":         model,
+		"model":         catalog.Model,
+		"models":        catalog.Models,
 		"configured":    configured,
 		"enabled":       enabled,
 		"system_prompt": prompt,
@@ -144,7 +165,13 @@ func (s *Server) handleAIChat(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	reply, err := s.ai.Chat(chatCtx, prompt, msg, sampling)
+	catalog, err := s.store.LoadAIModels(chatCtx, s.envAIModel)
+	if err != nil {
+		s.logAdminAI(msg, "", 0, err)
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	reply, err := s.ai.Chat(chatCtx, prompt, msg, catalog.Model, sampling)
 	if err != nil {
 		slog.Error("admin hesh helper chat failed", "err", err)
 		s.logAdminAI(msg, "", ai.HTTPStatus(err), err)
