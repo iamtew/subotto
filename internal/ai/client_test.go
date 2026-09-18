@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestChatRoundTrip(t *testing.T) {
@@ -41,6 +42,22 @@ func TestChatRoundTrip(t *testing.T) {
 	}
 	if got != "ollie it" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+func TestChatContextTimeout(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"late"}}]}`))
+	}))
+	t.Cleanup(srv.Close)
+	c := New("test-key", DefaultModel)
+	c.baseURL = srv.URL
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	_, err := c.Chat(ctx, "sys", "hi")
+	if err == nil || !strings.Contains(err.Error(), "timed out") {
+		t.Fatalf("err=%v", err)
 	}
 }
 

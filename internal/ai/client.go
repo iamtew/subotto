@@ -45,7 +45,8 @@ func HTTPStatus(err error) int {
 const (
 	DefaultModel   = "nvidia/nemotron-3-ultra-550b-a55b:free"
 	defaultBaseURL = "https://openrouter.ai/api/v1"
-	httpTimeout    = 45 * time.Second
+	// ChatTimeout is the Discord + Admin + HTTP budget for one OpenRouter turn.
+	ChatTimeout = 60 * time.Second
 )
 
 // Client is a tiny chat-completions caller.
@@ -66,7 +67,7 @@ func New(key, model string) *Client {
 		key:     strings.TrimSpace(key),
 		model:   model,
 		baseURL: defaultBaseURL,
-		http:    &http.Client{Timeout: httpTimeout},
+		http:    &http.Client{Timeout: ChatTimeout},
 	}
 }
 
@@ -137,13 +138,13 @@ func (c *Client) Chat(ctx context.Context, systemPrompt, userMessage string) (st
 
 	res, err := c.http.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("openrouter: %w", err)
+		return "", wrapChatErr(ctx, "openrouter", err)
 	}
 	defer res.Body.Close()
 
 	raw, err := io.ReadAll(io.LimitReader(res.Body, 1<<20))
 	if err != nil {
-		return "", fmt.Errorf("read openrouter response: %w", err)
+		return "", wrapChatErr(ctx, "read openrouter response", err)
 	}
 
 	var parsed chatResponse
@@ -166,4 +167,11 @@ func (c *Client) Chat(ctx context.Context, systemPrompt, userMessage string) (st
 		return "", apiErr(res.StatusCode, "openrouter returned an empty reply")
 	}
 	return reply, nil
+}
+
+func wrapChatErr(ctx context.Context, prefix string, err error) error {
+	if ctx != nil && ctx.Err() != nil {
+		return fmt.Errorf("openrouter timed out after %s: %w", ChatTimeout, err)
+	}
+	return fmt.Errorf("%s: %w", prefix, err)
 }

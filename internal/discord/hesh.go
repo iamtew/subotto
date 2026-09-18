@@ -14,10 +14,10 @@ import (
 	"subotto/internal/db"
 )
 
-const heshChatTimeout = 30 * time.Second
-
 // Discord's message cap. Truncate model output rather than fail the send.
 const heshMaxReplyRunes = 2000
+
+const heshTypingEvery = 8 * time.Second
 
 // handleHeshHelper replies when Subotto is @mentioned or someone replies to it.
 // Listeners still run on the same message — this path is independent.
@@ -54,46 +54,47 @@ func (b *Bot) handleHeshHelper(_ context.Context, s *discordgo.Session, m *disco
 	}
 	if b.ai == nil || !b.ai.Configured() {
 		slog.Debug("hesh helper skipped — OPENROUTER_API_KEY not set")
-		b.logHesh(context.Background(), trigger, author, channelID, userText, "", 0, fmtAIKeyMissing(), nil)
+		b.logHesh(trigger, author, channelID, userText, "", 0, fmtAIKeyMissing(), nil)
 		return
 	}
 
 	// OpenRouter can take a few seconds — don't stall YouTube/picture chrome.
 	go func() {
-		aiCtx, cancel := context.WithTimeout(context.Background(), heshChatTimeout)
+		aiCtx, cancel := context.WithTimeout(context.Background(), ai.ChatTimeout)
 		defer cancel()
+
+		stopTyping := make(chan struct{})
+		go keepHeshTyping(s, channelID, stopTyping)
+		defer close(stopTyping)
 
 		prompt, err := b.store.AISystemPrompt(aiCtx)
 		if err != nil {
 			slog.Error("hesh helper prompt load failed", "err", err)
-			b.logHesh(aiCtx, trigger, author, channelID, userText, "", 0, err, nil)
+			b.logHesh(trigger, author, channelID, userText, "", 0, err, nil)
 			return
 		}
 		reply, err := b.ai.Chat(aiCtx, prompt, userText)
 		if err != nil {
 			slog.Error("hesh helper chat failed", "err", err)
-			b.logHesh(aiCtx, trigger, author, channelID, userText, "", ai.HTTPStatus(err), err, nil)
+			b.logHesh(trigger, author, channelID, userText, "", ai.HTTPStatus(err), err, nil)
+			fail := heshFailReply(err)
+			if sendErr := heshReply(s, channelID, messageID, fail); sendErr != nil {
+				slog.Error("hesh helper fail reply failed", "channel", channelID, "err", sendErr)
+			}
 			return
 		}
 		reply = truncateRunes(strings.TrimSpace(reply), heshMaxReplyRunes)
 		if reply == "" {
 			empty := errors.New("openrouter returned an empty reply")
-			b.logHesh(aiCtx, trigger, author, channelID, userText, "", 0, empty, nil)
+			b.logHesh(trigger, author, channelID, userText, "", 0, empty, nil)
 			return
 		}
-		_, err = s.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
-			Content: reply,
-			Reference: &discordgo.MessageReference{
-				MessageID: messageID,
-				ChannelID: channelID,
-			},
-		})
-		if err != nil {
+		if err := heshReply(s, channelID, messageID, reply); err != nil {
 			slog.Error("hesh helper reply failed", "channel", channelID, "err", err)
-			b.logHesh(aiCtx, trigger, author, channelID, userText, reply, 0, nil, err)
+			b.logHesh(trigger, author, channelID, userText, reply, 0, nil, err)
 			return
 		}
-		b.logHesh(aiCtx, trigger, author, channelID, userText, reply, 0, nil, nil)
+		b.logHesh(trigger, author, channelID, userText, reply, 0, nil, nil)
 	}()
 }
 
@@ -101,7 +102,42 @@ func fmtAIKeyMissing() error {
 	return &ai.APIError{Msg: "OPENROUTER_API_KEY is not set"}
 }
 
-func (b *Bot) logHesh(ctx context.Context, trigger, author, channelID, userText, reply string, httpStatus int, apiErr, sendErr error) {
+func keepHeshTyping(s *discordgo.Session, channelID string, stop <-chan struct{}) {
+	if s == nil {
+		return
+	}
+	_ = s.ChannelTyping(channelID)
+	ticker := time.NewTicker(heshTypingEvery)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-ticker.C:
+			_ = s.ChannelTyping(channelID)
+		}
+	}
+}
+
+func heshReply(s *discordgo.Session, channelID, messageID, content string) error {
+	_, err := s.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
+		Content: truncateRunes(strings.TrimSpace(content), heshMaxReplyRunes),
+		Reference: &discordgo.MessageReference{
+			MessageID: messageID,
+			ChannelID: channelID,
+		},
+	})
+	return err
+}
+
+func heshFailReply(err error) string {
+	if err != nil && strings.Contains(strings.ToLower(err.Error()), "timed out") {
+		return "Hesh Helper timed out waiting for the model. Try again in a bit."
+	}
+	return "Hesh Helper couldn't answer just now."
+}
+
+func (b *Bot) logHesh(trigger, author, channelID, userText, reply string, httpStatus int, apiErr, sendErr error) {
 	if b == nil || b.store == nil {
 		return
 	}
@@ -111,7 +147,7 @@ func (b *Bot) logHesh(ctx context.Context, trigger, author, channelID, userText,
 	} else if sendErr != nil {
 		errText = sendErr.Error()
 	}
-	_ = b.store.LogAIRequest(ctx, db.AIRequestEntry{
+	if err := b.store.LogAIRequest(context.Background(), db.AIRequestEntry{
 		Level:       db.ClassifyAILevel(httpStatus, apiErr, sendErr),
 		Trigger:     trigger,
 		Author:      author,
@@ -120,7 +156,9 @@ func (b *Bot) logHesh(ctx context.Context, trigger, author, channelID, userText,
 		Reply:       reply,
 		Error:       errText,
 		HTTPStatus:  httpStatus,
-	})
+	}); err != nil {
+		slog.Error("hesh helper ai log failed", "err", err)
+	}
 }
 
 func heshMentioned(botID string, mentions []*discordgo.User) bool {

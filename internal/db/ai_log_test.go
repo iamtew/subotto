@@ -25,6 +25,7 @@ func TestClassifyAILevel(t *testing.T) {
 		{0, errors.New("OPENROUTER_API_KEY is not set"), nil, AILevelCritical},
 		{500, errors.New("oops"), nil, AILevelError},
 		{0, errors.New("openrouter: timeout"), nil, AILevelError},
+		{0, errors.New("openrouter timed out after 60s: context deadline exceeded"), nil, AILevelError},
 	}
 	for _, tc := range cases {
 		got := ClassifyAILevel(tc.status, tc.apiErr, tc.sendErr)

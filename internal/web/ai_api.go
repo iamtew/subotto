@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -95,7 +96,7 @@ type aiChatBody struct {
 func (s *Server) handleAIChat(w http.ResponseWriter, r *http.Request) {
 	if s.ai == nil || !s.ai.Configured() {
 		err := &ai.APIError{Msg: "OPENROUTER_API_KEY is not set"}
-		s.logAdminAI(r, "", "", 0, err)
+		s.logAdminAI("", "", 0, err)
 		writeErr(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
@@ -109,24 +110,26 @@ func (s *Server) handleAIChat(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "message is empty")
 		return
 	}
-	prompt, err := s.store.AISystemPrompt(r.Context())
+	chatCtx, cancel := context.WithTimeout(r.Context(), ai.ChatTimeout)
+	defer cancel()
+	prompt, err := s.store.AISystemPrompt(chatCtx)
 	if err != nil {
-		s.logAdminAI(r, msg, "", 0, err)
+		s.logAdminAI(msg, "", 0, err)
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	reply, err := s.ai.Chat(r.Context(), prompt, msg)
+	reply, err := s.ai.Chat(chatCtx, prompt, msg)
 	if err != nil {
 		slog.Error("admin hesh helper chat failed", "err", err)
-		s.logAdminAI(r, msg, "", ai.HTTPStatus(err), err)
+		s.logAdminAI(msg, "", ai.HTTPStatus(err), err)
 		writeErr(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	s.logAdminAI(r, msg, reply, 0, nil)
+	s.logAdminAI(msg, reply, 0, nil)
 	writeJSON(w, http.StatusOK, map[string]any{"reply": reply})
 }
 
-func (s *Server) logAdminAI(r *http.Request, userText, reply string, httpStatus int, apiErr error) {
+func (s *Server) logAdminAI(userText, reply string, httpStatus int, apiErr error) {
 	if s == nil || s.store == nil {
 		return
 	}
@@ -134,14 +137,16 @@ func (s *Server) logAdminAI(r *http.Request, userText, reply string, httpStatus 
 	if apiErr != nil {
 		errText = apiErr.Error()
 	}
-	_ = s.store.LogAIRequest(r.Context(), db.AIRequestEntry{
+	if err := s.store.LogAIRequest(context.Background(), db.AIRequestEntry{
 		Level:       db.ClassifyAILevel(httpStatus, apiErr, nil),
 		Trigger:     "admin_chat",
 		UserMessage: userText,
 		Reply:       reply,
 		Error:       errText,
 		HTTPStatus:  httpStatus,
-	})
+	}); err != nil {
+		slog.Error("admin hesh helper ai log failed", "err", err)
+	}
 }
 
 func (s *Server) handleAILogs(w http.ResponseWriter, r *http.Request) {
