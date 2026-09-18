@@ -236,7 +236,7 @@ async function loadAILogs() {
     }
     tbody.innerHTML = rows
       .map((e) => {
-        const when = e.timestamp ? new Date(e.timestamp).toLocaleString() : "";
+        const when = fmtWhen(e.timestamp);
         const levelName = e.level || "info";
         const levelClass = { info: 1, warning: 1, error: 1, critical: 1 }[levelName]
           ? levelName
@@ -611,6 +611,16 @@ let cachedStatus = null;
 let cachedActivity = [];
 let cachedUnlinked = { content: [], picture: [], total: 0 };
 
+/** RFC3339 → YYYY-MM-DD HH:MM:SS TZ (keep the string's offset; Z → UTC). */
+function fmtWhen(iso) {
+  const s = String(iso || "").trim();
+  if (!s) return "—";
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})(?:\.\d+)?(Z|[+-]\d{2}:\d{2})$/i);
+  if (!m) return s;
+  const tz = m[3].toUpperCase() === "Z" ? "UTC" : m[3];
+  return m[1] + " " + m[2] + " " + tz;
+}
+
 /** Human-readable uptime from process started_at (RFC3339). */
 function fmtUptime(startedAt) {
   if (!startedAt) return "—";
@@ -674,7 +684,7 @@ function renderStatusHealth() {
   if (s.scheduler_enabled) {
     const hours = s.resync_interval_hours || "?";
     const last = s.scheduler_last_run_at
-      ? new Date(s.scheduler_last_run_at).toLocaleString()
+      ? fmtWhen(s.scheduler_last_run_at)
       : "never";
     const err = s.scheduler_last_error
       ? ` · <span class="ok-no">err: ${esc(s.scheduler_last_error)}</span>`
@@ -688,7 +698,7 @@ function renderStatusHealth() {
   host.innerHTML = `<dl class="status-health-grid">
     <div><dt>Discord</dt><dd>${discord}</dd></div>
     <div><dt>YouTube</dt><dd>${yt}</dd></div>
-    <div><dt>Uptime</dt><dd class="mono">${esc(fmtUptime(s.started_at))} <span class="muted">since ${esc(s.started_at ? new Date(s.started_at).toLocaleString() : "—")}</span></dd></div>
+    <div><dt>Uptime</dt><dd class="mono">${esc(fmtUptime(s.started_at))} <span class="muted">since ${esc(fmtWhen(s.started_at))}</span></dd></div>
     <div><dt>Listen addr</dt><dd class="mono">${esc(s.listen_addr || "—")}</dd></div>
     <div><dt>Scheduler</dt><dd>${sched}</dd></div>
     <div><dt>Counts</dt><dd>content ${esc(String(on))}/${esc(String(tot))} · pics ${esc(String(picOn))}/${esc(String(picTot))} · log ${esc(String(s.activity_total ?? 0))}</dd></div>
@@ -726,7 +736,7 @@ function renderStatusEpisodes() {
         })
         .join(", ");
       const apiPath = e.public_url || `/api/get/episode/${e.show_slug}`;
-      const since = e.since ? new Date(e.since).toLocaleString() : "—";
+      const since = fmtWhen(e.since);
       return `<tr>
         <td>${esc(e.episode_name_full || e.name)}<br><span class="mono">${esc(e.show)} · ${esc(e.episode_short)}</span></td>
         <td>${listeners || "—"}</td>
@@ -758,7 +768,7 @@ function renderStatusContent() {
       const state = m.enabled
         ? `<span class="state-on">LISTENING</span>`
         : `<span class="state-off">PAUSED</span>`;
-      const since = m.active_from ? new Date(m.active_from).toLocaleString() : "—";
+      const since = fmtWhen(m.active_from);
       const orphan = orphans.has(m.discord_channel_id)
         ? ` <span class="status-orphan-flag" title="Not linked to a show episode">orphan</span>`
         : "";
@@ -795,7 +805,7 @@ function renderStatusPictures() {
       const state = p.enabled
         ? `<span class="state-on">LISTENING</span>`
         : `<span class="state-off">PAUSED</span>`;
-      const since = p.active_from ? new Date(p.active_from).toLocaleString() : "—";
+      const since = fmtWhen(p.active_from);
       const url = p.slideshow_url || ("/slideshow/" + p.slug);
       const orphan = orphans.has(p.discord_channel_id)
         ? ` <span class="status-orphan-flag" title="Not linked to a show episode">orphan</span>`
@@ -827,7 +837,7 @@ function renderStatusActivity() {
   }
   tbody.innerHTML = rows
     .map((e) => {
-      const when = e.timestamp ? new Date(e.timestamp).toLocaleString() : "";
+      const when = fmtWhen(e.timestamp);
       const details = esc(fmtDetails(e.details));
       const ok = e.success
         ? `<span class="ok-yes">YES</span>`
@@ -1061,7 +1071,7 @@ function renderChatMessages(messages) {
   log.innerHTML = list
     .map((m) => {
       const mine = m.self ? " mine" : "";
-      const when = m.timestamp ? new Date(m.timestamp).toLocaleString() : "";
+      const when = fmtWhen(m.timestamp);
       const body = (m.content || "").trim();
       const bodyHTML = body ? `<div class="body">${renderChatMarkdown(body)}</div>` : "";
       return `<article class="chat-msg${mine}">
@@ -1211,7 +1221,7 @@ async function loadListens() {
         const state = m.enabled
           ? `<span class="state-on">LISTENING</span>`
           : `<span class="state-off">PAUSED</span>`;
-        const since = m.active_from ? new Date(m.active_from).toLocaleString() : "—";
+        const since = fmtWhen(m.active_from);
         const apiCell = chName
           ? `<a class="api-get" href="/api/get/content/${encodeURIComponent(chName)}" target="_blank" rel="noopener">GET</a>`
           : `<span class="api-get muted" title="Discord channel name unavailable">GET</span>`;
@@ -1258,7 +1268,7 @@ async function loadPictureListens() {
         const state = p.enabled
           ? `<span class="state-on">LISTENING</span>`
           : `<span class="state-off">PAUSED</span>`;
-        const since = p.active_from ? new Date(p.active_from).toLocaleString() : "—";
+        const since = fmtWhen(p.active_from);
         const url = p.slideshow_url || ("/slideshow/" + p.slug);
         const apiCell = chName
           ? `<a class="api-get" href="/api/get/picture/${encodeURIComponent(chName)}" target="_blank" rel="noopener">GET</a>`
@@ -1302,7 +1312,7 @@ async function loadActivity() {
     }
     tbody.innerHTML = rows
       .map((e) => {
-        const when = e.timestamp ? new Date(e.timestamp).toLocaleString() : "";
+        const when = fmtWhen(e.timestamp);
         const details = esc(fmtDetails(e.details));
         const ok = e.success
           ? `<span class="ok-yes">YES</span>`
@@ -1395,7 +1405,7 @@ function renderSchedGlance() {
     return;
   }
   const last = s.scheduler_last_run_at
-    ? new Date(s.scheduler_last_run_at).toLocaleString()
+    ? fmtWhen(s.scheduler_last_run_at)
     : "never";
   const err = s.scheduler_last_error ? " · last error: " + s.scheduler_last_error : "";
   el.textContent = "On · every " + (s.resync_interval_hours || "?") + "h · last run " + last + err;
@@ -1632,7 +1642,7 @@ function fillAirDateTime(prefix, rfc) {
   document.getElementById(prefix + "-airtime").value = parsed.local ? parsed.local.slice(11, 16) : "";
   document.getElementById(prefix + "-airtz").value = parsed.tz;
   const prev = document.getElementById(prefix + "-airiso");
-  if (prev) prev.textContent = rfc || "";
+  if (prev) prev.textContent = rfc ? fmtWhen(rfc) : "";
 }
 
 function bindAirDateTime(prefix) {
@@ -1641,7 +1651,7 @@ function bindAirDateTime(prefix) {
   const tz = document.getElementById(prefix + "-airtz");
   const prev = document.getElementById(prefix + "-airiso");
   function paint() {
-    if (prev) prev.textContent = airDateTimeFromForm(prefix);
+    if (prev) prev.textContent = fmtWhen(airDateTimeFromForm(prefix));
   }
   day.addEventListener("input", paint);
   clock.addEventListener("input", paint);
@@ -1832,10 +1842,10 @@ async function loadEpisodes() {
           <td>${esc(e.show)}<br><code class="mono">${esc(e.show_slug)}</code></td>
           <td>${esc(e.episode_short)} · ${esc(e.name)}</td>
           <td class="mono">${esc(e.episode_name_full)}</td>
-          <td class="mono">${esc(e.air_datetime || "—")}</td>
+          <td class="mono">${esc(fmtWhen(e.air_datetime))}</td>
           <td>${spot}</td>
           <td>${listeners || "—"}</td>
-          <td class="mono">${esc(e.since ? new Date(e.since).toLocaleString() : "—")}</td>
+          <td class="mono">${esc(fmtWhen(e.since))}</td>
           <td><a class="api-get" href="${esc(apiPath)}" target="_blank" rel="noopener">GET</a></td>
           <td class="actions">
             <button type="button" class="secondary" data-ep-edit="${e.id}">Edit</button>
