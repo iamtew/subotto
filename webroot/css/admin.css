@@ -693,6 +693,36 @@ button.linkish:hover {
   padding: 0.55rem 0 0;
 }
 
+.ai-log-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.ai-log-filter select {
+  min-width: 10rem;
+}
+
+.ai-log-info {
+  color: var(--olive);
+}
+
+.ai-log-warning {
+  color: var(--chartreuse);
+}
+
+.ai-log-error,
+.ai-log-critical {
+  color: var(--red);
+}
+
+.ai-log-critical {
+  font-weight: 600;
+}
+
 .form-actions {
   display: flex;
   flex-wrap: wrap;

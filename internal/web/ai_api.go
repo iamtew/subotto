@@ -3,9 +3,12 @@ package web
 import (
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
+	"subotto/internal/ai"
 	"subotto/internal/db"
 )
 
@@ -15,6 +18,7 @@ func (s *Server) registerAIAPI(mux *http.ServeMux) {
 	mux.Handle("GET /api/ai", s.basicAuth(http.HandlerFunc(s.handleGetAI)))
 	mux.Handle("PUT /api/ai", s.basicAuth(http.HandlerFunc(s.handlePutAI)))
 	mux.Handle("POST /api/ai/chat", s.basicAuth(http.HandlerFunc(s.handleAIChat)))
+	mux.Handle("GET /api/ai/logs", s.basicAuth(http.HandlerFunc(s.handleAILogs)))
 }
 
 func (s *Server) handleGetAI(w http.ResponseWriter, r *http.Request) {
@@ -90,7 +94,9 @@ type aiChatBody struct {
 
 func (s *Server) handleAIChat(w http.ResponseWriter, r *http.Request) {
 	if s.ai == nil || !s.ai.Configured() {
-		writeErr(w, http.StatusServiceUnavailable, "OPENROUTER_API_KEY is not set")
+		err := &ai.APIError{Msg: "OPENROUTER_API_KEY is not set"}
+		s.logAdminAI(r, "", "", 0, err)
+		writeErr(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
 	var body aiChatBody
@@ -105,14 +111,86 @@ func (s *Server) handleAIChat(w http.ResponseWriter, r *http.Request) {
 	}
 	prompt, err := s.store.AISystemPrompt(r.Context())
 	if err != nil {
+		s.logAdminAI(r, msg, "", 0, err)
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	reply, err := s.ai.Chat(r.Context(), prompt, msg)
 	if err != nil {
 		slog.Error("admin hesh helper chat failed", "err", err)
+		s.logAdminAI(r, msg, "", ai.HTTPStatus(err), err)
 		writeErr(w, http.StatusBadGateway, err.Error())
 		return
 	}
+	s.logAdminAI(r, msg, reply, 0, nil)
 	writeJSON(w, http.StatusOK, map[string]any{"reply": reply})
+}
+
+func (s *Server) logAdminAI(r *http.Request, userText, reply string, httpStatus int, apiErr error) {
+	if s == nil || s.store == nil {
+		return
+	}
+	errText := ""
+	if apiErr != nil {
+		errText = apiErr.Error()
+	}
+	_ = s.store.LogAIRequest(r.Context(), db.AIRequestEntry{
+		Level:       db.ClassifyAILevel(httpStatus, apiErr, nil),
+		Trigger:     "admin_chat",
+		UserMessage: userText,
+		Reply:       reply,
+		Error:       errText,
+		HTTPStatus:  httpStatus,
+	})
+}
+
+func (s *Server) handleAILogs(w http.ResponseWriter, r *http.Request) {
+	level := strings.TrimSpace(r.URL.Query().Get("level"))
+	if level == "" {
+		level = "all"
+	}
+	limit := 50
+	if q := r.URL.Query().Get("limit"); q != "" {
+		if n, err := strconv.Atoi(q); err == nil {
+			limit = n
+		}
+	}
+	list, err := s.store.ListAIRequests(r.Context(), level, limit)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	out := make([]aiLogDTO, 0, len(list))
+	for _, e := range list {
+		out = append(out, toAILogDTO(e))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"logs": out})
+}
+
+type aiLogDTO struct {
+	ID          int64  `json:"id"`
+	Timestamp   string `json:"timestamp"`
+	Level       string `json:"level"`
+	Trigger     string `json:"trigger"`
+	Author      string `json:"author"`
+	ChannelID   string `json:"channel_id"`
+	UserMessage string `json:"user_message"`
+	Reply       string `json:"reply"`
+	Error       string `json:"error"`
+	HTTPStatus  int    `json:"http_status"`
+}
+
+func toAILogDTO(e db.AIRequestEntry) aiLogDTO {
+	return aiLogDTO{
+		ID:          e.ID,
+		Timestamp:   e.Timestamp.UTC().Format(time.RFC3339),
+		Level:       e.Level,
+		Trigger:     e.Trigger,
+		Author:      e.Author,
+		ChannelID:   e.ChannelID,
+		UserMessage: e.UserMessage,
+		Reply:       e.Reply,
+		Error:       e.Error,
+		HTTPStatus:  e.HTTPStatus,
+	}
 }

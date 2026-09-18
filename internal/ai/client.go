@@ -8,12 +8,39 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
 )
+
+// APIError is an OpenRouter (or local) chat failure with an HTTP status when one exists.
+type APIError struct {
+	Status int
+	Msg    string
+}
+
+func (e *APIError) Error() string {
+	if e == nil {
+		return ""
+	}
+	return e.Msg
+}
+
+func apiErr(status int, format string, args ...any) error {
+	return &APIError{Status: status, Msg: fmt.Sprintf(format, args...)}
+}
+
+// HTTPStatus returns the OpenRouter status from err, or 0.
+func HTTPStatus(err error) int {
+	var e *APIError
+	if errors.As(err, &e) && e != nil {
+		return e.Status
+	}
+	return 0
+}
 
 const (
 	DefaultModel   = "nvidia/nemotron-3-ultra-550b-a55b:free"
@@ -80,7 +107,7 @@ type chatResponse struct {
 // Chat sends one user turn plus a system prompt. No conversation memory.
 func (c *Client) Chat(ctx context.Context, systemPrompt, userMessage string) (string, error) {
 	if !c.Configured() {
-		return "", fmt.Errorf("OPENROUTER_API_KEY is not set")
+		return "", apiErr(0, "OPENROUTER_API_KEY is not set")
 	}
 	systemPrompt = strings.TrimSpace(systemPrompt)
 	userMessage = strings.TrimSpace(userMessage)
@@ -122,21 +149,21 @@ func (c *Client) Chat(ctx context.Context, systemPrompt, userMessage string) (st
 	var parsed chatResponse
 	_ = json.Unmarshal(raw, &parsed)
 	if parsed.Error != nil && strings.TrimSpace(parsed.Error.Message) != "" {
-		return "", fmt.Errorf("openrouter: %s", parsed.Error.Message)
+		return "", apiErr(res.StatusCode, "openrouter: %s", parsed.Error.Message)
 	}
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		msg := strings.TrimSpace(string(raw))
 		if msg == "" {
 			msg = res.Status
 		}
-		return "", fmt.Errorf("openrouter HTTP %d: %s", res.StatusCode, msg)
+		return "", apiErr(res.StatusCode, "openrouter HTTP %d: %s", res.StatusCode, msg)
 	}
 	if len(parsed.Choices) == 0 {
-		return "", fmt.Errorf("openrouter returned no choices")
+		return "", apiErr(res.StatusCode, "openrouter returned no choices")
 	}
 	reply := strings.TrimSpace(parsed.Choices[0].Message.Content)
 	if reply == "" {
-		return "", fmt.Errorf("openrouter returned an empty reply")
+		return "", apiErr(res.StatusCode, "openrouter returned an empty reply")
 	}
 	return reply, nil
 }

@@ -86,6 +86,7 @@ const API_CATALOG = [
       { method: "GET", path: "/api/ai", note: "Hesh Helper model, key configured?, enabled?, saved system prompt." },
       { method: "PUT", path: "/api/ai", note: "Save the Hesh Helper system prompt and/or enabled flag." },
       { method: "POST", path: "/api/ai/chat", note: "Test chat using the saved system prompt." },
+      { method: "GET", path: "/api/ai/logs", note: "Hesh Helper request log (filter: all / warning / error / critical)." },
     ],
   },
   {
@@ -207,6 +208,49 @@ async function loadAITab() {
     syncAIEnabledToggle(on);
   } catch (err) {
     status.textContent = err.message;
+  }
+  await loadAILogs();
+}
+
+function fmtAILogWhat(e) {
+  const bits = [];
+  if (e.author) bits.push("who: " + e.author);
+  if (e.user_message) bits.push("in: " + e.user_message);
+  if (e.error) bits.push("error: " + e.error);
+  if (e.reply) bits.push("out: " + e.reply);
+  if (e.http_status) bits.push("HTTP " + e.http_status);
+  return bits.join("\n") || "—";
+}
+
+async function loadAILogs() {
+  const tbody = document.querySelector("#ai-log-table tbody");
+  if (!tbody) return;
+  const sel = document.getElementById("ai-log-filter");
+  const level = sel && sel.value ? sel.value : "all";
+  try {
+    const data = await api("/api/ai/logs?level=" + encodeURIComponent(level) + "&limit=50");
+    const rows = data.logs || [];
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="4" class="empty">no AI requests yet</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = rows
+      .map((e) => {
+        const when = e.timestamp ? new Date(e.timestamp).toLocaleString() : "";
+        const levelName = e.level || "info";
+        const levelClass = { info: 1, warning: 1, error: 1, critical: 1 }[levelName]
+          ? levelName
+          : "info";
+        return `<tr>
+          <td>${esc(when)}</td>
+          <td class="mono ai-log-${levelClass}">${esc(levelName)}</td>
+          <td class="mono">${esc(e.trigger || "")}</td>
+          <td><pre class="details-pre">${esc(fmtAILogWhat(e))}</pre></td>
+        </tr>`;
+      })
+      .join("");
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="4" class="empty">failed: ${esc(err.message)}</td></tr>`;
   }
 }
 
@@ -1388,7 +1432,7 @@ async function loadSchedulerTab() {
 }
 
 async function refreshAll() {
-  await Promise.all([
+  const jobs = [
     loadStatus(),
     loadListens(),
     loadPictureListens(),
@@ -1398,7 +1442,12 @@ async function refreshAll() {
     loadActivity(),
     loadUnlinked(),
     loadSchedulerTab(),
-  ]);
+  ];
+  const aiTab = document.getElementById("tab-ai");
+  if (aiTab && !aiTab.hidden) {
+    jobs.push(loadAILogs());
+  }
+  await Promise.all(jobs);
   renderStatusDashboard();
 }
 
@@ -3343,12 +3392,17 @@ document.getElementById("ai-chat-form").addEventListener("submit", async (ev) =>
     toast(err.message, true);
   } finally {
     btn.disabled = false;
+    loadAILogs();
   }
 });
 
 document.getElementById("ai-chat-clear").addEventListener("click", () => {
   heshChatLines = [];
   renderHeshChat();
+});
+
+document.getElementById("ai-log-filter").addEventListener("change", () => {
+  loadAILogs();
 });
 
 document.getElementById("api-password-toggle").addEventListener("click", () => {

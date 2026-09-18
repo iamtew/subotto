@@ -120,6 +120,22 @@ CREATE TABLE IF NOT EXISTS activity_log (
 CREATE INDEX IF NOT EXISTS idx_activity_log_timestamp
 	ON activity_log (timestamp DESC);
 
+CREATE TABLE IF NOT EXISTS ai_request_log (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+	level TEXT NOT NULL,
+	trigger TEXT NOT NULL,
+	author TEXT NOT NULL DEFAULT '',
+	channel_id TEXT NOT NULL DEFAULT '',
+	user_message TEXT NOT NULL DEFAULT '',
+	reply TEXT NOT NULL DEFAULT '',
+	error TEXT NOT NULL DEFAULT '',
+	http_status INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_request_log_level_id
+	ON ai_request_log (level, id DESC);
+
 CREATE TABLE IF NOT EXISTS oauth_tokens (
 	key TEXT PRIMARY KEY,
 	value TEXT NOT NULL,

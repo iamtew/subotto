@@ -66,4 +66,24 @@ func TestChatHTTPError(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "nope") {
 		t.Fatalf("err=%v", err)
 	}
+	if HTTPStatus(err) != http.StatusBadRequest {
+		t.Fatalf("status=%d", HTTPStatus(err))
+	}
+}
+
+func TestChatHTTPUnauthorized(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"error":{"message":"invalid key"}}`))
+	}))
+	t.Cleanup(srv.Close)
+	c := New("test-key", DefaultModel)
+	c.baseURL = srv.URL
+	_, err := c.Chat(context.Background(), "sys", "hi")
+	if err == nil || !strings.Contains(err.Error(), "invalid key") {
+		t.Fatalf("err=%v", err)
+	}
+	if HTTPStatus(err) != http.StatusUnauthorized {
+		t.Fatalf("status=%d", HTTPStatus(err))
+	}
 }

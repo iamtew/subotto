@@ -74,4 +74,38 @@ func TestAIGetPutAndChatUnconfigured(t *testing.T) {
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("chat unconfigured: %d %s", rec.Code, rec.Body.String())
 	}
+
+	logs := httptest.NewRequest(http.MethodGet, "/api/ai/logs?level=all", nil)
+	logs.SetBasicAuth("admin", "test-pass")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, logs)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("logs: %d %s", rec.Code, rec.Body.String())
+	}
+	var logBody struct {
+		Logs []map[string]any `json:"logs"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &logBody); err != nil {
+		t.Fatal(err)
+	}
+	if len(logBody.Logs) != 1 {
+		t.Fatalf("logs=%#v", logBody.Logs)
+	}
+	if logBody.Logs[0]["level"] != "critical" || logBody.Logs[0]["trigger"] != "admin_chat" {
+		t.Fatalf("row=%#v", logBody.Logs[0])
+	}
+
+	warnOnly := httptest.NewRequest(http.MethodGet, "/api/ai/logs?level=warning", nil)
+	warnOnly.SetBasicAuth("admin", "test-pass")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, warnOnly)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("warn logs: %d %s", rec.Code, rec.Body.String())
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &logBody); err != nil {
+		t.Fatal(err)
+	}
+	if len(logBody.Logs) != 1 {
+		t.Fatalf("warning filter should include critical, got %#v", logBody.Logs)
+	}
 }

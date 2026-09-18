@@ -845,6 +845,37 @@
           <button type="button" class="secondary" id="ai-chat-clear">Clear</button>
         </form>
       </section>
+
+      <section class="panel" id="ai-log-section">
+        <div class="panel-head">
+          <h2>REQUEST LOG</h2>
+          <p>OpenRouter attempts · Discord + Admin test chat · auto-refresh 15s while this tab is open</p>
+          <label class="ai-log-filter">
+            Filter
+            <select id="ai-log-filter">
+              <option value="all">All</option>
+              <option value="warning">Warnings</option>
+              <option value="error">Errors</option>
+              <option value="critical">Critical</option>
+            </select>
+          </label>
+        </div>
+        <div class="table-wrap activity-wrap">
+          <table id="ai-log-table">
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Level</th>
+                <th>Trigger</th>
+                <th>What happened</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td colspan="4" class="empty">loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
 
     <!-- ========== API (docs + password for Streamer.bot) ========== -->
