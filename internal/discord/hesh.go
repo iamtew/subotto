@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"math/rand/v2"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -77,7 +78,7 @@ func (b *Bot) handleHeshHelper(_ context.Context, s *discordgo.Session, m *disco
 		if err != nil {
 			slog.Error("hesh helper chat failed", "err", err)
 			b.logHesh(trigger, author, channelID, userText, "", ai.HTTPStatus(err), err, nil)
-			fail := heshFailReply(err)
+			fail := heshFailReply()
 			if sendErr := heshReply(s, channelID, messageID, fail); sendErr != nil {
 				slog.Error("hesh helper fail reply failed", "channel", channelID, "err", sendErr)
 			}
@@ -130,11 +131,43 @@ func heshReply(s *discordgo.Session, channelID, messageID, content string) error
 	return err
 }
 
-func heshFailReply(err error) string {
-	if err != nil && strings.Contains(strings.ToLower(err.Error()), "timed out") {
-		return "Hesh Helper timed out waiting for the model. Try again in a bit."
-	}
-	return "Hesh Helper couldn't answer just now."
+var heshFailReplies = []string{
+	"Brain blanked. Poke me again in a sec.",
+	"The model went for a smoke. Try again shortly.",
+	"I had the thought, then it timed out. Classic.",
+	"OpenRouter hung up on me. Give it another go.",
+	"That's a no from the cloud. Retry in a moment.",
+	"I tripped over my own context window. Try again.",
+	"The neurons are buffering. Hit me in a bit.",
+	"I almost had it. Then the timeout laughed. Retry?",
+	"Servers are doing a kickflip into a wall. Try again soon.",
+	"My witty comeback expired in transit. One more time.",
+	"That's a 408 from the universe. Ping me again.",
+	"I stared into the void. The void timed out. Retry.",
+	"Couldn't land it. Run it back in a moment.",
+	"The AI took a bathroom break. Catch me in a sec.",
+	"I dropped the thought like a board on a crack. Try again.",
+	"Out of clever. Back in a moment if you ask again.",
+	"Model's buffering like 2006 YouTube. Retry shortly.",
+	"I started answering and then... nothing. Again?",
+	"Temporary brain freeze. Not the fun kind. Try again.",
+	"Lost the plot mid-sentence. Poke me again.",
+	"The hamster fell off the wheel. Give it a second.",
+	"Couldn't fetch a thought. Inventory's empty. Retry.",
+	"That's a bail. Roll up and ask again in a bit.",
+	"My inner monologue hit a paywall. Try again shortly.",
+	"The punchline timed out. I'll get it next attempt.",
+	"I was this close. Then the clock said no. Retry.",
+	"Cloud said \"brb\". It lied. Ask again in a moment.",
+	"Error: charm unavailable. Please insert another mention.",
+	"I fumbled the reply. Not my proudest ollie. Try again.",
+	"Timed out waiting for my own brain. Hit me soon.",
+	"That one got lost between here and the model. Retry.",
+	"I plead timeout. Come back in a sec and I'll behave.",
+}
+
+func heshFailReply() string {
+	return heshFailReplies[rand.IntN(len(heshFailReplies))]
 }
 
 func (b *Bot) logHesh(trigger, author, channelID, userText, reply string, httpStatus int, apiErr, sendErr error) {

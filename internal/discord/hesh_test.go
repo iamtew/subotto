@@ -1,8 +1,7 @@
 package discord
 
 import (
-	"errors"
-	"strings"
+	"slices"
 	"testing"
 )
 
@@ -26,12 +25,11 @@ func TestHeshMentioned(t *testing.T) {
 }
 
 func TestHeshFailReply(t *testing.T) {
-	got := heshFailReply(errors.New("openrouter timed out after 60s: context deadline exceeded"))
-	if !strings.Contains(got, "timed out") {
-		t.Fatalf("timeout copy: %q", got)
+	if n := len(heshFailReplies); n != 32 {
+		t.Fatalf("want 32 fail replies, got %d", n)
 	}
-	got = heshFailReply(errors.New("openrouter HTTP 502: nope"))
-	if got != "Hesh Helper couldn't answer just now." {
-		t.Fatalf("generic copy: %q", got)
+	got := heshFailReply()
+	if !slices.Contains(heshFailReplies, got) {
+		t.Fatalf("not in pool: %q", got)
 	}
 }
