@@ -85,8 +85,17 @@ func (c *Client) Model() string {
 }
 
 type chatRequest struct {
-	Model    string        `json:"model"`
-	Messages []chatMessage `json:"messages"`
+	Model             string        `json:"model"`
+	Messages          []chatMessage `json:"messages"`
+	MaxTokens         *int          `json:"max_tokens,omitempty"`
+	Temperature       *float64      `json:"temperature,omitempty"`
+	TopP              *float64      `json:"top_p,omitempty"`
+	TopK              *int          `json:"top_k,omitempty"`
+	FrequencyPenalty  *float64      `json:"frequency_penalty,omitempty"`
+	PresencePenalty   *float64      `json:"presence_penalty,omitempty"`
+	RepetitionPenalty *float64      `json:"repetition_penalty,omitempty"`
+	MinP              *float64      `json:"min_p,omitempty"`
+	TopA              *float64      `json:"top_a,omitempty"`
 }
 
 type chatMessage struct {
@@ -106,7 +115,7 @@ type chatResponse struct {
 }
 
 // Chat sends one user turn plus a system prompt. No conversation memory.
-func (c *Client) Chat(ctx context.Context, systemPrompt, userMessage string) (string, error) {
+func (c *Client) Chat(ctx context.Context, systemPrompt, userMessage string, sampling Sampling) (string, error) {
 	if !c.Configured() {
 		return "", apiErr(0, "OPENROUTER_API_KEY is not set")
 	}
@@ -116,13 +125,15 @@ func (c *Client) Chat(ctx context.Context, systemPrompt, userMessage string) (st
 		return "", fmt.Errorf("message is empty")
 	}
 
-	body, err := json.Marshal(chatRequest{
+	reqBody := chatRequest{
 		Model: c.model,
 		Messages: []chatMessage{
 			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: userMessage},
 		},
-	})
+	}
+	sampling.apply(&reqBody)
+	body, err := json.Marshal(reqBody)
 	if err != nil {
 		return "", fmt.Errorf("encode chat request: %w", err)
 	}

@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -27,8 +28,9 @@ func (s *Server) handleGetAI(w http.ResponseWriter, r *http.Request) {
 }
 
 type aiSettingsBody struct {
-	SystemPrompt *string `json:"system_prompt"`
-	Enabled      *bool   `json:"enabled"`
+	SystemPrompt *string          `json:"system_prompt"`
+	Enabled      *bool            `json:"enabled"`
+	Sampling     *json.RawMessage `json:"sampling"`
 }
 
 func (s *Server) handlePutAI(w http.ResponseWriter, r *http.Request) {
@@ -37,7 +39,7 @@ func (s *Server) handlePutAI(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
-	if body.SystemPrompt == nil && body.Enabled == nil {
+	if body.SystemPrompt == nil && body.Enabled == nil && body.Sampling == nil {
 		writeErr(w, http.StatusBadRequest, "nothing to save")
 		return
 	}
@@ -60,6 +62,18 @@ func (s *Server) handlePutAI(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = s.store.LogActivity(r.Context(), "ai_enabled_updated", map[string]any{"enabled": *body.Enabled, "source": "admin_ui"}, true)
 	}
+	if body.Sampling != nil {
+		parsed, err := ai.ParseSamplingJSON(*body.Sampling)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid sampling: "+err.Error())
+			return
+		}
+		if _, err := s.store.SaveAISampling(r.Context(), parsed); err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		_ = s.store.LogActivity(r.Context(), "ai_sampling_updated", map[string]any{"source": "admin_ui"}, true)
+	}
 	s.writeAISettings(w, r)
 }
 
@@ -70,6 +84,11 @@ func (s *Server) writeAISettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	enabled, err := s.store.AIEnabled(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	sampling, err := s.store.LoadAISampling(r.Context())
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -86,6 +105,7 @@ func (s *Server) writeAISettings(w http.ResponseWriter, r *http.Request) {
 		"configured":    configured,
 		"enabled":       enabled,
 		"system_prompt": prompt,
+		"sampling":      sampling,
 	})
 }
 
@@ -118,7 +138,13 @@ func (s *Server) handleAIChat(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	reply, err := s.ai.Chat(chatCtx, prompt, msg)
+	sampling, err := s.store.LoadAISampling(chatCtx)
+	if err != nil {
+		s.logAdminAI(msg, "", 0, err)
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	reply, err := s.ai.Chat(chatCtx, prompt, msg, sampling)
 	if err != nil {
 		slog.Error("admin hesh helper chat failed", "err", err)
 		s.logAdminAI(msg, "", ai.HTTPStatus(err), err)

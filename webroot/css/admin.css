@@ -999,8 +999,35 @@ label .optional {
 }
 
 .ops-details > form,
-.ops-details > .mapping-form {
+.ops-details > .mapping-form,
+.ops-details > .sampling-rows {
   padding: 0.85rem;
+}
+
+.sampling-rows {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.sampling-row {
+  display: grid;
+  grid-template-columns: 9.5rem 1fr 3.4rem;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 0.82rem;
+  color: var(--off-white);
+}
+
+.sampling-row input[type="range"] {
+  width: 100%;
+  accent-color: var(--muted);
+}
+
+.sampling-row output {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-align: right;
 }
 
 .episode-template-meta {

@@ -83,8 +83,8 @@ const API_CATALOG = [
       { method: "GET", path: "/api/broadcasts/{id}", note: "One broadcast by numeric id." },
       { method: "PATCH", path: "/api/broadcasts/{id}", note: "Update a broadcast." },
       { method: "DELETE", path: "/api/broadcasts/{id}", note: "Delete a broadcast." },
-      { method: "GET", path: "/api/ai", note: "Hesh Helper model, key configured?, enabled?, saved system prompt." },
-      { method: "PUT", path: "/api/ai", note: "Save the Hesh Helper system prompt and/or enabled flag." },
+      { method: "GET", path: "/api/ai", note: "Hesh Helper model, key configured?, enabled?, saved system prompt, sampling." },
+      { method: "PUT", path: "/api/ai", note: "Save the Hesh Helper system prompt, sampling sliders, and/or enabled flag." },
       { method: "POST", path: "/api/ai/chat", note: "Test chat using the saved system prompt." },
       { method: "GET", path: "/api/ai/logs", note: "Hesh Helper request log (filter: all / warning / error / critical)." },
     ],
@@ -204,12 +204,56 @@ async function loadAITab() {
     const on = data.enabled !== false;
     status.textContent = "Model: " + model + " · " + key + " · Discord " + (on ? "on" : "off");
     document.getElementById("ai-system-prompt").value = data.system_prompt || "";
+    fillAISampling(data.sampling || {});
     document.getElementById("ai-chat-send").disabled = !data.configured;
     syncAIEnabledToggle(on);
   } catch (err) {
     status.textContent = err.message;
   }
   await loadAILogs();
+}
+
+function aiSamplingInputs() {
+  return document.querySelectorAll("[data-sampling]");
+}
+
+function formatAISamplingValue(input) {
+  const n = Number(input.value);
+  if (input.getAttribute("data-int") === "1") {
+    return String(Math.round(n));
+  }
+  return n.toFixed(3);
+}
+
+function syncAISamplingOutput(input) {
+  const out = input.parentElement && input.parentElement.querySelector("output");
+  if (out) out.textContent = formatAISamplingValue(input);
+}
+
+function fillAISampling(sampling) {
+  aiSamplingInputs().forEach((input) => {
+    const key = input.getAttribute("data-sampling");
+    if (sampling[key] == null) return;
+    input.value = sampling[key];
+    syncAISamplingOutput(input);
+  });
+}
+
+function readAISampling() {
+  const out = {};
+  aiSamplingInputs().forEach((input) => {
+    const key = input.getAttribute("data-sampling");
+    const n = Number(input.value);
+    out[key] = input.getAttribute("data-int") === "1" ? Math.round(n) : n;
+  });
+  return out;
+}
+
+function bindAISampling() {
+  aiSamplingInputs().forEach((input) => {
+    input.addEventListener("input", () => syncAISamplingOutput(input));
+    syncAISamplingOutput(input);
+  });
 }
 
 function fmtAILogWhat(e) {
@@ -3365,9 +3409,10 @@ document.getElementById("ai-prompt-form").addEventListener("submit", async (ev) 
       method: "PUT",
       body: JSON.stringify({
         system_prompt: document.getElementById("ai-system-prompt").value,
+        sampling: readAISampling(),
       }),
     });
-    toast("system prompt saved");
+    toast("AI settings saved");
     await loadAITab();
   } catch (err) {
     toast(err.message, true);
@@ -3450,3 +3495,4 @@ document.getElementById("api-catalog").addEventListener("click", async (ev) => {
 
 refreshAll();
 setInterval(refreshAll, 15000);
+bindAISampling();

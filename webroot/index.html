@@ -825,8 +825,58 @@
             System prompt
             <textarea name="system_prompt" id="ai-system-prompt" rows="8" spellcheck="true"></textarea>
           </label>
+          <details class="ops-details" id="ai-sampling-details">
+            <summary>Sampling Parameters</summary>
+            <div class="sampling-rows">
+              <label class="sampling-row">
+                <span>Max tokens</span>
+                <input type="range" data-sampling="max_tokens" data-int="1" min="0" max="8192" step="1" value="0">
+                <output>0</output>
+              </label>
+              <label class="sampling-row">
+                <span>Temperature</span>
+                <input type="range" data-sampling="temperature" min="0" max="2" step="0.001" value="0.7">
+                <output>0.700</output>
+              </label>
+              <label class="sampling-row">
+                <span>Top P</span>
+                <input type="range" data-sampling="top_p" min="0" max="1" step="0.001" value="1">
+                <output>1.000</output>
+              </label>
+              <label class="sampling-row">
+                <span>Top K</span>
+                <input type="range" data-sampling="top_k" data-int="1" min="0" max="200" step="1" value="0">
+                <output>0</output>
+              </label>
+              <label class="sampling-row">
+                <span>Frequency Penalty</span>
+                <input type="range" data-sampling="frequency_penalty" min="-2" max="2" step="0.001" value="0">
+                <output>0.000</output>
+              </label>
+              <label class="sampling-row">
+                <span>Presence Penalty</span>
+                <input type="range" data-sampling="presence_penalty" min="-2" max="2" step="0.001" value="0">
+                <output>0.000</output>
+              </label>
+              <label class="sampling-row">
+                <span>Repetition Penalty</span>
+                <input type="range" data-sampling="repetition_penalty" min="0" max="2" step="0.001" value="1">
+                <output>1.000</output>
+              </label>
+              <label class="sampling-row">
+                <span>Min P</span>
+                <input type="range" data-sampling="min_p" min="0" max="1" step="0.001" value="0">
+                <output>0.000</output>
+              </label>
+              <label class="sampling-row">
+                <span>Top A</span>
+                <input type="range" data-sampling="top_a" min="0" max="1" step="0.001" value="0">
+                <output>0.000</output>
+              </label>
+            </div>
+          </details>
           <div class="form-actions">
-            <button type="submit">SAVE PROMPT</button>
+            <button type="submit">SAVE</button>
           </div>
         </form>
       </section>

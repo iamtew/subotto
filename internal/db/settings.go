@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"unicode/utf16"
+
+	"subotto/internal/ai"
 )
 
 // Global listener ONLINE/OFFLINE notices (one set for every guild/channel —
@@ -34,6 +36,8 @@ const (
 	SettingAISystemPrompt = "ai_system_prompt"
 	// Hesh Helper Discord replies. Missing → enabled.
 	SettingAIEnabled = "ai_enabled"
+	// Hesh Helper OpenRouter sampling knobs (Admin AI sliders). JSON blob.
+	SettingAISampling = "ai_sampling"
 
 	ResyncScopeAll      = "all"
 	ResyncScopeSelected = "selected"
@@ -353,4 +357,33 @@ func (d *DB) SetAIEnabled(ctx context.Context, on bool) error {
 		val = "1"
 	}
 	return d.SetSetting(ctx, SettingAIEnabled, val)
+}
+
+// LoadAISampling reads Admin sampling sliders, or built-in defaults when unset.
+func (d *DB) LoadAISampling(ctx context.Context) (ai.Sampling, error) {
+	raw, present, err := d.getSettingPresent(ctx, SettingAISampling)
+	if err != nil {
+		return ai.Sampling{}, err
+	}
+	if !present || strings.TrimSpace(raw) == "" {
+		return ai.DefaultSampling(), nil
+	}
+	out, err := ai.ParseSamplingJSON([]byte(raw))
+	if err != nil {
+		return ai.Sampling{}, fmt.Errorf("ai sampling settings: %w", err)
+	}
+	return out, nil
+}
+
+// SaveAISampling clamps and writes the Admin sampling sliders.
+func (d *DB) SaveAISampling(ctx context.Context, in ai.Sampling) (ai.Sampling, error) {
+	out := ai.NormalizeSampling(in)
+	b, err := json.Marshal(out)
+	if err != nil {
+		return ai.Sampling{}, err
+	}
+	if err := d.SetSetting(ctx, SettingAISampling, string(b)); err != nil {
+		return ai.Sampling{}, err
+	}
+	return out, nil
 }

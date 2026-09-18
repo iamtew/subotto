@@ -74,7 +74,13 @@ func (b *Bot) handleHeshHelper(_ context.Context, s *discordgo.Session, m *disco
 			b.logHesh(trigger, author, channelID, userText, "", 0, err, nil)
 			return
 		}
-		reply, err := b.ai.Chat(aiCtx, prompt, userText)
+		sampling, err := b.store.LoadAISampling(aiCtx)
+		if err != nil {
+			slog.Error("hesh helper sampling load failed", "err", err)
+			b.logHesh(trigger, author, channelID, userText, "", 0, err, nil)
+			return
+		}
+		reply, err := b.ai.Chat(aiCtx, prompt, userText, sampling)
 		if err != nil {
 			slog.Error("hesh helper chat failed", "err", err)
 			b.logHesh(trigger, author, channelID, userText, "", ai.HTTPStatus(err), err, nil)

@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"subotto/internal/ai"
 )
 
 func TestListenAnnounceMessagesDefaultsAndSave(t *testing.T) {
@@ -220,5 +222,80 @@ func TestAIEnabledDefaultAndSave(t *testing.T) {
 	}
 	if on {
 		t.Fatal("expected disabled")
+	}
+}
+
+func TestAISamplingDefaultRoundTripAndClamp(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "ai-sampling.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	ctx := context.Background()
+
+	got, err := store.LoadAISampling(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := ai.DefaultSampling()
+	if got != want {
+		t.Fatalf("default: %+v want %+v", got, want)
+	}
+
+	saved, err := store.SaveAISampling(ctx, ai.Sampling{
+		MaxTokens:         256,
+		Temperature:       0.4,
+		TopP:              0.9,
+		TopK:              40,
+		FrequencyPenalty:  0.1,
+		PresencePenalty:   -0.2,
+		RepetitionPenalty: 1.1,
+		MinP:              0.05,
+		TopA:              0.2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := store.LoadAISampling(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again != saved {
+		t.Fatalf("round-trip: %+v vs %+v", again, saved)
+	}
+
+	clamped, err := store.SaveAISampling(ctx, ai.Sampling{
+		MaxTokens:         99999,
+		Temperature:       -1,
+		TopP:              2,
+		TopK:              999,
+		FrequencyPenalty:  9,
+		PresencePenalty:   -9,
+		RepetitionPenalty: 9,
+		MinP:              -1,
+		TopA:              4,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if clamped.MaxTokens != ai.MaxSamplingTokens || clamped.TopK != ai.MaxSamplingTopK {
+		t.Fatalf("int clamp: %+v", clamped)
+	}
+	if clamped.Temperature != 0 || clamped.TopP != 1 || clamped.MinP != 0 || clamped.TopA != 1 {
+		t.Fatalf("float clamp: %+v", clamped)
+	}
+	if clamped.FrequencyPenalty != 2 || clamped.PresencePenalty != -2 || clamped.RepetitionPenalty != 2 {
+		t.Fatalf("penalty clamp: %+v", clamped)
+	}
+
+	if err := store.SetSetting(ctx, SettingAISampling, `{"temperature":0.2}`); err != nil {
+		t.Fatal(err)
+	}
+	partial, err := store.LoadAISampling(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if partial.Temperature != 0.2 || partial.TopP != 1 || partial.RepetitionPenalty != 1 {
+		t.Fatalf("partial json should keep defaults: %+v", partial)
 	}
 }
