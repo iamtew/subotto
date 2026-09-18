@@ -17,7 +17,7 @@ Shipped in code:
 - **Picture listeners** — Discord channel → on-disk images + public OBS `/slideshow/...`
 - **Show episodes** — templates + start/cease + absorb live listeners + public `/api/get/episode/{show}` (`air_datetime`, `spot_image`)
 - **Broadcasts** — named multi-channel Discord sends (Admin Fire or `GET /api/broadcasts/{slug}/fire` with Basic Auth `api` / `API_PASSWORD`)
-- **Hesh Helper** — Discord mention / reply-to-bot chat via OpenRouter (Admin **AI** tab for the model, system prompt, sampling sliders, and test chat)
+- **Hesh Helper** — Discord mention / reply-to-bot chat via OpenRouter (Admin **AI** tab for the model, system prompt, sampling sliders, optional channel memory, and test chat)
 
 Parked: bi-weekly schedules, richer show-runner Discord announce.
 

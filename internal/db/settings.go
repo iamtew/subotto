@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"unicode/utf16"
 
@@ -40,6 +41,14 @@ const (
 	SettingAISampling = "ai_sampling"
 	// Hesh Helper active model + catalog (Admin AI tab). JSON blob.
 	SettingAIModels = "ai_models"
+	// Discord channel memory for Hesh Helper. Missing → off.
+	SettingAIMemoryEnabled = "ai_memory_enabled"
+	// How many recent channel messages to send (1–12). Missing → 8.
+	SettingAIMemoryWindow = "ai_memory_window"
+
+	DefaultAIMemoryWindow = 8
+	MinAIMemoryWindow     = 1
+	MaxAIMemoryWindow     = 12
 
 	ResyncScopeAll      = "all"
 	ResyncScopeSelected = "selected"
@@ -359,6 +368,68 @@ func (d *DB) SetAIEnabled(ctx context.Context, on bool) error {
 		val = "1"
 	}
 	return d.SetSetting(ctx, SettingAIEnabled, val)
+}
+
+// AIMemoryEnabled is whether Discord replies include recent channel messages.
+// Missing key → false (opt-in; extra tokens).
+func (d *DB) AIMemoryEnabled(ctx context.Context) (bool, error) {
+	v, present, err := d.getSettingPresent(ctx, SettingAIMemoryEnabled)
+	if err != nil {
+		return false, err
+	}
+	if !present {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "true", "on", "yes":
+		return true, nil
+	default:
+		return false, nil
+	}
+}
+
+func (d *DB) SetAIMemoryEnabled(ctx context.Context, on bool) error {
+	val := "0"
+	if on {
+		val = "1"
+	}
+	return d.SetSetting(ctx, SettingAIMemoryEnabled, val)
+}
+
+// NormalizeAIMemoryWindow returns n if it is 1–12.
+func NormalizeAIMemoryWindow(n int) (int, error) {
+	if n < MinAIMemoryWindow || n > MaxAIMemoryWindow {
+		return 0, fmt.Errorf("memory window must be %d–%d", MinAIMemoryWindow, MaxAIMemoryWindow)
+	}
+	return n, nil
+}
+
+// AIMemoryWindow is how many prior channel messages to include. Missing/junk → 8.
+func (d *DB) AIMemoryWindow(ctx context.Context) (int, error) {
+	v, present, err := d.getSettingPresent(ctx, SettingAIMemoryWindow)
+	if err != nil {
+		return 0, err
+	}
+	if !present || strings.TrimSpace(v) == "" {
+		return DefaultAIMemoryWindow, nil
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil {
+		return DefaultAIMemoryWindow, nil
+	}
+	out, err := NormalizeAIMemoryWindow(n)
+	if err != nil {
+		return DefaultAIMemoryWindow, nil
+	}
+	return out, nil
+}
+
+func (d *DB) SetAIMemoryWindow(ctx context.Context, n int) error {
+	out, err := NormalizeAIMemoryWindow(n)
+	if err != nil {
+		return err
+	}
+	return d.SetSetting(ctx, SettingAIMemoryWindow, fmt.Sprintf("%d", out))
 }
 
 // LoadAISampling reads Admin sampling sliders, or built-in defaults when unset.

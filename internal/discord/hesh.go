@@ -86,7 +86,8 @@ func (b *Bot) handleHeshHelper(_ context.Context, s *discordgo.Session, m *disco
 			b.logHesh(trigger, author, channelID, userText, "", 0, err, nil)
 			return
 		}
-		reply, err := b.ai.Chat(aiCtx, prompt, userText, catalog.Model, sampling)
+		history := b.heshMemoryTurns(aiCtx, s, channelID, messageID)
+		reply, err := b.ai.Chat(aiCtx, prompt, history, userText, catalog.Model, sampling)
 		if err != nil {
 			slog.Error("hesh helper chat failed", "err", err)
 			b.logHesh(trigger, author, channelID, userText, "", ai.HTTPStatus(err), err, nil)
@@ -113,6 +114,65 @@ func (b *Bot) handleHeshHelper(_ context.Context, s *discordgo.Session, m *disco
 
 func fmtAIKeyMissing() error {
 	return &ai.APIError{Msg: "OPENROUTER_API_KEY is not set"}
+}
+
+func (b *Bot) heshMemoryTurns(ctx context.Context, s *discordgo.Session, channelID, skipID string) []ai.Turn {
+	if b == nil || b.store == nil || s == nil {
+		return nil
+	}
+	on, err := b.store.AIMemoryEnabled(ctx)
+	if err != nil {
+		slog.Error("hesh helper memory enabled check failed", "err", err)
+		return nil
+	}
+	if !on {
+		return nil
+	}
+	n, err := b.store.AIMemoryWindow(ctx)
+	if err != nil {
+		slog.Error("hesh helper memory window load failed", "err", err)
+		return nil
+	}
+	msgs, err := s.ChannelMessages(channelID, n, skipID, "", "")
+	if err != nil {
+		slog.Error("hesh helper memory fetch failed", "channel", channelID, "err", err)
+		return nil
+	}
+	botID := ""
+	if s.State != nil && s.State.User != nil {
+		botID = s.State.User.ID
+	}
+	return heshContextTurns(msgs, botID, skipID)
+}
+
+// heshContextTurns maps Discord history (newest first) to OpenRouter turns (oldest first).
+func heshContextTurns(msgs []*discordgo.Message, botID, skipID string) []ai.Turn {
+	out := make([]ai.Turn, 0, len(msgs))
+	for i := len(msgs) - 1; i >= 0; i-- {
+		m := msgs[i]
+		if m == nil || m.ID == skipID {
+			continue
+		}
+		content := strings.TrimSpace(m.Content)
+		if botID != "" {
+			content = strings.ReplaceAll(content, "<@"+botID+">", "")
+			content = strings.ReplaceAll(content, "<@!"+botID+">", "")
+			content = strings.TrimSpace(content)
+		}
+		if content == "" {
+			continue
+		}
+		if m.Author != nil && m.Author.ID == botID {
+			out = append(out, ai.Turn{Role: "assistant", Content: content})
+			continue
+		}
+		name := "user"
+		if m.Author != nil && strings.TrimSpace(m.Author.Username) != "" {
+			name = m.Author.Username
+		}
+		out = append(out, ai.Turn{Role: "user", Content: name + ": " + content})
+	}
+	return out
 }
 
 func keepHeshTyping(s *discordgo.Session, channelID string, stop <-chan struct{}) {

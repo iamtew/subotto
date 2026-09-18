@@ -814,7 +814,7 @@
       <section class="panel">
         <div class="panel-head">
           <h2>HESH HELPER</h2>
-          <p>OpenRouter chat · Discord <code>@Subotto</code> or reply-to-bot · no conversation memory yet</p>
+          <p>OpenRouter chat · Discord <code>@Subotto</code> or reply-to-bot · optional channel memory</p>
         </div>
         <div class="form-actions">
           <button type="button" id="ai-enabled-toggle">Disable</button>
@@ -834,6 +834,16 @@
             System prompt
             <textarea name="system_prompt" id="ai-system-prompt" rows="8" spellcheck="true"></textarea>
           </label>
+          <label class="sampling-row">
+            <span>Conversational Memory</span>
+            <input type="checkbox" id="ai-memory-enabled">
+          </label>
+          <label class="sampling-row">
+            <span>Recent messages</span>
+            <input type="range" id="ai-memory-window" min="1" max="12" step="1" value="8">
+            <output id="ai-memory-window-out">8 messages</output>
+          </label>
+          <p class="panel-note">When on, Discord replies include the last N messages from that channel. More messages use more tokens.</p>
           <details class="ops-details" id="ai-sampling-details">
             <summary>Sampling Parameters</summary>
             <div class="sampling-rows">

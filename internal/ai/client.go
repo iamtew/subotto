@@ -83,6 +83,12 @@ type chatRequest struct {
 	TopA              *float64      `json:"top_a,omitempty"`
 }
 
+// Turn is one prior chat message (user or assistant) sent before the current user turn.
+type Turn struct {
+	Role    string
+	Content string
+}
+
 type chatMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
@@ -99,8 +105,8 @@ type chatResponse struct {
 	} `json:"error"`
 }
 
-// Chat sends one user turn plus a system prompt. No conversation memory.
-func (c *Client) Chat(ctx context.Context, systemPrompt, userMessage, model string, sampling Sampling) (string, error) {
+// Chat sends system prompt, optional history, then the current user turn.
+func (c *Client) Chat(ctx context.Context, systemPrompt string, history []Turn, userMessage, model string, sampling Sampling) (string, error) {
 	if !c.Configured() {
 		return "", apiErr(0, "OPENROUTER_API_KEY is not set")
 	}
@@ -114,12 +120,24 @@ func (c *Client) Chat(ctx context.Context, systemPrompt, userMessage, model stri
 		model = DefaultModel
 	}
 
+	msgs := make([]chatMessage, 0, 2+len(history))
+	msgs = append(msgs, chatMessage{Role: "system", Content: systemPrompt})
+	for _, t := range history {
+		content := strings.TrimSpace(t.Content)
+		if content == "" {
+			continue
+		}
+		role := strings.TrimSpace(t.Role)
+		if role != "assistant" {
+			role = "user"
+		}
+		msgs = append(msgs, chatMessage{Role: role, Content: content})
+	}
+	msgs = append(msgs, chatMessage{Role: "user", Content: userMessage})
+
 	reqBody := chatRequest{
-		Model: model,
-		Messages: []chatMessage{
-			{Role: "system", Content: systemPrompt},
-			{Role: "user", Content: userMessage},
-		},
+		Model:    model,
+		Messages: msgs,
 	}
 	sampling.apply(&reqBody)
 	body, err := json.Marshal(reqBody)

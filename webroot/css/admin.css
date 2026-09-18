@@ -1020,7 +1020,7 @@ label .optional {
 
 .sampling-row {
   display: grid;
-  grid-template-columns: 9.5rem 1fr 3.4rem;
+  grid-template-columns: 9.5rem 1fr 6.2rem;
   align-items: center;
   gap: 0.65rem;
   font-size: 0.82rem;

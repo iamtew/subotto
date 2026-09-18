@@ -83,8 +83,8 @@ const API_CATALOG = [
       { method: "GET", path: "/api/broadcasts/{id}", note: "One broadcast by numeric id." },
       { method: "PATCH", path: "/api/broadcasts/{id}", note: "Update a broadcast." },
       { method: "DELETE", path: "/api/broadcasts/{id}", note: "Delete a broadcast." },
-      { method: "GET", path: "/api/ai", note: "Hesh Helper model catalog, key configured?, enabled?, saved system prompt, sampling." },
-      { method: "PUT", path: "/api/ai", note: "Save system prompt, sampling, enabled flag, and/or model catalog." },
+      { method: "GET", path: "/api/ai", note: "Hesh Helper model catalog, key configured?, enabled?, memory, saved system prompt, sampling." },
+      { method: "PUT", path: "/api/ai", note: "Save system prompt, sampling, enabled flag, memory, and/or model catalog." },
       { method: "POST", path: "/api/ai/chat", note: "Test chat using the saved system prompt." },
       { method: "GET", path: "/api/ai/logs", note: "Hesh Helper request log (filter: all / warning / error / critical)." },
     ],
@@ -206,6 +206,7 @@ async function loadAITab() {
     document.getElementById("ai-system-prompt").value = data.system_prompt || "";
     fillAISampling(data.sampling || {});
     fillAIModels(data);
+    fillAIMemory(data);
     document.getElementById("ai-chat-send").disabled = !data.configured;
     syncAIEnabledToggle(on);
   } catch (err) {
@@ -229,6 +230,31 @@ function formatAISamplingValue(input) {
 function syncAISamplingOutput(input) {
   const out = input.parentElement && input.parentElement.querySelector("output");
   if (out) out.textContent = formatAISamplingValue(input);
+}
+
+function fillAIMemory(data) {
+  const box = document.getElementById("ai-memory-enabled");
+  if (box) box.checked = data.memory_enabled === true;
+  const slider = document.getElementById("ai-memory-window");
+  if (!slider) return;
+  const n = Number(data.memory_window);
+  slider.value = n >= 1 && n <= 12 ? String(n) : "8";
+  syncAIMemoryWindowOutput();
+}
+
+function syncAIMemoryWindowOutput() {
+  const slider = document.getElementById("ai-memory-window");
+  const out = document.getElementById("ai-memory-window-out");
+  if (!slider || !out) return;
+  const n = Math.round(Number(slider.value));
+  out.textContent = n + " messages";
+}
+
+function bindAIMemory() {
+  const slider = document.getElementById("ai-memory-window");
+  if (!slider) return;
+  slider.addEventListener("input", syncAIMemoryWindowOutput);
+  syncAIMemoryWindowOutput();
 }
 
 function fillAISampling(sampling) {
@@ -3486,6 +3512,8 @@ document.getElementById("ai-prompt-form").addEventListener("submit", async (ev) 
       body: JSON.stringify({
         system_prompt: document.getElementById("ai-system-prompt").value,
         sampling: readAISampling(),
+        memory_enabled: document.getElementById("ai-memory-enabled").checked,
+        memory_window: Math.round(Number(document.getElementById("ai-memory-window").value)),
       }),
     });
     toast("AI settings saved");
@@ -3572,3 +3600,4 @@ document.getElementById("api-catalog").addEventListener("click", async (ev) => {
 refreshAll();
 setInterval(refreshAll, 15000);
 bindAISampling();
+bindAIMemory();

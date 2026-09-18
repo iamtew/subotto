@@ -50,6 +50,35 @@ func TestAIGetPutAndChatUnconfigured(t *testing.T) {
 	if len(models) != 2 || models[1] != ai.DefaultFlashModel {
 		t.Fatalf("models default: %#v", got["models"])
 	}
+	if got["memory_enabled"] != false {
+		t.Fatalf("memory default: %#v", got["memory_enabled"])
+	}
+	if got["memory_window"] != float64(db.DefaultAIMemoryWindow) {
+		t.Fatalf("memory window default: %#v", got["memory_window"])
+	}
+
+	mem := httptest.NewRequest(http.MethodPut, "/api/ai", strings.NewReader(`{"memory_enabled":true,"memory_window":4}`))
+	mem.SetBasicAuth("admin", "test-pass")
+	mem.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, mem)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("memory: %d %s", rec.Code, rec.Body.String())
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["memory_enabled"] != true || got["memory_window"] != float64(4) {
+		t.Fatalf("memory save: %#v", got)
+	}
+	badWin := httptest.NewRequest(http.MethodPut, "/api/ai", strings.NewReader(`{"memory_window":99}`))
+	badWin.SetBasicAuth("admin", "test-pass")
+	badWin.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, badWin)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("bad window: %d %s", rec.Code, rec.Body.String())
+	}
 
 	off := httptest.NewRequest(http.MethodPut, "/api/ai", strings.NewReader(`{"enabled":false}`))
 	off.SetBasicAuth("admin", "test-pass")

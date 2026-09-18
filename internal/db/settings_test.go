@@ -198,6 +198,57 @@ func TestAISystemPromptDefaultAndSave(t *testing.T) {
 	}
 }
 
+func TestAIMemoryDefaultAndSave(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "ai-memory.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	ctx := context.Background()
+
+	on, err := store.AIMemoryEnabled(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if on {
+		t.Fatal("default should be off")
+	}
+	n, err := store.AIMemoryWindow(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != DefaultAIMemoryWindow {
+		t.Fatalf("default window %d", n)
+	}
+	if err := store.SetAIMemoryEnabled(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	on, err = store.AIMemoryEnabled(ctx)
+	if err != nil || !on {
+		t.Fatalf("enabled=%v err=%v", on, err)
+	}
+	if err := store.SetAIMemoryWindow(ctx, 3); err != nil {
+		t.Fatal(err)
+	}
+	n, err = store.AIMemoryWindow(ctx)
+	if err != nil || n != 3 {
+		t.Fatalf("window=%d err=%v", n, err)
+	}
+	if err := store.SetAIMemoryWindow(ctx, 0); err == nil {
+		t.Fatal("expected window 0 error")
+	}
+	if err := store.SetAIMemoryWindow(ctx, 13); err == nil {
+		t.Fatal("expected window 13 error")
+	}
+	if err := store.SetSetting(ctx, SettingAIMemoryWindow, "99"); err != nil {
+		t.Fatal(err)
+	}
+	n, err = store.AIMemoryWindow(ctx)
+	if err != nil || n != DefaultAIMemoryWindow {
+		t.Fatalf("junk window should fall back, got %d err=%v", n, err)
+	}
+}
+
 func TestAIEnabledDefaultAndSave(t *testing.T) {
 	store, err := Open(filepath.Join(t.TempDir(), "ai-enabled.db"))
 	if err != nil {

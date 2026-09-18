@@ -1,35 +1,27 @@
 package discord
 
 import (
-	"slices"
 	"testing"
+
+	"github.com/bwmarrin/discordgo"
 )
 
-func TestHeshUserText(t *testing.T) {
-	const botID = "99"
-	if got := heshUserText("<@99> kickflip?", botID); got != "kickflip?" {
-		t.Fatalf("got %q", got)
+func TestHeshContextTurns(t *testing.T) {
+	botID := "bot1"
+	msgs := []*discordgo.Message{
+		{ID: "cur", Content: "now", Author: &discordgo.User{ID: "u1", Username: "alice"}},
+		{ID: "3", Content: "do it", Author: &discordgo.User{ID: botID, Username: "subotto"}},
+		{ID: "2", Content: "  ", Author: &discordgo.User{ID: "u2", Username: "bob"}},
+		{ID: "1", Content: "<@" + botID + "> kickflip?", Author: &discordgo.User{ID: "u1", Username: "alice"}},
 	}
-	if got := heshUserText("<@!99>", botID); got != "hey" {
-		t.Fatalf("empty mention should fallback, got %q", got)
+	got := heshContextTurns(msgs, botID, "cur")
+	if len(got) != 2 {
+		t.Fatalf("got %+v", got)
 	}
-	if got := heshUserText("no mention", botID); got != "no mention" {
-		t.Fatalf("got %q", got)
+	if got[0].Role != "user" || got[0].Content != "alice: kickflip?" {
+		t.Fatalf("first %+v", got[0])
 	}
-}
-
-func TestHeshMentioned(t *testing.T) {
-	if heshMentioned("99", nil) {
-		t.Fatal("empty mentions")
-	}
-}
-
-func TestHeshFailReply(t *testing.T) {
-	if n := len(heshFailReplies); n != 32 {
-		t.Fatalf("want 32 fail replies, got %d", n)
-	}
-	got := heshFailReply()
-	if !slices.Contains(heshFailReplies, got) {
-		t.Fatalf("not in pool: %q", got)
+	if got[1].Role != "assistant" || got[1].Content != "do it" {
+		t.Fatalf("second %+v", got[1])
 	}
 }

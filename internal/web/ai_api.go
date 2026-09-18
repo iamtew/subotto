@@ -28,11 +28,13 @@ func (s *Server) handleGetAI(w http.ResponseWriter, r *http.Request) {
 }
 
 type aiSettingsBody struct {
-	SystemPrompt *string          `json:"system_prompt"`
-	Enabled      *bool            `json:"enabled"`
-	Sampling     *json.RawMessage `json:"sampling"`
-	Model        *string          `json:"model"`
-	Models       *[]string        `json:"models"`
+	SystemPrompt   *string          `json:"system_prompt"`
+	Enabled        *bool            `json:"enabled"`
+	Sampling       *json.RawMessage `json:"sampling"`
+	Model          *string          `json:"model"`
+	Models         *[]string        `json:"models"`
+	MemoryEnabled  *bool            `json:"memory_enabled"`
+	MemoryWindow   *int             `json:"memory_window"`
 }
 
 func (s *Server) handlePutAI(w http.ResponseWriter, r *http.Request) {
@@ -41,7 +43,7 @@ func (s *Server) handlePutAI(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
-	if body.SystemPrompt == nil && body.Enabled == nil && body.Sampling == nil && body.Model == nil && body.Models == nil {
+	if body.SystemPrompt == nil && body.Enabled == nil && body.Sampling == nil && body.Model == nil && body.Models == nil && body.MemoryEnabled == nil && body.MemoryWindow == nil {
 		writeErr(w, http.StatusBadRequest, "nothing to save")
 		return
 	}
@@ -94,6 +96,20 @@ func (s *Server) handlePutAI(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = s.store.LogActivity(r.Context(), "ai_models_updated", map[string]any{"source": "admin_ui"}, true)
 	}
+	if body.MemoryEnabled != nil {
+		if err := s.store.SetAIMemoryEnabled(r.Context(), *body.MemoryEnabled); err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		_ = s.store.LogActivity(r.Context(), "ai_memory_enabled_updated", map[string]any{"enabled": *body.MemoryEnabled, "source": "admin_ui"}, true)
+	}
+	if body.MemoryWindow != nil {
+		if err := s.store.SetAIMemoryWindow(r.Context(), *body.MemoryWindow); err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		_ = s.store.LogActivity(r.Context(), "ai_memory_window_updated", map[string]any{"window": *body.MemoryWindow, "source": "admin_ui"}, true)
+	}
 	s.writeAISettings(w, r)
 }
 
@@ -118,15 +134,27 @@ func (s *Server) writeAISettings(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	memoryOn, err := s.store.AIMemoryEnabled(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	memoryWindow, err := s.store.AIMemoryWindow(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	configured := s.ai != nil && s.ai.Configured()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ok":            true,
-		"model":         catalog.Model,
-		"models":        catalog.Models,
-		"configured":    configured,
-		"enabled":       enabled,
-		"system_prompt": prompt,
-		"sampling":      sampling,
+		"ok":             true,
+		"model":          catalog.Model,
+		"models":         catalog.Models,
+		"configured":     configured,
+		"enabled":        enabled,
+		"system_prompt":  prompt,
+		"sampling":       sampling,
+		"memory_enabled": memoryOn,
+		"memory_window":  memoryWindow,
 	})
 }
 
@@ -171,7 +199,7 @@ func (s *Server) handleAIChat(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	reply, err := s.ai.Chat(chatCtx, prompt, msg, catalog.Model, sampling)
+	reply, err := s.ai.Chat(chatCtx, prompt, nil, msg, catalog.Model, sampling)
 	if err != nil {
 		slog.Error("admin hesh helper chat failed", "err", err)
 		s.logAdminAI(msg, "", ai.HTTPStatus(err), err)
