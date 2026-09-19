@@ -34,6 +34,7 @@ Parked: bi-weekly schedules, richer show-runner Discord announce.
 - Admin UI from `webroot/`; background history re-scan from the **Scheduler** tab (`RESYNC_INTERVAL_HOURS` is only a bootstrap until you save there).
 
 Reactions on ingest: **💾** added · **♻️** DUPE · **🛑** OLD · **❌** failed.
+Superadmin **❌** on a bot-stamped post hides picture-listener images, or skips a content-listener video (remove from the playlist, restamp **❌** + SKIP).
 
 ---
 

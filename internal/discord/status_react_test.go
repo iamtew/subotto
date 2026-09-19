@@ -141,6 +141,39 @@ func TestExtraManagedChromeDropsStaleDupe(t *testing.T) {
 	}
 }
 
+func TestExtraManagedChromeSkipDropsFloppy(t *testing.T) {
+	saved := &discordgo.Message{
+		Reactions: []*discordgo.MessageReactions{
+			{Me: true, Emoji: &discordgo.Emoji{Name: "💾"}},
+		},
+	}
+	if got := extraManagedChrome(saved, chromeSkip); !slices.Equal(got, []string{"💾"}) {
+		t.Fatalf("SKIP should drop 💾: %v", got)
+	}
+}
+
+func TestMessageHasSubottoChrome(t *testing.T) {
+	if messageHasSubottoChrome(nil) {
+		t.Fatal("nil")
+	}
+	human := &discordgo.Message{
+		Reactions: []*discordgo.MessageReactions{
+			{Me: false, Emoji: &discordgo.Emoji{Name: "❌"}},
+		},
+	}
+	if messageHasSubottoChrome(human) {
+		t.Fatal("human ❌ is not Subotto chrome")
+	}
+	bot := &discordgo.Message{
+		Reactions: []*discordgo.MessageReactions{
+			{Me: true, Emoji: &discordgo.Emoji{Name: "💾"}},
+		},
+	}
+	if !messageHasSubottoChrome(bot) {
+		t.Fatal("bot 💾 is chrome")
+	}
+}
+
 func TestExtraManagedChromeKeepsWantedIgnoreSet(t *testing.T) {
 	msg := &discordgo.Message{
 		Reactions: []*discordgo.MessageReactions{

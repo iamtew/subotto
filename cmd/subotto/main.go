@@ -158,7 +158,7 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 		os.Exit(1)
 	}
 
-	bot, err := discord.New(cfg.DiscordBotToken, store, yt, cfg.DiscordGuildID, aiClient, cfg.OpenRouterModel)
+	bot, err := discord.New(cfg.DiscordBotToken, store, yt, cfg.DiscordGuildID, aiClient, cfg.OpenRouterModel, cfg.SuperadminDiscordID)
 	if err != nil {
 		slog.Error("failed to create discord bot", "err", err)
 		os.Exit(1)

@@ -43,7 +43,8 @@ type Bot struct {
 	guildID string // optional filter; empty = all guilds the bot is in
 	ready   atomic.Bool
 	// envAIModel bootstraps the catalog until Admin saves ai_models.
-	envAIModel string
+	envAIModel   string
+	superadminID string
 
 	// reconnectMu serializes forced Close+Open (Admin button + watchdog).
 	reconnectMu sync.Mutex
@@ -57,7 +58,7 @@ type Bot struct {
 
 // New creates a Discord session with the intents Subotto needs.
 // Message Content Intent must be enabled in the Discord Developer Portal.
-func New(token string, store *db.DB, yt *youtube.Client, guildID string, aiClient *ai.Client, envAIModel string) (*Bot, error) {
+func New(token string, store *db.DB, yt *youtube.Client, guildID string, aiClient *ai.Client, envAIModel, superadminID string) (*Bot, error) {
 	token = strings.TrimSpace(token)
 	if token == "" {
 		return nil, fmt.Errorf("DISCORD_BOT_TOKEN is empty")
@@ -78,12 +79,13 @@ func New(token string, store *db.DB, yt *youtube.Client, guildID string, aiClien
 		discordgo.IntentsGuildMessageReactions
 
 	b := &Bot{
-		session:    session,
-		store:      store,
-		yt:         yt,
-		ai:         aiClient,
-		guildID:    strings.TrimSpace(guildID),
-		envAIModel: strings.TrimSpace(envAIModel),
+		session:      session,
+		store:        store,
+		yt:           yt,
+		ai:           aiClient,
+		guildID:      strings.TrimSpace(guildID),
+		envAIModel:   strings.TrimSpace(envAIModel),
+		superadminID: strings.TrimSpace(superadminID),
 	}
 	// Start "down" so Maintain's grace clock begins if Open never succeeds.
 	b.markDown("boot")
@@ -325,7 +327,7 @@ func (b *Bot) handleContentListener(ctx context.Context, s *discordgo.Session, m
 	}
 
 	res := ingest.ProcessContent(ctx, b.store, b.yt, mapping, m.ChannelID, m.ID, m.Content)
-	syncStatusChrome(ctx, s, m.ChannelID, m.ID, m.Message, contentStatusChrome(res))
+	stampContentChrome(ctx, s, b.store, m.ChannelID, m.ID, m.Message, res)
 }
 
 func (b *Bot) handlePictureListener(ctx context.Context, s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -407,6 +409,12 @@ func (b *Bot) onMessageUpdate(s *discordgo.Session, m *discordgo.MessageUpdate) 
 func (b *Bot) onMessageReactionAdd(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 	if s.State.User != nil && r.UserID == s.State.User.ID {
 		return // ignore our own reacts
+	}
+	if b.guildID != "" && r.GuildID != "" && r.GuildID != b.guildID {
+		return
+	}
+	if b.isSuperadminSkipReact(r) {
+		b.handleSuperadminSkip(s, r)
 	}
 	b.refreshMessageReactions(r.ChannelID, r.MessageID)
 }

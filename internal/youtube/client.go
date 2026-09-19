@@ -167,6 +167,73 @@ func (c *Client) AddVideoToPlaylist(ctx context.Context, playlistID, videoID str
 	return lastErr
 }
 
+// RemoveVideoFromPlaylist deletes the playlist item for videoID (playlistItems.list + delete).
+func (c *Client) RemoveVideoFromPlaylist(ctx context.Context, playlistID, videoID string) error {
+	svc, err := c.svc()
+	if err != nil {
+		return err
+	}
+	playlistID = strings.TrimSpace(playlistID)
+	videoID = strings.TrimSpace(videoID)
+	if playlistID == "" || videoID == "" {
+		return errors.New("playlistID and videoID are required")
+	}
+
+	itemID, err := findPlaylistItemID(ctx, svc, playlistID, videoID)
+	if err != nil {
+		return wrapAPIError(err, playlistID, videoID)
+	}
+	if itemID == "" {
+		return nil // already gone
+	}
+
+	const maxAttempts = 3
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		err := svc.PlaylistItems.Delete(itemID).Context(ctx).Do()
+		if err == nil {
+			return nil
+		}
+		lastErr = wrapAPIError(err, playlistID, videoID)
+		if !isRetryableYouTube(err) || attempt == maxAttempts {
+			return lastErr
+		}
+		wait := time.Duration(attempt) * time.Second
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(wait):
+		}
+	}
+	return lastErr
+}
+
+func findPlaylistItemID(ctx context.Context, svc *ytapi.Service, playlistID, videoID string) (string, error) {
+	token := ""
+	for {
+		call := svc.PlaylistItems.List([]string{"snippet"}).PlaylistId(playlistID).MaxResults(50).Context(ctx)
+		if token != "" {
+			call = call.PageToken(token)
+		}
+		resp, err := call.Do()
+		if err != nil {
+			return "", err
+		}
+		for _, it := range resp.Items {
+			if it == nil || it.Snippet == nil || it.Snippet.ResourceId == nil {
+				continue
+			}
+			if it.Snippet.ResourceId.VideoId == videoID {
+				return it.Id, nil
+			}
+		}
+		if resp.NextPageToken == "" {
+			return "", nil
+		}
+		token = resp.NextPageToken
+	}
+}
+
 // CreatePlaylist makes a new YouTube playlist owned by the authorized account.
 // Meat Bag: use this from the Admin UI when you cannot create an empty playlist
 // by hand — Subotto creates it, then stores the returned playlist ID.

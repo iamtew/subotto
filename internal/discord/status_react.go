@@ -19,6 +19,7 @@ import (
 var (
 	chromeFailed = []string{"❌"}
 	chromeSaved  = []string{"💾"}
+	chromeSkip   = []string{"❌", "🇸", "🇰", "🇮", "🇵"}
 	chromeOld    = []string{"🛑", "🇴", "🇱", "🇩"}
 	chromeDupe   = []string{"♻️", "🇩", "🇺", "🇵", "🇪"}
 	// 1-based attachment index on multi-image posts (Discord's blue keycaps).
@@ -85,6 +86,30 @@ func stampPictureChrome(ctx context.Context, s *discordgo.Session, store *db.DB,
 	syncStatusChrome(ctx, s, channelID, messageID, existing, wanted)
 }
 
+func stampContentChrome(ctx context.Context, s *discordgo.Session, store *db.DB, channelID, messageID string, existing *discordgo.Message, res ingest.Result) {
+	if store != nil {
+		rows, err := store.ListProcessedVideosByMessage(ctx, channelID, messageID)
+		if err == nil && len(rows) > 0 && allProcessedSkipped(rows) {
+			syncStatusChrome(ctx, s, channelID, messageID, existing, chromeSkip)
+			return
+		}
+	}
+	wanted := contentStatusChrome(res)
+	if len(wanted) == 0 {
+		return
+	}
+	syncStatusChrome(ctx, s, channelID, messageID, existing, wanted)
+}
+
+func allProcessedSkipped(rows []db.ProcessedVideo) bool {
+	for _, r := range rows {
+		if !r.Skipped {
+			return false
+		}
+	}
+	return true
+}
+
 // syncStatusChrome adds missing wanted reacts and drops bot-owned status
 // chrome (💾 / ❌ / DUPE / OLD / keycaps) that is no longer wanted.
 func syncStatusChrome(ctx context.Context, s *discordgo.Session, channelID, messageID string, existing *discordgo.Message, wanted []string) {
@@ -131,7 +156,7 @@ func extraManagedChrome(msg *discordgo.Message, wanted []string) []string {
 }
 
 func isManagedStatusChrome(normalized string) bool {
-	for _, group := range [][]string{chromeSaved, chromeFailed, chromeOld, chromeDupe, indexKeycaps} {
+	for _, group := range [][]string{chromeSaved, chromeFailed, chromeSkip, chromeOld, chromeDupe, indexKeycaps} {
 		for _, e := range group {
 			if normalized == normalizeEmoji(e) {
 				return true

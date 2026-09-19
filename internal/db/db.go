@@ -112,6 +112,7 @@ CREATE TABLE IF NOT EXISTS processed_videos (
 	playlist_id TEXT NOT NULL,
 	discord_channel_id TEXT NOT NULL DEFAULT '',
 	discord_message_id TEXT NOT NULL DEFAULT '',
+	skipped INTEGER NOT NULL DEFAULT 0,
 	added_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -481,6 +482,14 @@ func (d *DB) migrateProcessedVideosChannelScope() error {
 		return err
 	}
 	if cols["discord_channel_id"] {
+		if !cols["skipped"] {
+			if _, err := d.sql.Exec(`
+				ALTER TABLE processed_videos
+				ADD COLUMN skipped INTEGER NOT NULL DEFAULT 0
+			`); err != nil {
+				return fmt.Errorf("add processed_videos.skipped: %w", err)
+			}
+		}
 		// Ensure channel-scoped unique index exists (fresh DBs created without UNIQUE in CREATE).
 		_, err := d.sql.Exec(`
 			CREATE UNIQUE INDEX IF NOT EXISTS idx_processed_videos_channel
@@ -506,6 +515,7 @@ func (d *DB) migrateProcessedVideosChannelScope() error {
 			playlist_id TEXT NOT NULL,
 			discord_channel_id TEXT NOT NULL DEFAULT '',
 			discord_message_id TEXT NOT NULL DEFAULT '',
+			skipped INTEGER NOT NULL DEFAULT 0,
 			added_at TEXT NOT NULL DEFAULT (datetime('now'))
 		)
 	`); err != nil {
@@ -687,16 +697,21 @@ func (d *DB) WasVideoProcessedOnChannel(ctx context.Context, videoID, channelID 
 type ProcessedOnChannel struct {
 	PlaylistID string
 	MessageID  string // Discord message that first saved it (may be empty on very old rows)
+	Skipped    bool   // superadmin ❌ skip: pulled from the playlist
 }
 
 // LookupProcessedOnChannel returns the first filing of this video on this channel.
 // ok=false means never processed here.
 func (d *DB) LookupProcessedOnChannel(ctx context.Context, videoID, channelID string) (ProcessedOnChannel, bool, error) {
 	var rec ProcessedOnChannel
+	var skipped int
 	err := d.sql.QueryRowContext(ctx, `
-		SELECT playlist_id, discord_message_id FROM processed_videos
+		SELECT playlist_id, discord_message_id, skipped FROM processed_videos
 		WHERE video_id = ? AND discord_channel_id = ?
-	`, videoID, channelID).Scan(&rec.PlaylistID, &rec.MessageID)
+	`, videoID, channelID).Scan(&rec.PlaylistID, &rec.MessageID, &skipped)
+	if err == nil {
+		rec.Skipped = skipped != 0
+	}
 	if err == sql.ErrNoRows {
 		return ProcessedOnChannel{}, false, nil
 	}
@@ -721,6 +736,45 @@ func (d *DB) MarkVideoProcessed(ctx context.Context, videoID, playlistID, channe
 		INSERT OR IGNORE INTO processed_videos (video_id, playlist_id, discord_channel_id, discord_message_id)
 		VALUES (?, ?, ?, ?)
 	`, videoID, playlistID, channelID, discordMessageID)
+	return err
+}
+
+// ProcessedVideo is one filed YouTube id on a Discord channel.
+type ProcessedVideo struct {
+	VideoID    string
+	PlaylistID string
+	Skipped    bool
+}
+
+// ListProcessedVideosByMessage returns videos first saved from this Discord post.
+func (d *DB) ListProcessedVideosByMessage(ctx context.Context, channelID, messageID string) ([]ProcessedVideo, error) {
+	rows, err := d.sql.QueryContext(ctx, `
+		SELECT video_id, playlist_id, skipped FROM processed_videos
+		WHERE discord_channel_id = ? AND discord_message_id = ?
+	`, channelID, messageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ProcessedVideo
+	for rows.Next() {
+		var p ProcessedVideo
+		var skipped int
+		if err := rows.Scan(&p.VideoID, &p.PlaylistID, &skipped); err != nil {
+			return nil, err
+		}
+		p.Skipped = skipped != 0
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// MarkVideoSkipped records a superadmin skip (playlist delete) for this channel.
+func (d *DB) MarkVideoSkipped(ctx context.Context, videoID, channelID string) error {
+	_, err := d.sql.ExecContext(ctx, `
+		UPDATE processed_videos SET skipped = 1
+		WHERE video_id = ? AND discord_channel_id = ?
+	`, videoID, channelID)
 	return err
 }
 

@@ -53,20 +53,20 @@ type ReactionCount struct {
 // PictureListener is one Discord channel → on-disk gallery *picture listener* epoch.
 // Meat Bag: start/cease like a content listener, but images land under data/pictures/{slug}/.
 type PictureListener struct {
-	ID               int64
-	DiscordChannelID string
-	GuildID          string
-	Name             string
-	Slug             string
-	Enabled          bool
-	CreditCorner     string // tl, tr, bl, br
-	IntervalSeconds  int
-	Shuffle          bool
-	ShowCredit       bool
+	ID                 int64
+	DiscordChannelID   string
+	GuildID            string
+	Name               string
+	Slug               string
+	Enabled            bool
+	CreditCorner       string // tl, tr, bl, br
+	IntervalSeconds    int
+	Shuffle            bool
+	ShowCredit         bool
 	ShowComment        bool // Discord message text under the author card
 	ShowReactions      bool
-	ReactionsAnimated  bool // true = fountain floaters; false = static stack by author
-	ReactionMultiplier int // 1–25; copies of each reaction = count * multiplier (animated only)
+	ReactionsAnimated  bool    // true = fountain floaters; false = static stack by author
+	ReactionMultiplier int     // 1–25; copies of each reaction = count * multiplier (animated only)
 	CreditScale        float64 // author card + font size multiplier (0.5–5)
 	ReactionScale      float64 // emoji size multiplier (0.5–5)
 	Transition         string  // cut, fade, swipe, slide, rise, zoom, blur, flip, iris
@@ -77,31 +77,31 @@ type PictureListener struct {
 
 // CollectedPicture is one saved Discord image attachment.
 type CollectedPicture struct {
-	ID                   int64
-	ListenerID           int64
-	DiscordMessageID     string
-	DiscordAttachmentID  string
-	AuthorID             string
-	AuthorDisplayName    string
-	StoredPath           string // relative to PicturesDir(), e.g. "my-show/123_456.jpg"
-	ContentType          string
-	MessageText          string // Discord message body posted with the image (may be empty)
-	CollectedAt          time.Time
-	Reactions            []ReactionCount // Discord order preserved
-	Ignored              bool            // true = keep on disk, drop from slideshow
+	ID                  int64
+	ListenerID          int64
+	DiscordMessageID    string
+	DiscordAttachmentID string
+	AuthorID            string
+	AuthorDisplayName   string
+	StoredPath          string // relative to PicturesDir(), e.g. "my-show/123_456.jpg"
+	ContentType         string
+	MessageText         string // Discord message body posted with the image (may be empty)
+	CollectedAt         time.Time
+	Reactions           []ReactionCount // Discord order preserved
+	Ignored             bool            // true = keep on disk, drop from slideshow
 }
 
 // PictureListenerInput is the create/update payload from Admin / CLI.
 type PictureListenerInput struct {
-	DiscordChannelID string
-	GuildID          string
-	Name             string
-	Slug             string // optional; derived from Name when empty
-	Enabled          bool
-	CreditCorner     string
-	IntervalSeconds  int
-	Shuffle          bool
-	ShowCredit       bool
+	DiscordChannelID   string
+	GuildID            string
+	Name               string
+	Slug               string // optional; derived from Name when empty
+	Enabled            bool
+	CreditCorner       string
+	IntervalSeconds    int
+	Shuffle            bool
+	ShowCredit         bool
 	ShowComment        bool
 	ShowReactions      bool
 	ReactionsAnimated  bool
@@ -758,6 +758,25 @@ func (d *DB) SetCollectedPictureIgnored(ctx context.Context, id int64, ignored b
 		return fmt.Errorf("collected picture %d not found", id)
 	}
 	return nil
+}
+
+// SetCollectedPicturesIgnoredByMessage hides or restores every saved image on one Discord post.
+func (d *DB) SetCollectedPicturesIgnoredByMessage(ctx context.Context, channelID, messageID string, ignored bool) (int, error) {
+	pics, err := d.ListCollectedPicturesByMessage(ctx, channelID, messageID)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, p := range pics {
+		if p.Ignored == ignored {
+			continue
+		}
+		if err := d.SetCollectedPictureIgnored(ctx, p.ID, ignored); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, nil
 }
 
 // ListCollectedPicturesByMessage returns all saved attachments for a Discord message

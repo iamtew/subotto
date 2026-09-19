@@ -145,7 +145,7 @@ func ResyncChannel(
 			}
 			r := ingest.ProcessContent(ctx, store, yt, mapping, channelID, m.ID, m.Content)
 			summary.Result.Merge(r)
-			syncStatusChrome(ctx, session, channelID, m.ID, m, contentStatusChrome(r))
+			stampContentChrome(ctx, session, store, channelID, m.ID, m, r)
 		}
 
 		if hitEpochFloor {
