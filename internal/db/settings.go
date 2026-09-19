@@ -45,6 +45,8 @@ const (
 	SettingAIMemoryEnabled = "ai_memory_enabled"
 	// How many recent channel messages to send (1–12). Missing → 8.
 	SettingAIMemoryWindow = "ai_memory_window"
+	// Extra Discord user IDs allowed into Admin (JSON string array). Superadmin is env-only.
+	SettingAdminDiscordIDs = "admin_discord_ids"
 
 	DefaultAIMemoryWindow = 8
 	MinAIMemoryWindow     = 1
@@ -495,4 +497,62 @@ func (d *DB) SaveAIModels(ctx context.Context, in ai.ModelCatalog) (ai.ModelCata
 		return ai.ModelCatalog{}, err
 	}
 	return out, nil
+}
+
+// ExtraAdminDiscordIDs is the allowlist stored in Admin (not SUPERADMIN_DISCORD_ID).
+func (d *DB) ExtraAdminDiscordIDs(ctx context.Context) ([]string, error) {
+	raw, err := d.GetSetting(ctx, SettingAdminDiscordIDs)
+	if err != nil {
+		return nil, err
+	}
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	var ids []string
+	if err := json.Unmarshal([]byte(raw), &ids); err != nil {
+		return nil, fmt.Errorf("admin discord ids: %w", err)
+	}
+	return NormalizeDiscordIDs(ids), nil
+}
+
+// SaveExtraAdminDiscordIDs writes extra operator snowflakes (JSON array).
+func (d *DB) SaveExtraAdminDiscordIDs(ctx context.Context, ids []string) error {
+	out := NormalizeDiscordIDs(ids)
+	b, err := json.Marshal(out)
+	if err != nil {
+		return err
+	}
+	return d.SetSetting(ctx, SettingAdminDiscordIDs, string(b))
+}
+
+// NormalizeDiscordIDs trims, drops empties, keeps digits-only unique IDs in order.
+func NormalizeDiscordIDs(ids []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" || seen[id] {
+			continue
+		}
+		if !IsDiscordSnowflake(id) {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	return out
+}
+
+// IsDiscordSnowflake is a digits-only Discord user/channel id (tests use short ids).
+func IsDiscordSnowflake(id string) bool {
+	if id == "" {
+		return false
+	}
+	for i := 0; i < len(id); i++ {
+		if id[i] < '0' || id[i] > '9' {
+			return false
+		}
+	}
+	return true
 }

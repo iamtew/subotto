@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SUBOTTO</title>
+  <link rel="stylesheet" href="https://fonts.cdnfonts.com/css/better-vcr">
+  <link rel="stylesheet" href="https://fonts.cdnfonts.com/css/inter">
+  <style>
+    :root {
+      --olive: #9aac62;
+      --dusty: #6c754a;
+      --chartreuse: #e5f20d;
+      --red: #f20d0d;
+      --off-white: #e0e0e0;
+      --bg0: #10140f;
+      --bg-panel: #1a2118;
+      --ink: var(--off-white);
+      --muted: #8a9478;
+      --line: #2d3528;
+      --font-display: "Better VCR", monospace;
+      --font-body: "Inter", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html { color-scheme: dark; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      font-family: var(--font-body);
+      background: var(--bg0);
+      display: grid;
+      place-items: center;
+      padding: 1.5rem;
+    }
+    .bg-glow {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(ellipse 45% 35% at 12% 0%, rgba(134, 0, 223, 0.07), transparent 60%),
+        radial-gradient(ellipse 40% 30% at 92% 8%, rgba(229, 242, 13, 0.03), transparent 55%);
+    }
+    .card {
+      position: relative;
+      width: min(28rem, 100%);
+      padding: 1.75rem 1.5rem;
+      border: 1px solid var(--line);
+      background: rgba(26, 33, 24, 0.92);
+      box-shadow: 0 0 0 1px rgba(154, 172, 98, 0.12), 0 12px 40px rgba(0, 0, 0, 0.45);
+    }
+    h1 {
+      margin: 0 0 0.35rem;
+      font-family: var(--font-display);
+      font-size: 1.35rem;
+      letter-spacing: 0.12em;
+      font-weight: 400;
+    }
+    p { color: var(--muted); line-height: 1.45; }
+    .err { color: var(--red); }
+    .actions { display: flex; flex-direction: column; gap: 0.65rem; margin-top: 1.25rem; }
+    a.btn {
+      display: block;
+      text-align: center;
+      text-decoration: none;
+      font-family: var(--font-display);
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.7rem 0.85rem;
+      border: 1px solid var(--chartreuse);
+      background: var(--chartreuse);
+      color: #10140f;
+    }
+    a.secondary {
+      background: transparent;
+      color: var(--olive);
+      border-color: var(--dusty);
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-glow" aria-hidden="true"></div>
+  <div class="card">
+    <h1>SUBOTTO</h1>
+    <p>Discord listeners, YouTube playlists, picture slideshows, show episodes.</p>
+    {{if .Err}}<p class="err">{{.Err}}</p>{{end}}
+    <div class="actions">
+      {{if .DiscordOAuth}}<a class="btn" href="/auth/discord">Continue with Discord</a>{{end}}
+      {{if .Basic}}<a class="btn secondary" href="/admin">Password login</a>{{end}}
+      {{if not .DiscordOAuth}}{{if not .Basic}}<p>No Admin login is configured. Set SUPERADMIN_DISCORD_ID plus Discord OAuth, or ADMIN_PASSWORD.</p>{{end}}{{end}}
+    </div>
+  </div>
+</body>
+</html>

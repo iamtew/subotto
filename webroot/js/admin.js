@@ -1,5 +1,5 @@
 /* Subotto Admin UI — vanilla JS for a sovereign Meat Bag.
-   Talks to /api/... with browser Basic Auth (collected on page load).
+   Talks to /api/... with a Discord session cookie or browser Basic Auth.
    Product language: content listeners + picture listeners (expandable tabs). */
 
 /* ---------- Expandable tab registry ----------
@@ -21,7 +21,7 @@ const TAB_REGISTRY = [
 const API_CATALOG = [
   {
     title: "Public (no password)",
-    blurb: "Streamer.bot / OBS JSON. No Basic Auth.",
+    blurb: "Streamer.bot / OBS JSON. No Admin login.",
     routes: [
       { method: "GET", path: "/api/get/content/{channel}", note: "Live content listener by Discord channel name (playlist id, since, listening|paused)." },
       { method: "GET", path: "/api/get/picture/{channel}", note: "Live picture listener by Discord channel name (slideshow URL, since, state)." },
@@ -29,21 +29,24 @@ const API_CATALOG = [
       { method: "GET", path: "/stream-background", note: "OBS Browser Source page for the global stream background (polls; last upload)." },
       { method: "GET", path: "/media/stream-background/latest", note: "Raw stream background image (no auth; last upload)." },
       { method: "GET", path: "/api/slideshow/{slug}", note: "Picture slideshow feed JSON for one listener slug." },
-      { method: "GET", path: "/oauth/callback", note: "Google OAuth redirect (no Basic Auth). Caddy must not lock this path." },
+      { method: "GET", path: "/oauth/callback", note: "Google OAuth redirect (no login). Caddy must not lock this path." },
+      { method: "GET", path: "/auth/discord/callback", note: "Discord login redirect (no login). Caddy must not lock this path." },
     ],
   },
   {
     title: "API or admin",
-    blurb: "Basic Auth user api / API_PASSWORD, or admin / ADMIN_PASSWORD. GET fires the broadcast.",
+    blurb: "Basic Auth user api / API_PASSWORD, or the same Admin login as this UI. GET fires the broadcast.",
     routes: [
       { method: "GET", path: "/api/broadcasts/{slug}/fire", note: "Send every message of that named broadcast to its mapped channels. Template-bound bodies fill episode placeholders." },
     ],
   },
   {
     title: "Admin",
-    blurb: "Basic Auth user admin / ADMIN_PASSWORD. Same login as this UI.",
+    blurb: "Discord session cookie or Basic Auth user admin / ADMIN_PASSWORD.",
     routes: [
       { method: "GET", path: "/api/status", note: "Wire health: Discord, YouTube, listener counts, scheduler, API password." },
+      { method: "GET", path: "/api/operators", note: "Allowlisted Discord user IDs (superadmin can PUT extra_ids)." },
+      { method: "PUT", path: "/api/operators", note: "Replace extra operator Discord IDs (superadmin or Basic admin only)." },
       { method: "GET", path: "/api/youtube/auth", note: "Start YouTube OAuth (browser redirect to Google). Use Authorize YouTube on Status." },
       { method: "GET", path: "/api/activity", note: "Recent ops log." },
       { method: "GET", path: "/api/listens", note: "All content listeners (channel → YouTube playlist)." },
@@ -503,6 +506,10 @@ async function api(path, options = {}) {
     ...options,
     headers,
   });
+  if (res.status === 401) {
+    window.location.href = "/";
+    throw new Error("unauthorized");
+  }
   const text = await res.text();
   let data = null;
   try {
@@ -1274,6 +1281,67 @@ async function loadStatus() {
   }
 }
 
+async function loadOperators() {
+  const section = document.getElementById("status-operators-section");
+  const list = document.getElementById("status-operators-list");
+  const superEl = document.getElementById("status-operators-super");
+  if (!section || !list || !superEl) return;
+  try {
+    const data = await api("/api/operators");
+    const you = data.you || {};
+    section.hidden = !you.superadmin;
+    if (!you.superadmin) return;
+    superEl.textContent = "Superadmin: " + (data.superadmin_id || "(not set)");
+    const extra = data.extra_ids || [];
+    if (!extra.length) {
+      list.innerHTML = `<li class="empty">no extra operators</li>`;
+      return;
+    }
+    list.innerHTML = extra
+      .map(
+        (id) =>
+          `<li><span class="mono">${esc(id)}</span> <button type="button" class="secondary" data-remove-operator="${esc(id)}">Remove</button></li>`
+      )
+      .join("");
+  } catch (err) {
+    section.hidden = true;
+    console.warn("operators", err);
+  }
+}
+
+document.getElementById("status-operators-form")?.addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const input = document.getElementById("status-operators-id");
+  const id = (input.value || "").trim();
+  if (!id) return;
+  try {
+    const cur = await api("/api/operators");
+    const extra = [...(cur.extra_ids || [])];
+    if (!extra.includes(id)) extra.push(id);
+    await api("/api/operators", { method: "PUT", body: JSON.stringify({ extra_ids: extra }) });
+    input.value = "";
+    toast("operator added");
+    await loadOperators();
+  } catch (err) {
+    toast(err.message || "add failed", true);
+  }
+});
+
+document.getElementById("status-operators-list")?.addEventListener("click", async (ev) => {
+  const btn = ev.target.closest("[data-remove-operator]");
+  if (!btn) return;
+  const drop = btn.getAttribute("data-remove-operator");
+  try {
+    const cur = await api("/api/operators");
+    const extra = (cur.extra_ids || []).filter((id) => id !== drop);
+    await api("/api/operators", { method: "PUT", body: JSON.stringify({ extra_ids: extra }) });
+    toast("operator removed");
+    await loadOperators();
+  } catch (err) {
+    toast(err.message || "remove failed", true);
+  }
+});
+
 function fillApiPassword(s) {
   const el = document.getElementById("api-password");
   if (!el) return;
@@ -1548,6 +1616,7 @@ async function loadSchedulerTab() {
 async function refreshAll() {
   const jobs = [
     loadStatus(),
+    loadOperators(),
     loadListens(),
     loadPictureListens(),
     loadEpisodes(),

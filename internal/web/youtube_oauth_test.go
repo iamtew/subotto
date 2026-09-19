@@ -93,8 +93,8 @@ func TestYouTubeCallbackHappyPath(t *testing.T) {
 	if rec.Code != http.StatusFound {
 		t.Fatalf("want 302, got %d body=%s", rec.Code, rec.Body.String())
 	}
-	if loc := rec.Header().Get("Location"); loc != "/?youtube=ok" {
-		t.Fatalf("want /?youtube=ok, got %s", loc)
+	if loc := rec.Header().Get("Location"); loc != "/admin?youtube=ok" {
+		t.Fatalf("want /admin?youtube=ok, got %s", loc)
 	}
 	if s.youtubeName != "Test Channel" {
 		t.Fatalf("youtubeName=%q", s.youtubeName)

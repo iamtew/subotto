@@ -17,10 +17,10 @@ import (
 const maxAISystemPromptRunes = 8000
 
 func (s *Server) registerAIAPI(mux *http.ServeMux) {
-	mux.Handle("GET /api/ai", s.basicAuth(http.HandlerFunc(s.handleGetAI)))
-	mux.Handle("PUT /api/ai", s.basicAuth(http.HandlerFunc(s.handlePutAI)))
-	mux.Handle("POST /api/ai/chat", s.basicAuth(http.HandlerFunc(s.handleAIChat)))
-	mux.Handle("GET /api/ai/logs", s.basicAuth(http.HandlerFunc(s.handleAILogs)))
+	mux.Handle("GET /api/ai", s.requireAdmin(http.HandlerFunc(s.handleGetAI)))
+	mux.Handle("PUT /api/ai", s.requireAdmin(http.HandlerFunc(s.handlePutAI)))
+	mux.Handle("POST /api/ai/chat", s.requireAdmin(http.HandlerFunc(s.handleAIChat)))
+	mux.Handle("GET /api/ai/logs", s.requireAdmin(http.HandlerFunc(s.handleAILogs)))
 }
 
 func (s *Server) handleGetAI(w http.ResponseWriter, r *http.Request) {

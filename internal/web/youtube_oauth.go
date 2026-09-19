@@ -43,7 +43,7 @@ func (s *Server) handleYouTubeOAuthCallback(w http.ResponseWriter, r *http.Reque
 	if errMsg := r.URL.Query().Get("error"); errMsg != "" {
 		_ = s.takeOAuthState(r.URL.Query().Get("state"))
 		slog.Warn("youtube oauth denied", "error", errMsg)
-		http.Redirect(w, r, "/?youtube=denied", http.StatusFound)
+		http.Redirect(w, r, "/admin?youtube=denied", http.StatusFound)
 		return
 	}
 	if !s.takeOAuthState(r.URL.Query().Get("state")) {
@@ -59,12 +59,12 @@ func (s *Server) handleYouTubeOAuthCallback(w http.ResponseWriter, r *http.Reque
 	tok, err := s.exchangeCode(ctx, code)
 	if err != nil {
 		slog.Error("youtube oauth exchange failed", "err", err)
-		http.Redirect(w, r, "/?youtube=err", http.StatusFound)
+		http.Redirect(w, r, "/admin?youtube=err", http.StatusFound)
 		return
 	}
 	if err := youtube.SaveToken(ctx, s.store, tok); err != nil {
 		slog.Error("youtube oauth save failed", "err", err)
-		http.Redirect(w, r, "/?youtube=err", http.StatusFound)
+		http.Redirect(w, r, "/admin?youtube=err", http.StatusFound)
 		return
 	}
 
@@ -73,7 +73,7 @@ func (s *Server) handleYouTubeOAuthCallback(w http.ResponseWriter, r *http.Reque
 	}
 	if err := s.yt.Reload(ctx, s.store, s.ytClientID, s.ytClientSecret, s.ytRedirectURL); err != nil {
 		slog.Error("youtube client reload failed", "err", err)
-		http.Redirect(w, r, "/?youtube=err", http.StatusFound)
+		http.Redirect(w, r, "/admin?youtube=err", http.StatusFound)
 		return
 	}
 
@@ -82,13 +82,13 @@ func (s *Server) handleYouTubeOAuthCallback(w http.ResponseWriter, r *http.Reque
 		slog.Warn("YouTube ping failed after Admin OAuth", "err", err)
 		_ = s.store.LogActivity(ctx, "youtube_auth", map[string]any{"ok": false, "error": err.Error()}, false)
 		s.youtubeName = ""
-		http.Redirect(w, r, "/?youtube=err", http.StatusFound)
+		http.Redirect(w, r, "/admin?youtube=err", http.StatusFound)
 		return
 	}
 	s.youtubeName = title
 	_ = s.store.LogActivity(ctx, "youtube_auth", map[string]any{"ok": true, "channel": title}, true)
 	slog.Info("YouTube authorization OK", "channel", title)
-	http.Redirect(w, r, "/?youtube=ok", http.StatusFound)
+	http.Redirect(w, r, "/admin?youtube=ok", http.StatusFound)
 }
 
 func (s *Server) exchangeCode(ctx context.Context, code string) (*oauth2.Token, error) {

@@ -3,7 +3,8 @@
 // Meat Bag:
 //   - `just run` — Discord bot + Admin UI + YouTube (needs tokens + auth-youtube)
 //   - `just auth-youtube` — DEV Google OAuth (Admin Status can re-auth too)
-//   - Admin UI at http://localhost:50770 (user admin / ADMIN_PASSWORD)
+//   - Admin landing at http://localhost:50770 — Discord OAuth and/or Basic admin / ADMIN_PASSWORD
+//   - Admin UI at http://localhost:50770/admin
 package main
 
 import (
@@ -176,24 +177,28 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 	})
 
 	admin, err := web.New(web.Options{
-		Store:               store,
-		YouTube:             yt,
-		Status:              bot,
-		Scheduler:           sched,
-		Discord:             bot,
-		DiscordToken:        cfg.DiscordBotToken,
-		AdminPassword:       cfg.AdminPassword,
-		APIPassword:         cfg.APIPassword,
-		AdminHost:           cfg.AdminHost,
-		AdminPort:           cfg.AdminPort,
-		Webroot:             "webroot",
-		YouTubeChannel:      ytChannel,
-		ResyncIntervalHours: cfg.ResyncIntervalHours,
-		YouTubeClientID:     cfg.YouTubeClientID,
-		YouTubeClientSecret: cfg.YouTubeClientSecret,
-		YouTubeRedirectURL:  cfg.YouTubeRedirectURL,
-		AI:                  aiClient,
-		OpenRouterModel:     cfg.OpenRouterModel,
+		Store:                   store,
+		YouTube:                 yt,
+		Status:                  bot,
+		Scheduler:               sched,
+		Discord:                 bot,
+		DiscordToken:            cfg.DiscordBotToken,
+		AdminPassword:           cfg.AdminPassword,
+		APIPassword:             cfg.APIPassword,
+		AdminHost:               cfg.AdminHost,
+		AdminPort:               cfg.AdminPort,
+		Webroot:                 "webroot",
+		YouTubeChannel:          ytChannel,
+		ResyncIntervalHours:     cfg.ResyncIntervalHours,
+		YouTubeClientID:         cfg.YouTubeClientID,
+		YouTubeClientSecret:     cfg.YouTubeClientSecret,
+		YouTubeRedirectURL:      cfg.YouTubeRedirectURL,
+		DiscordClientID:         cfg.DiscordClientID,
+		DiscordClientSecret:     cfg.DiscordClientSecret,
+		DiscordOAuthRedirectURL: cfg.DiscordOAuthRedirectURL,
+		SuperadminDiscordID:     cfg.SuperadminDiscordID,
+		AI:                      aiClient,
+		OpenRouterModel:         cfg.OpenRouterModel,
 	})
 	if err != nil {
 		slog.Error("failed to create admin UI server", "err", err)
@@ -214,7 +219,7 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 	go sched.Run(runCtx)
 
 	slog.Info("listening for content + picture listeners — Ctrl+C to stop")
-	slog.Info("Admin UI ready", "url", fmt.Sprintf("http://%s", admin.Addr()), "user", "admin")
+	slog.Info("Admin UI ready", "url", fmt.Sprintf("http://%s/admin", admin.Addr()), "landing", fmt.Sprintf("http://%s/", admin.Addr()))
 	slog.Info("public slideshow", "latest", fmt.Sprintf("http://%s/slideshow/latest", admin.Addr()))
 	if info := sched.Info(); info.Enabled {
 		slog.Info("background resync enabled", "interval_hours", info.IntervalHours, "resync_limit", info.Limit)

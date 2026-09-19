@@ -13,13 +13,13 @@ import (
 )
 
 func (s *Server) registerPictureAPI(mux *http.ServeMux) {
-	mux.Handle("GET /api/picture-listens", s.basicAuth(http.HandlerFunc(s.handleListPictureListeners)))
-	mux.Handle("POST /api/picture-listens", s.basicAuth(http.HandlerFunc(s.handleUpsertPictureListener)))
-	mux.Handle("GET /api/picture-listens/{channel}/images", s.basicAuth(http.HandlerFunc(s.handleListPictureImages)))
-	mux.Handle("PATCH /api/picture-listens/{channel}/images/{id}", s.basicAuth(http.HandlerFunc(s.handlePatchPictureImage)))
-	mux.Handle("PATCH /api/picture-listens/{channel}", s.basicAuth(http.HandlerFunc(s.handlePatchPictureListener)))
-	mux.Handle("DELETE /api/picture-listens/{channel}", s.basicAuth(http.HandlerFunc(s.handleDeletePictureListener)))
-	mux.Handle("POST /api/picture-resync", s.basicAuth(http.HandlerFunc(s.handlePictureResync)))
+	mux.Handle("GET /api/picture-listens", s.requireAdmin(http.HandlerFunc(s.handleListPictureListeners)))
+	mux.Handle("POST /api/picture-listens", s.requireAdmin(http.HandlerFunc(s.handleUpsertPictureListener)))
+	mux.Handle("GET /api/picture-listens/{channel}/images", s.requireAdmin(http.HandlerFunc(s.handleListPictureImages)))
+	mux.Handle("PATCH /api/picture-listens/{channel}/images/{id}", s.requireAdmin(http.HandlerFunc(s.handlePatchPictureImage)))
+	mux.Handle("PATCH /api/picture-listens/{channel}", s.requireAdmin(http.HandlerFunc(s.handlePatchPictureListener)))
+	mux.Handle("DELETE /api/picture-listens/{channel}", s.requireAdmin(http.HandlerFunc(s.handleDeletePictureListener)))
+	mux.Handle("POST /api/picture-resync", s.requireAdmin(http.HandlerFunc(s.handlePictureResync)))
 }
 
 type pictureListenerDTO struct {

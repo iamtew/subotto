@@ -19,6 +19,7 @@
     <div id="status-pills" class="pills" aria-live="polite">
       <span class="pill muted">boot…</span>
     </div>
+    <a class="secondary" href="/logout">Log out</a>
   </header>
 
   <!-- Expandable tab shell — add entries in admin.js TAB_REGISTRY. -->
@@ -35,6 +36,22 @@
         <div id="status-health" class="status-health" aria-live="polite">
           <p class="empty">loading…</p>
         </div>
+      </section>
+
+      <section class="panel" id="status-operators-section" hidden>
+        <div class="panel-head">
+          <h2>OPERATORS</h2>
+          <p>Discord user IDs allowed into Admin · superadmin is SUPERADMIN_DISCORD_ID (not removable)</p>
+        </div>
+        <p id="status-operators-super" class="empty"></p>
+        <ul id="status-operators-list" class="operator-list"></ul>
+        <form id="status-operators-form" class="mapping-form">
+          <label>
+            Discord user ID
+            <input id="status-operators-id" name="discord_id" inputmode="numeric" autocomplete="off" required>
+          </label>
+          <button type="submit">Add</button>
+        </form>
       </section>
 
       <div id="status-orphans" class="status-callout" hidden></div>
@@ -982,7 +999,7 @@
       <section class="panel" id="api-password-section">
         <div class="panel-head">
           <h2>API PASSWORD</h2>
-          <p>Basic Auth user <code>api</code> for <code>GET /api/broadcasts/{slug}/fire</code> · <code>admin</code> / Admin password still works · empty means the <code>api</code> user is off</p>
+          <p>Basic Auth user <code>api</code> for <code>GET /api/broadcasts/{slug}/fire</code> · Discord session or <code>admin</code> / Admin password still works · empty means the <code>api</code> user is off</p>
         </div>
         <div class="api-secret">
           <label for="api-password">API_PASSWORD</label>

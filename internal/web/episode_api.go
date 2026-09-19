@@ -15,19 +15,19 @@ import (
 )
 
 func (s *Server) registerEpisodeAPI(mux *http.ServeMux) {
-	mux.Handle("GET /api/episodes", s.basicAuth(http.HandlerFunc(s.handleListEpisodes)))
-	mux.Handle("GET /api/episodes/unlinked", s.basicAuth(http.HandlerFunc(s.handleListUnlinkedListeners)))
-	mux.Handle("POST /api/episodes", s.basicAuth(http.HandlerFunc(s.handleStartEpisode)))
-	mux.Handle("POST /api/episodes/absorb", s.basicAuth(http.HandlerFunc(s.handleAbsorbEpisode)))
-	mux.Handle("PATCH /api/episodes/{id}", s.basicAuth(http.HandlerFunc(s.handlePatchEpisode)))
-	mux.Handle("POST /api/episodes/{id}/spot", s.basicAuth(http.HandlerFunc(s.handleUploadEpisodeSpot)))
-	mux.Handle("POST /api/episodes/{id}/stream-background", s.basicAuth(http.HandlerFunc(s.handleUploadStreamBackground)))
-	mux.Handle("DELETE /api/episodes/{id}", s.basicAuth(http.HandlerFunc(s.handleCeaseEpisode)))
+	mux.Handle("GET /api/episodes", s.requireAdmin(http.HandlerFunc(s.handleListEpisodes)))
+	mux.Handle("GET /api/episodes/unlinked", s.requireAdmin(http.HandlerFunc(s.handleListUnlinkedListeners)))
+	mux.Handle("POST /api/episodes", s.requireAdmin(http.HandlerFunc(s.handleStartEpisode)))
+	mux.Handle("POST /api/episodes/absorb", s.requireAdmin(http.HandlerFunc(s.handleAbsorbEpisode)))
+	mux.Handle("PATCH /api/episodes/{id}", s.requireAdmin(http.HandlerFunc(s.handlePatchEpisode)))
+	mux.Handle("POST /api/episodes/{id}/spot", s.requireAdmin(http.HandlerFunc(s.handleUploadEpisodeSpot)))
+	mux.Handle("POST /api/episodes/{id}/stream-background", s.requireAdmin(http.HandlerFunc(s.handleUploadStreamBackground)))
+	mux.Handle("DELETE /api/episodes/{id}", s.requireAdmin(http.HandlerFunc(s.handleCeaseEpisode)))
 
-	mux.Handle("GET /api/episode-templates", s.basicAuth(http.HandlerFunc(s.handleListEpisodeTemplates)))
-	mux.Handle("POST /api/episode-templates", s.basicAuth(http.HandlerFunc(s.handleCreateEpisodeTemplate)))
-	mux.Handle("PUT /api/episode-templates/{id}", s.basicAuth(http.HandlerFunc(s.handleUpdateEpisodeTemplate)))
-	mux.Handle("DELETE /api/episode-templates/{id}", s.basicAuth(http.HandlerFunc(s.handleDeleteEpisodeTemplate)))
+	mux.Handle("GET /api/episode-templates", s.requireAdmin(http.HandlerFunc(s.handleListEpisodeTemplates)))
+	mux.Handle("POST /api/episode-templates", s.requireAdmin(http.HandlerFunc(s.handleCreateEpisodeTemplate)))
+	mux.Handle("PUT /api/episode-templates/{id}", s.requireAdmin(http.HandlerFunc(s.handleUpdateEpisodeTemplate)))
+	mux.Handle("DELETE /api/episode-templates/{id}", s.requireAdmin(http.HandlerFunc(s.handleDeleteEpisodeTemplate)))
 }
 
 func (s *Server) createPlaylist(ctx context.Context, title, description string) (string, error) {

@@ -22,6 +22,12 @@ type Config struct {
 	DiscordBotToken string
 	DiscordGuildID  string // optional: limit the bot to one server
 
+	// Discord user OAuth (Admin login). Off unless SuperadminDiscordID + client + secret are set.
+	DiscordClientID         string
+	DiscordClientSecret     string
+	DiscordOAuthRedirectURL string
+	SuperadminDiscordID     string
+
 	// YouTube / Google OAuth
 	YouTubeClientID     string
 	YouTubeClientSecret string
@@ -53,18 +59,22 @@ func Load() (*Config, error) {
 	_ = godotenv.Load()
 
 	cfg := &Config{
-		DiscordBotToken:     os.Getenv("DISCORD_BOT_TOKEN"),
-		DiscordGuildID:      os.Getenv("DISCORD_GUILD_ID"),
-		YouTubeClientID:     os.Getenv("YOUTUBE_CLIENT_ID"),
-		YouTubeClientSecret: os.Getenv("YOUTUBE_CLIENT_SECRET"),
-		YouTubeRedirectURL:  envOr("YOUTUBE_REDIRECT_URL", "http://localhost:50770/oauth/callback"),
-		AdminPassword:       envOr("ADMIN_PASSWORD", "change-me-please"),
-		APIPassword:         strings.TrimSpace(os.Getenv("API_PASSWORD")),
-		AdminHost:           envOr("ADMIN_HOST", "0.0.0.0"),
-		DatabasePath:        envOr("DATABASE_PATH", "./data/subotto.db"),
-		LogLevel:            strings.ToLower(envOr("LOG_LEVEL", "info")),
-		OpenRouterAPIKey:    strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY")),
-		OpenRouterModel:     strings.TrimSpace(os.Getenv("OPENROUTER_MODEL")),
+		DiscordBotToken:         os.Getenv("DISCORD_BOT_TOKEN"),
+		DiscordGuildID:          os.Getenv("DISCORD_GUILD_ID"),
+		DiscordClientID:         strings.TrimSpace(os.Getenv("DISCORD_CLIENT_ID")),
+		DiscordClientSecret:     strings.TrimSpace(os.Getenv("DISCORD_CLIENT_SECRET")),
+		DiscordOAuthRedirectURL: envOr("DISCORD_OAUTH_REDIRECT_URL", "http://localhost:50770/auth/discord/callback"),
+		SuperadminDiscordID:     strings.TrimSpace(os.Getenv("SUPERADMIN_DISCORD_ID")),
+		YouTubeClientID:         os.Getenv("YOUTUBE_CLIENT_ID"),
+		YouTubeClientSecret:     os.Getenv("YOUTUBE_CLIENT_SECRET"),
+		YouTubeRedirectURL:      envOr("YOUTUBE_REDIRECT_URL", "http://localhost:50770/oauth/callback"),
+		AdminPassword:           envDefaultIfUnset("ADMIN_PASSWORD", "change-me-please"),
+		APIPassword:             strings.TrimSpace(os.Getenv("API_PASSWORD")),
+		AdminHost:               envOr("ADMIN_HOST", "0.0.0.0"),
+		DatabasePath:            envOr("DATABASE_PATH", "./data/subotto.db"),
+		LogLevel:                strings.ToLower(envOr("LOG_LEVEL", "info")),
+		OpenRouterAPIKey:        strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY")),
+		OpenRouterModel:         strings.TrimSpace(os.Getenv("OPENROUTER_MODEL")),
 	}
 
 	port, err := strconv.Atoi(envOr("ADMIN_PORT", "50770"))
@@ -134,4 +144,14 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// envDefaultIfUnset uses fallback only when the key is missing.
+// Present-but-empty (ADMIN_PASSWORD=) is kept empty so Basic login can be turned off.
+func envDefaultIfUnset(key, fallback string) string {
+	v, ok := os.LookupEnv(key)
+	if !ok {
+		return fallback
+	}
+	return v
 }

@@ -14,11 +14,11 @@ import (
 )
 
 func (s *Server) registerBroadcastAPI(mux *http.ServeMux) {
-	mux.Handle("GET /api/broadcasts", s.basicAuth(http.HandlerFunc(s.handleListBroadcasts)))
-	mux.Handle("POST /api/broadcasts", s.basicAuth(http.HandlerFunc(s.handleCreateBroadcast)))
-	mux.Handle("GET /api/broadcasts/{id}", s.basicAuth(http.HandlerFunc(s.handleGetBroadcast)))
-	mux.Handle("PATCH /api/broadcasts/{id}", s.basicAuth(http.HandlerFunc(s.handlePatchBroadcast)))
-	mux.Handle("DELETE /api/broadcasts/{id}", s.basicAuth(http.HandlerFunc(s.handleDeleteBroadcast)))
+	mux.Handle("GET /api/broadcasts", s.requireAdmin(http.HandlerFunc(s.handleListBroadcasts)))
+	mux.Handle("POST /api/broadcasts", s.requireAdmin(http.HandlerFunc(s.handleCreateBroadcast)))
+	mux.Handle("GET /api/broadcasts/{id}", s.requireAdmin(http.HandlerFunc(s.handleGetBroadcast)))
+	mux.Handle("PATCH /api/broadcasts/{id}", s.requireAdmin(http.HandlerFunc(s.handlePatchBroadcast)))
+	mux.Handle("DELETE /api/broadcasts/{id}", s.requireAdmin(http.HandlerFunc(s.handleDeleteBroadcast)))
 	// Streamer.bot + Admin Fire button — slug in path is the predictable trigger name.
 	mux.Handle("GET /api/broadcasts/{slug}/fire", s.adminOrAPIAuth(http.HandlerFunc(s.handleFireBroadcast)))
 }

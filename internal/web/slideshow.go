@@ -11,7 +11,7 @@ import (
 )
 
 // registerPublic mounts unauthenticated routes (OBS slideshow + media +
-// Streamer.bot listener GET). Must run before the Basic-Auth "/" catch-all.
+// Streamer.bot listener GET). Must run before the Admin file routes.
 func (s *Server) registerPublic(mux *http.ServeMux) {
 	mux.HandleFunc("GET /slideshow/latest", s.handleSlideshowLatest)
 	mux.HandleFunc("GET /slideshow/{slug}", s.handleSlideshowPage)
@@ -23,6 +23,10 @@ func (s *Server) registerPublic(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/get/episode/{show}", s.handlePublicGetEpisode)
 	mux.HandleFunc("GET /api/get/{kind}/{channel}", s.handlePublicGetListener)
 	mux.HandleFunc("GET /oauth/callback", s.handleYouTubeOAuthCallback)
+	mux.HandleFunc("GET /{$}", s.handleLanding)
+	mux.HandleFunc("GET /auth/discord", s.handleDiscordAuthStart)
+	mux.HandleFunc("GET /auth/discord/callback", s.handleDiscordOAuthCallback)
+	mux.HandleFunc("GET /logout", s.handleLogout)
 
 	// OBS page assets (no auth).
 	staticDir := filepath.Join(s.webroot, "slideshow")

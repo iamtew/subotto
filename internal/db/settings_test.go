@@ -395,3 +395,30 @@ func TestAIModelsDefaultBootstrapAndSave(t *testing.T) {
 		t.Fatal("empty catalog")
 	}
 }
+
+func TestExtraAdminDiscordIDs(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "ops.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	ctx := context.Background()
+
+	got, err := store.ExtraAdminDiscordIDs(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("want empty, got %v", got)
+	}
+	if err := store.SaveExtraAdminDiscordIDs(ctx, []string{" 99 ", "99", "nope", "100"}); err != nil {
+		t.Fatal(err)
+	}
+	got, err = store.ExtraAdminDiscordIDs(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0] != "99" || got[1] != "100" {
+		t.Fatalf("got %v", got)
+	}
+}
