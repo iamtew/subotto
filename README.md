@@ -30,7 +30,7 @@ Parked: bi-weekly schedules, richer show-runner Discord announce.
 - **Content:** detects YouTube links and adds them to that channel’s playlist.
 - **Pictures:** saves image attachments under `data/pictures/` and serves an OBS slideshow.
 - Both listener types may be live on the **same channel** at once.
-- **Episodes** group content + picture listeners for a show (Admin tab + Streamer.bot GET). Optional **air datetime** (RFC3339 with offset, e.g. `2026-09-20T20:00:00+02:00`) and **spot image** live on the episode (`data/episode-spots/`, public `/media/episodes/{id}/…`). **Stream background** is one global still (`data/stream-background/latest`, 15 MB). OBS Browser Source: `/stream-background` (picks up a new upload in a couple of seconds). Raw image: `/media/stream-background/latest`.
+- **Episodes** group content + picture listeners for a show (Admin tab + Streamer.bot GET). Optional **air datetime** (RFC3339 with offset, e.g. `2026-09-20T20:00:00+02:00`) and **spot image** live on the episode (`data/episode-spots/`, public `/media/episodes/{id}/…`; no upload yet still serves `spotplaceholder.jpg`). **Stream background** is one global still (`data/stream-background/latest`, 15 MB). OBS Browser Source: `/stream-background` (picks up a new upload in a couple of seconds). Raw image: `/media/stream-background/latest`.
 - Admin UI from `webroot/`; background history re-scan from the **Scheduler** tab (`RESYNC_INTERVAL_HOURS` is only a bootstrap until you save there).
 
 Reactions on ingest: **💾** added · **♻️** DUPE · **🛑** OLD · **❌** failed.

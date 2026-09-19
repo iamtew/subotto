@@ -23,7 +23,7 @@ Produces `dist/subotto-linux.zip` with:
 
 **Not in the zip:** live `.env` or `data/` (copy those yourself — DB **and** `data/pictures/` / `data/episode-spots/` / `data/stream-background/` if you already collected images).
 
-Public slideshow URLs (no login): `/slideshow/latest`, `/slideshow/{slug}`, `/media/pictures/...`, `/media/episodes/{id}/...`, `/stream-background` (OBS Browser Source, live-updates), `/media/stream-background/latest` (raw image).  
+Public slideshow URLs (no login): `/slideshow/latest`, `/slideshow/{slug}`, `/media/pictures/...`, `/media/episodes/{id}/...` (placeholder `spotplaceholder.jpg` until a still is uploaded), `/stream-background` (OBS Browser Source, live-updates), `/media/stream-background/latest` (raw image).  
 Landing (no login): `GET /`. Discord login callback: `GET /auth/discord/callback`.  
 Streamer.bot GETs (no login): `GET /api/get/content/{channel-name}`, `GET /api/get/picture/{channel-name}`, and `GET /api/get/episode/{show}` — live listener / episode JSON (`air_datetime` RFC3339 with offset, `spot_image`, `stream_background`, `stream_background_url` on the episode). Channel name is the Discord name without `#`; Discord must be connected.  
 Broadcast fire (Basic Auth): `GET /api/broadcasts/{slug}/fire` — user `api` / `API_PASSWORD` (or Admin login). Sends every message of that named broadcast to its mapped channels.  

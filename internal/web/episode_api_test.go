@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -370,8 +371,15 @@ func TestEpisodeAirDateAndSpot(t *testing.T) {
 	if ep.AirDateTime != "2026-09-20T20:00:00+02:00" {
 		t.Fatalf("start air_datetime: %q", ep.AirDateTime)
 	}
-	if ep.SpotImage != "" {
-		t.Fatalf("spot should be empty, got %q", ep.SpotImage)
+	wantSpot := fmt.Sprintf("/media/episodes/%d/%s", ep.ID, db.SpotPlaceholderFile)
+	if ep.SpotImage != wantSpot {
+		t.Fatalf("spot should be placeholder, got %q", ep.SpotImage)
+	}
+	req = httptest.NewRequest(http.MethodGet, ep.SpotImage, nil)
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("placeholder media: %d", rec.Code)
 	}
 	if ep.StreamBackground != "" || ep.StreamBackgroundURL != "" {
 		t.Fatalf("stream background should be empty, got %q %q", ep.StreamBackground, ep.StreamBackgroundURL)
@@ -418,6 +426,21 @@ func TestEpisodeAirDateAndSpot(t *testing.T) {
 	}
 	if ep.SpotImage == "" || !strings.Contains(ep.SpotImage, "/media/episodes/") {
 		t.Fatalf("spot url: %q", ep.SpotImage)
+	}
+	if strings.Contains(ep.SpotImage, db.SpotPlaceholderFile) {
+		t.Fatalf("uploaded spot still placeholder: %q", ep.SpotImage)
+	}
+	req = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/media/episodes/%d/%s", ep.ID, db.SpotPlaceholderFile), nil)
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("placeholder alias after upload: %d", rec.Code)
+	}
+	req = httptest.NewRequest(http.MethodGet, "/media/episodes/99999/"+db.SpotPlaceholderFile, nil)
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("unknown episode placeholder: %d", rec.Code)
 	}
 
 	buf.Reset()

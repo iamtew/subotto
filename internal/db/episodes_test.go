@@ -140,6 +140,11 @@ func TestEpisodePlaceholderMap(t *testing.T) {
 	if m["spot_image"] != "/media/episodes/7/spot.jpg" {
 		t.Fatalf("spot_image: %q", m["spot_image"])
 	}
+
+	empty := Episode{ID: 7}
+	if empty.SpotURL() != "/media/episodes/7/"+SpotPlaceholderFile {
+		t.Fatalf("placeholder url: %q", empty.SpotURL())
+	}
 	if m["since"] != "2026-09-19T18:00:00Z" {
 		t.Fatalf("since: %q", m["since"])
 	}

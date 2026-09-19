@@ -163,12 +163,19 @@ func (e Episode) NameFull() string {
 	return ResolveEpisodeNameFull(e.NameFullTemplate, e.Show, e.Episode, e.Name, e.TwitchSuffix)
 }
 
-// SpotURL is the public media path, or empty when no still is on file.
+// SpotPlaceholderFile is served until a real still is uploaded.
+const SpotPlaceholderFile = "spotplaceholder.jpg"
+
+// SpotURL is the public media path. No still yet → placeholder filename.
 func (e Episode) SpotURL() string {
-	if e.ID < 1 || strings.TrimSpace(e.SpotPath) == "" {
+	if e.ID < 1 {
 		return ""
 	}
-	return fmt.Sprintf("/media/episodes/%d/%s", e.ID, filepath.Base(e.SpotPath))
+	name := filepath.Base(strings.TrimSpace(e.SpotPath))
+	if name == "" || name == "." {
+		name = SpotPlaceholderFile
+	}
+	return fmt.Sprintf("/media/episodes/%d/%s", e.ID, name)
 }
 
 // NormalizeAirDateTime accepts RFC3339 with offset, a legacy YYYY-MM-DD (midnight +02:00), or empty.

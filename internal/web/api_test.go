@@ -52,6 +52,9 @@ func testServer(t *testing.T) (*Server, *db.DB) {
 	if err := os.WriteFile(filepath.Join(webroot, "stream-background.html"), []byte("<html>stream-bg</html>"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(webroot, db.SpotPlaceholderFile), []byte("fake-jpg"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	s, err := New(Options{
 		Store:         store,

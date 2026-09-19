@@ -177,17 +177,28 @@ func (s *Server) handleEpisodeSpotMedia(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	ep, err := s.store.GetEpisodeByID(r.Context(), id)
-	if err != nil || ep == nil || ep.SpotPath == "" || filepath.Base(ep.SpotPath) != file {
+	if err != nil || ep == nil {
 		http.NotFound(w, r)
 		return
 	}
-	abs, err := s.store.AbsoluteEpisodeSpotPath(ep.SpotPath)
-	if err != nil {
-		http.NotFound(w, r)
+	placeholder := file == db.SpotPlaceholderFile
+	stored := strings.TrimSpace(ep.SpotPath)
+	if stored != "" && (filepath.Base(stored) == file || placeholder) {
+		abs, err := s.store.AbsoluteEpisodeSpotPath(stored)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Cache-Control", "public, max-age=60")
+		http.ServeFile(w, r, abs)
 		return
 	}
-	w.Header().Set("Cache-Control", "public, max-age=60")
-	http.ServeFile(w, r, abs)
+	if placeholder {
+		w.Header().Set("Cache-Control", "public, max-age=60")
+		http.ServeFile(w, r, filepath.Join(s.webroot, db.SpotPlaceholderFile))
+		return
+	}
+	http.NotFound(w, r)
 }
 
 func (s *Server) handleStreamBackgroundPage(w http.ResponseWriter, r *http.Request) {
