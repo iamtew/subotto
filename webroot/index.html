@@ -582,6 +582,7 @@
               Full name template
               <input name="name_full_template" id="episode-edit-namefull" type="text" placeholder="{{episode_short}} {{name}} | {{show}} | {{twitch_suffix}}" autocomplete="off" spellcheck="false">
             </label>
+            <p class="panel-note">Identity keys in this box: <code>{{show}}</code> <code>{{show_slug}}</code> <code>{{episode}}</code> <code>{{episode_short}}</code> <code>{{episode_long}}</code> <code>{{name}}</code> <code>{{twitch_suffix}}</code>. <code>{{episode_name_full}}</code> is the output, not an input.</p>
             <div class="air-datetime">
               <label>
                 Air date <span class="optional">opt</span>
@@ -669,7 +670,8 @@
       <section class="panel" id="episode-templates-section">
         <div class="panel-head">
           <h2>EPISODE TEMPLATES</h2>
-          <p>Show defaults + listener stubs. Names/playlist/slug support placeholders: <code>{{episode_short}}</code> <code>{{name}}</code> <code>{{show}}</code> <code>{{twitch_suffix}}</code> <code>{{episode}}</code> <code>{{episode_long}}</code></p>
+          <p>Show defaults + listener stubs. Names/playlist/slug support episode placeholders.</p>
+          <p id="episode-template-placeholders" class="panel-note placeholder-list">loading placeholders…</p>
         </div>
 
         <form id="episode-template-form" class="announce-form">
@@ -687,6 +689,7 @@
               Full name template
               <input name="name_full_template" id="episode-template-namefull" type="text" placeholder="{{episode_short}} {{name}} | {{show}} | {{twitch_suffix}}" autocomplete="off" spellcheck="false">
             </label>
+            <p class="panel-note">Identity keys in this box: <code>{{show}}</code> <code>{{show_slug}}</code> <code>{{episode}}</code> <code>{{episode_short}}</code> <code>{{episode_long}}</code> <code>{{name}}</code> <code>{{twitch_suffix}}</code>. <code>{{episode_name_full}}</code> is the output, not an input.</p>
           </div>
 
           <div class="stub-section">
@@ -776,7 +779,8 @@
       <section class="panel" id="broadcasts-section">
         <div class="panel-head">
           <h2>BROADCASTS</h2>
-          <p>Named multi-channel Discord sends · Fire button or <code>GET /api/broadcasts/{slug}/fire</code> (Basic Auth <code>api</code> / <code>API_PASSWORD</code>) · template-bound bodies resolve live episode placeholders</p>
+          <p>Named multi-channel Discord sends · Fire button or <code>GET /api/broadcasts/{slug}/fire</code> (Basic Auth <code>api</code> / <code>API_PASSWORD</code>)</p>
+          <p id="broadcast-placeholders" class="panel-note placeholder-list">loading placeholders…</p>
         </div>
 
         <form id="broadcast-form" class="announce-form">

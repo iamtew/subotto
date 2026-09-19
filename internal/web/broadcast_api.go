@@ -84,7 +84,11 @@ func (s *Server) handleListBroadcasts(w http.ResponseWriter, r *http.Request) {
 	for _, b := range list {
 		out = append(out, toBroadcastDTO(b))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"broadcasts": out})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"broadcasts":        out,
+		"placeholders":      db.EpisodePlaceholderKeys(),
+		"placeholders_note": db.EpisodePlaceholdersNote,
+	})
 }
 
 func (s *Server) handleGetBroadcast(w http.ResponseWriter, r *http.Request) {
@@ -179,7 +183,7 @@ func (s *Server) handleFireBroadcast(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fields, err := s.broadcastResolveFields(r.Context(), b)
+	fields, err := s.broadcastResolveFields(r, b)
 	if err != nil {
 		writeErr(w, http.StatusConflict, err.Error())
 		return
@@ -213,10 +217,11 @@ func (s *Server) handleFireBroadcast(w http.ResponseWriter, r *http.Request) {
 
 // broadcastResolveFields returns episode placeholder map for template-bound broadcasts.
 // Standalone → nil fields (bodies sent as stored). Missing live episode → error.
-func (s *Server) broadcastResolveFields(ctx context.Context, b *db.Broadcast) (map[string]string, error) {
+func (s *Server) broadcastResolveFields(r *http.Request, b *db.Broadcast) (map[string]string, error) {
 	if b.EpisodeTemplateID == nil || *b.EpisodeTemplateID < 1 {
 		return nil, nil
 	}
+	ctx := r.Context()
 	tmpl, err := s.store.GetEpisodeTemplateByID(ctx, *b.EpisodeTemplateID)
 	if err != nil {
 		return nil, err
@@ -231,9 +236,40 @@ func (s *Server) broadcastResolveFields(ctx context.Context, b *db.Broadcast) (m
 	if ep == nil {
 		return nil, fmt.Errorf("no live episode for show %q — start one before firing", tmpl.Show)
 	}
-	fields := db.EpisodeFieldMap(ep.Show, ep.Episode, ep.Name, ep.TwitchSuffix)
-	fields["episode_name_full"] = ep.NameFull()
+	fields := ep.PlaceholderMap()
+	s.addBroadcastLivePlaceholders(r, ep, fields)
 	return fields, nil
+}
+
+// addBroadcastLivePlaceholders fills first content/picture listener + absolute URLs.
+// ponytail: first listener of each kind only; add indexed keys if a show runs several.
+func (s *Server) addBroadcastLivePlaceholders(r *http.Request, ep *db.Episode, fields map[string]string) {
+	fields["playlist_id"] = ""
+	fields["playlist_url"] = ""
+	fields["slug"] = ""
+	fields["slideshow"] = ""
+	fields["slideshow_url"] = ""
+	fields["spot_image_url"] = requestAbsoluteURL(r, fields["spot_image"])
+	bg, bgURL := s.streamBackgroundFields(r)
+	fields["stream_background"] = bg
+	fields["stream_background_url"] = bgURL
+
+	if s.store == nil || ep == nil {
+		return
+	}
+	maps, err := s.store.ListMappingsByEpisode(r.Context(), ep.ID)
+	if err == nil && len(maps) > 0 && strings.TrimSpace(maps[0].YouTubePlaylistID) != "" {
+		id := maps[0].YouTubePlaylistID
+		fields["playlist_id"] = id
+		fields["playlist_url"] = "https://www.youtube.com/playlist?list=" + id
+	}
+	pics, err := s.store.ListPictureListenersByEpisode(r.Context(), ep.ID)
+	if err == nil && len(pics) > 0 && strings.TrimSpace(pics[0].Slug) != "" {
+		slug := pics[0].Slug
+		fields["slug"] = slug
+		fields["slideshow"] = "/slideshow/" + slug
+		fields["slideshow_url"] = requestAbsoluteURL(r, fields["slideshow"])
+	}
 }
 
 func (s *Server) announce(ctx context.Context, channelID, content string) error {

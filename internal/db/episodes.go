@@ -69,16 +69,70 @@ func EpisodeLong(n int) string {
 	return fmt.Sprintf("Episode %d", n)
 }
 
-// EpisodeFieldMap builds placeholder values for template resolve (without name_full yet).
+// EpisodeFieldMap builds identity placeholder values for name_full_template
+// (no episode_name_full — that is the output of ResolveEpisodeNameFull).
 func EpisodeFieldMap(show string, episode int, name, twitchSuffix string) map[string]string {
 	return map[string]string{
 		"show":          show,
+		"show_slug":     ShowSlug(show),
 		"episode":       strconv.Itoa(episode),
 		"episode_short": EpisodeShort(episode),
 		"episode_long":  EpisodeLong(episode),
 		"name":          name,
 		"twitch_suffix": twitchSuffix,
 	}
+}
+
+// EpisodePlaceholderKeys is the ordered Admin/API list ({{key}} form).
+// playlist/slideshow/URL keys fill only when firing a template-bound broadcast.
+func EpisodePlaceholderKeys() []string {
+	keys := []string{
+		"show", "show_slug", "episode", "episode_short", "episode_long",
+		"name", "twitch_suffix", "episode_name_full",
+		"air_datetime", "air_date", "air_time",
+		"spot_image", "since",
+		"playlist_id", "playlist_url", "slug", "slideshow",
+		"spot_image_url", "slideshow_url", "stream_background", "stream_background_url",
+	}
+	out := make([]string, len(keys))
+	for i, k := range keys {
+		out[i] = "{{" + k + "}}"
+	}
+	return out
+}
+
+const EpisodePlaceholdersNote = "Template-bound bodies fill these from the live episode. Standalone sends the body as written. {{episode_name_full}} is the resolved title — do not put it inside the full-name template. playlist/slideshow/URL keys use the first live content and picture listener."
+
+// PlaceholderMap is identity plus stored/computed episode scalars for stubs and broadcasts.
+func (e Episode) PlaceholderMap() map[string]string {
+	m := EpisodeFieldMap(e.Show, e.Episode, e.Name, e.TwitchSuffix)
+	if strings.TrimSpace(e.ShowSlug) != "" {
+		m["show_slug"] = e.ShowSlug
+	}
+	m["episode_name_full"] = e.NameFull()
+	m["air_datetime"] = e.AirDateTime
+	date, clock := splitAirDateTime(e.AirDateTime)
+	m["air_date"] = date
+	m["air_time"] = clock
+	m["spot_image"] = e.SpotURL()
+	if !e.ActiveFrom.IsZero() {
+		m["since"] = e.ActiveFrom.UTC().Format(time.RFC3339)
+	} else {
+		m["since"] = ""
+	}
+	return m
+}
+
+func splitAirDateTime(s string) (date, clock string) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", ""
+	}
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return "", ""
+	}
+	return t.Format("2006-01-02"), t.Format("15:04")
 }
 
 // ResolveTemplate replaces {{key}} placeholders. Unknown keys stay as-is.

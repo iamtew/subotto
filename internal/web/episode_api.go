@@ -286,8 +286,7 @@ func (s *Server) handleStartEpisode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fields := db.EpisodeFieldMap(ep.Show, ep.Episode, ep.Name, ep.TwitchSuffix)
-	fields["episode_name_full"] = ep.NameFull()
+	fields := ep.PlaceholderMap()
 
 	var started []episodeStartedStub
 	for i, stub := range tmpl.Listeners {
@@ -705,8 +704,7 @@ func (s *Server) syncEpisodeListenersFromStubs(ctx context.Context, ep *db.Episo
 	if ep == nil || len(ep.Listeners) == 0 {
 		return nil
 	}
-	fields := db.EpisodeFieldMap(ep.Show, ep.Episode, ep.Name, ep.TwitchSuffix)
-	fields["episode_name_full"] = ep.NameFull()
+	fields := ep.PlaceholderMap()
 
 	maps, err := s.store.ListMappingsByEpisode(ctx, ep.ID)
 	if err != nil {

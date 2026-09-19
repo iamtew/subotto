@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestEpisodeCRUDAndTemplateResolve(t *testing.T) {
@@ -109,6 +110,45 @@ func TestEpisodeCRUDAndTemplateResolve(t *testing.T) {
 	// New episode same show ok after cease.
 	if _, err := store.CreateEpisode(ctx, "Sesh Sofa", 21, "Next", "LIVE", "", "", nil); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestEpisodePlaceholderMap(t *testing.T) {
+	air := "2026-09-20T20:00:00+02:00"
+	ep := Episode{
+		ID:               7,
+		Show:             "Sesh Sofa",
+		ShowSlug:         "sesh-sofa",
+		Episode:          20,
+		Name:             "Creature Park",
+		TwitchSuffix:     "LIVE",
+		NameFullTemplate: "",
+		AirDateTime:      air,
+		SpotPath:         "spot.jpg",
+		ActiveFrom:       time.Date(2026, 9, 19, 18, 0, 0, 0, time.UTC),
+	}
+	m := ep.PlaceholderMap()
+	if m["show_slug"] != "sesh-sofa" {
+		t.Fatalf("show_slug: %q", m["show_slug"])
+	}
+	if m["episode_name_full"] != "EP20 Creature Park | Sesh Sofa | LIVE" {
+		t.Fatalf("episode_name_full: %q", m["episode_name_full"])
+	}
+	if m["air_datetime"] != air || m["air_date"] != "2026-09-20" || m["air_time"] != "20:00" {
+		t.Fatalf("air: %+v", m)
+	}
+	if m["spot_image"] != "/media/episodes/7/spot.jpg" {
+		t.Fatalf("spot_image: %q", m["spot_image"])
+	}
+	if m["since"] != "2026-09-19T18:00:00Z" {
+		t.Fatalf("since: %q", m["since"])
+	}
+	if _, ok := m["playlist_id"]; ok {
+		t.Fatal("stub map must not include empty playlist_id")
+	}
+	keys := EpisodePlaceholderKeys()
+	if len(keys) < 10 || keys[0] != "{{show}}" {
+		t.Fatalf("keys: %v", keys)
 	}
 }
 

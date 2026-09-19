@@ -977,6 +977,20 @@ label .optional {
   max-width: 42rem;
 }
 
+.placeholder-list {
+  max-width: 72rem;
+}
+
+.placeholder-list code {
+  display: inline-block;
+  margin: 0 0.2rem 0.25rem 0;
+}
+
+.placeholder-list .placeholder-note {
+  display: block;
+  margin-top: 0.45rem;
+}
+
 .ops-details {
   margin: 0.35rem 0 1rem;
   border: 1px solid var(--line);

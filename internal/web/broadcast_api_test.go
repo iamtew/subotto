@@ -38,7 +38,7 @@ func TestBroadcastCRUDAndFireAuth(t *testing.T) {
 		"name":"Cold Open",
 		"slug":"cold-open",
 		"episode_template_id":` + strconv.FormatInt(tmpl.ID, 10) + `,
-		"messages":[{"body":"Hello {{show}} {{episode_short}}","channel_ids":["111","222"]}]
+		"messages":[{"body":"Hello {{show}} {{episode_short}} {{show_slug}} {{episode_name_full}}","channel_ids":["111","222"]}]
 	}`
 	req := httptest.NewRequest(http.MethodPost, "/api/broadcasts", strings.NewReader(body))
 	req.SetBasicAuth("admin", "test-pass")
@@ -68,8 +68,34 @@ func TestBroadcastCRUDAndFireAuth(t *testing.T) {
 	if len(gotPosts) != 2 {
 		t.Fatalf("posts: %v", gotPosts)
 	}
-	if !strings.Contains(gotPosts[0], "Hello Sesh Sofa EP20") {
+	if !strings.Contains(gotPosts[0], "Hello Sesh Sofa EP20 sesh-sofa EP20 Creature Park | Sesh Sofa | LIVE") {
 		t.Fatalf("resolved body: %v", gotPosts)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/broadcasts", nil)
+	req.SetBasicAuth("admin", "test-pass")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list: %d %s", rec.Code, rec.Body.String())
+	}
+	var listed map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &listed); err != nil {
+		t.Fatal(err)
+	}
+	ph, _ := listed["placeholders"].([]any)
+	if len(ph) < 8 {
+		t.Fatalf("placeholders: %+v", listed["placeholders"])
+	}
+	foundFull := false
+	for _, p := range ph {
+		if p == "{{episode_name_full}}" {
+			foundFull = true
+			break
+		}
+	}
+	if !foundFull {
+		t.Fatalf("missing {{episode_name_full}} in %+v", ph)
 	}
 
 	req = httptest.NewRequest(http.MethodGet, "/api/broadcasts/cold-open/fire", nil)

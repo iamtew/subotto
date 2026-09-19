@@ -36,7 +36,7 @@ const API_CATALOG = [
     title: "API or admin",
     blurb: "Basic Auth user api / API_PASSWORD, or admin / ADMIN_PASSWORD. GET fires the broadcast.",
     routes: [
-      { method: "GET", path: "/api/broadcasts/{slug}/fire", note: "Send every message of that named broadcast to its mapped channels." },
+      { method: "GET", path: "/api/broadcasts/{slug}/fire", note: "Send every message of that named broadcast to its mapped channels. Template-bound bodies fill episode placeholders." },
     ],
   },
   {
@@ -81,7 +81,7 @@ const API_CATALOG = [
       { method: "POST", path: "/api/episode-templates", note: "Create a show template." },
       { method: "PUT", path: "/api/episode-templates/{id}", note: "Update a show template." },
       { method: "DELETE", path: "/api/episode-templates/{id}", note: "Delete a show template." },
-      { method: "GET", path: "/api/broadcasts", note: "Named broadcasts." },
+      { method: "GET", path: "/api/broadcasts", note: "Named broadcasts plus the episode {{placeholder}} list." },
       { method: "POST", path: "/api/broadcasts", note: "Create a broadcast." },
       { method: "GET", path: "/api/broadcasts/{id}", note: "One broadcast by numeric id." },
       { method: "PATCH", path: "/api/broadcasts/{id}", note: "Update a broadcast." },
@@ -1563,6 +1563,7 @@ async function refreshAll() {
   }
   await Promise.all(jobs);
   renderStatusDashboard();
+  updateAllBcMsgPreviews();
 }
 
 /* ---------- Episodes ---------- */
@@ -2017,6 +2018,7 @@ async function loadEpisodes() {
     cachedEpisodes = [];
     tbody.innerHTML = `<tr><td colspan="9" class="empty">load failed: ${esc(err.message)}</td></tr>`;
   }
+  updateAllBcMsgPreviews();
 }
 
 async function loadEpisodeTemplates() {
@@ -2060,6 +2062,7 @@ async function loadEpisodeTemplates() {
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="5" class="empty">load failed: ${esc(err.message)}</td></tr>`;
   }
+  updateAllBcMsgPreviews();
 }
 
 function syncEpisodeStubsEmpty() {
@@ -2511,12 +2514,23 @@ function fillBroadcastTemplateSelect() {
   if (prev && [...sel.options].some((o) => o.value === prev)) sel.value = prev;
 }
 
+function renderEpisodePlaceholderHelp(keys, note) {
+  const codes = (keys || []).map((k) => `<code>${esc(k)}</code>`).join(" ");
+  const noteHtml = note ? `<span class="placeholder-note">${esc(note)}</span>` : "";
+  const html = codes || noteHtml ? `${codes}${noteHtml}` : "no placeholders";
+  for (const id of ["broadcast-placeholders", "episode-template-placeholders"]) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+  }
+}
+
 async function loadBroadcasts() {
   const tbody = document.querySelector("#broadcasts-table tbody");
   fillBroadcastTemplateSelect();
   try {
     const data = await api("/api/broadcasts");
     cachedBroadcasts = data.broadcasts || [];
+    renderEpisodePlaceholderHelp(data.placeholders, data.placeholders_note);
     if (!cachedBroadcasts.length) {
       tbody.innerHTML = `<tr><td colspan="6" class="empty">no broadcasts yet</td></tr>`;
       return;
@@ -2544,6 +2558,7 @@ async function loadBroadcasts() {
   } catch (err) {
     cachedBroadcasts = [];
     tbody.innerHTML = `<tr><td colspan="6" class="empty">failed: ${esc(err.message)}</td></tr>`;
+    renderEpisodePlaceholderHelp([], "failed to load placeholders: " + err.message);
   }
 }
 
@@ -2565,11 +2580,89 @@ function syncBroadcastMessagesEmpty() {
   if (empty) empty.hidden = n > 0;
 }
 
+function splitAirDateTimePreview(s) {
+  const m = String(s || "").match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/);
+  return m ? { date: m[1], time: m[2] } : { date: "", time: "" };
+}
+
+function resolveEpisodePlaceholders(tmpl, fields) {
+  if (!tmpl || !fields) return tmpl;
+  let out = tmpl;
+  for (const k of Object.keys(fields)) {
+    out = out.split("{{" + k + "}}").join(fields[k] == null ? "" : String(fields[k]));
+  }
+  return out;
+}
+
+function absMediaURL(path) {
+  if (!path) return "";
+  if (/^https?:\/\//i.test(path)) return path;
+  const origin = (window.location && window.location.origin) || "";
+  return origin ? origin + path : path;
+}
+
+function episodePlaceholderFields(ep) {
+  const air = splitAirDateTimePreview(ep.air_datetime || "");
+  const fields = {
+    show: ep.show || "",
+    show_slug: ep.show_slug || "",
+    episode: ep.episode == null ? "" : String(ep.episode),
+    episode_short: ep.episode_short || "",
+    episode_long: ep.episode_long || "",
+    name: ep.name || "",
+    twitch_suffix: ep.twitch_suffix || "",
+    episode_name_full: ep.episode_name_full || "",
+    air_datetime: ep.air_datetime || "",
+    air_date: air.date,
+    air_time: air.time,
+    spot_image: ep.spot_image || "",
+    since: ep.since || "",
+    playlist_id: "",
+    playlist_url: "",
+    slug: "",
+    slideshow: "",
+    slideshow_url: "",
+    spot_image_url: absMediaURL(ep.spot_image || ""),
+    stream_background: ep.stream_background || "",
+    stream_background_url: ep.stream_background_url || "",
+  };
+  const listeners = ep.listeners || [];
+  const content = listeners.find((l) => l.kind === "content" && l.playlist_id);
+  const picture = listeners.find((l) => l.kind === "picture" && (l.slideshow || l.slug));
+  if (content) {
+    fields.playlist_id = content.playlist_id;
+    fields.playlist_url = "https://www.youtube.com/playlist?list=" + content.playlist_id;
+  }
+  if (picture) {
+    const slug = picture.slug || String(picture.slideshow || "").replace(/^\/slideshow\//, "");
+    fields.slug = slug;
+    fields.slideshow = picture.slideshow || (slug ? "/slideshow/" + slug : "");
+    fields.slideshow_url = absMediaURL(fields.slideshow);
+  }
+  return fields;
+}
+
+function broadcastPreviewFields() {
+  const tid = (document.getElementById("broadcast-template-select") || {}).value;
+  if (!tid) return null;
+  const tmpl = (cachedEpisodeTemplates || []).find((t) => String(t.id) === String(tid));
+  if (!tmpl) return null;
+  const ep = (cachedEpisodes || []).find((e) => e.show_slug === tmpl.show_slug);
+  if (!ep) return null;
+  return episodePlaceholderFields(ep);
+}
+
 function updateBcMsgPreview(row) {
   const ta = row.querySelector(".bc-msg-body");
   const prev = row.querySelector(".bc-msg-preview");
   if (!ta || !prev) return;
-  prev.innerHTML = renderBroadcastMarkdown(ta.value);
+  const fields = broadcastPreviewFields();
+  const body = fields ? resolveEpisodePlaceholders(ta.value, fields) : ta.value;
+  prev.innerHTML = renderBroadcastMarkdown(body);
+}
+
+function updateAllBcMsgPreviews() {
+  document.querySelectorAll("#broadcast-messages .bc-msg").forEach(updateBcMsgPreview);
 }
 
 function renderBcChannelChips(row, channelIDs) {
@@ -2606,7 +2699,7 @@ async function addBroadcastMessageRow(msg) {
       <button type="button" class="danger bc-msg-remove">Remove</button>
     </div>
     <div class="bc-msg-split">
-      <textarea class="bc-msg-body" rows="6" maxlength="2000" placeholder="Discord markdown… {{show}} {{episode_short}} …"></textarea>
+      <textarea class="bc-msg-body" rows="6" maxlength="2000" placeholder="Discord markdown… {{show}} {{episode_short}} {{episode_name_full}} …"></textarea>
       <div class="bc-msg-preview" aria-live="polite"></div>
     </div>
     <div class="bc-chan-row mapping-form">
@@ -2683,6 +2776,8 @@ document.getElementById("broadcast-name").addEventListener("input", (ev) => {
 document.getElementById("broadcast-slug").addEventListener("input", (ev) => {
   ev.target.dataset.touched = "1";
 });
+
+document.getElementById("broadcast-template-select").addEventListener("change", updateAllBcMsgPreviews);
 
 document.getElementById("broadcast-messages").addEventListener("input", (ev) => {
   const ta = ev.target.closest(".bc-msg-body");
