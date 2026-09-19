@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Subotto Stream Background</title>
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+    img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; }
+  </style>
+</head>
+<body>
+  <img id="bg" alt="">
+  <script>
+    const img = document.getElementById("bg");
+    const src = "/media/stream-background/latest";
+    let stamp = "";
+    async function tick() {
+      try {
+        const res = await fetch(src, { method: "HEAD", cache: "no-store" });
+        if (!res.ok) {
+          img.style.display = "none";
+          stamp = "";
+          return;
+        }
+        const next = res.headers.get("Last-Modified") || res.headers.get("ETag") || "";
+        if (!next || next === stamp) return;
+        stamp = next;
+        img.src = src + "?v=" + encodeURIComponent(next);
+        img.style.display = "block";
+      } catch (_) {
+        img.style.display = "none";
+      }
+    }
+    tick();
+    setInterval(tick, 2000);
+  </script>
+</body>
+</html>

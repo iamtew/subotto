@@ -25,7 +25,9 @@ const API_CATALOG = [
     routes: [
       { method: "GET", path: "/api/get/content/{channel}", note: "Live content listener by Discord channel name (playlist id, since, listening|paused)." },
       { method: "GET", path: "/api/get/picture/{channel}", note: "Live picture listener by Discord channel name (slideshow URL, since, state)." },
-      { method: "GET", path: "/api/get/episode/{show}", note: "Live show episode by show slug (listeners, spot, placeholders)." },
+      { method: "GET", path: "/api/get/episode/{show}", note: "Live show episode by show slug (listeners, spot, stream background, placeholders)." },
+      { method: "GET", path: "/stream-background", note: "OBS Browser Source page for the global stream background (polls; last upload)." },
+      { method: "GET", path: "/media/stream-background/latest", note: "Raw stream background image (no auth; last upload)." },
       { method: "GET", path: "/api/slideshow/{slug}", note: "Picture slideshow feed JSON for one listener slug." },
       { method: "GET", path: "/oauth/callback", note: "Google OAuth redirect (no Basic Auth). Caddy must not lock this path." },
     ],
@@ -73,6 +75,7 @@ const API_CATALOG = [
       { method: "POST", path: "/api/episodes/absorb", note: "Link existing live listeners onto a new episode (no restart)." },
       { method: "PATCH", path: "/api/episodes/{id}", note: "Edit a live episode (spot, dates — not the immutable label)." },
       { method: "POST", path: "/api/episodes/{id}/spot", note: "Upload the episode spot image (multipart)." },
+      { method: "POST", path: "/api/episodes/{id}/stream-background", note: "Upload the global stream background (multipart, 15 MB, one photo)." },
       { method: "DELETE", path: "/api/episodes/{id}", note: "Cease an episode and its linked listeners." },
       { method: "GET", path: "/api/episode-templates", note: "Show templates." },
       { method: "POST", path: "/api/episode-templates", note: "Create a show template." },
@@ -1567,6 +1570,8 @@ async function refreshAll() {
 let cachedEpisodeTemplates = [];
 let startSpotFile = null;
 let editSpotFile = null;
+let startBgFile = null;
+let editBgFile = null;
 
 function bindFileDrop(box, onFiles) {
   if (!box) return;
@@ -1597,6 +1602,12 @@ async function uploadEpisodeSpot(id, file) {
   const fd = new FormData();
   fd.append("file", file);
   return api("/api/episodes/" + id + "/spot", { method: "POST", body: fd });
+}
+
+async function uploadStreamBackground(id, file) {
+  const fd = new FormData();
+  fd.append("file", file);
+  return api("/api/episodes/" + id + "/stream-background", { method: "POST", body: fd });
 }
 
 function paintSpot(box, file, url) {
@@ -1641,6 +1652,32 @@ function takeSpotFile(kind, fileList) {
     return;
   }
   setSpotFile(kind, f);
+}
+
+const STREAM_BG_MAX_BYTES = 15 * 1024 * 1024;
+
+function setBgFile(kind, file, existingUrl) {
+  const box = document.getElementById(kind === "edit" ? "episode-edit-bg" : "episode-start-bg");
+  if (kind === "edit") editBgFile = file || null;
+  else startBgFile = file || null;
+  paintSpot(box, file || null, existingUrl || "");
+  const hint = box && box.querySelector(".spot-drop-hint");
+  if (!hint || file) return;
+  hint.textContent = existingUrl ? "current background" : "one photo, 15 MB · drop, paste, or click";
+}
+
+function takeBgFile(kind, fileList) {
+  const f = fileList && fileList[0];
+  if (!f) return;
+  if (f.size > STREAM_BG_MAX_BYTES) {
+    toast(f.name + " is over 15 MB", true);
+    return;
+  }
+  if (!String(f.type || "").startsWith("image/")) {
+    toast("stream background must be an image", true);
+    return;
+  }
+  setBgFile(kind, f);
 }
 
 const DEFAULT_AIR_TZ = "Europe/Amsterdam";
@@ -1875,6 +1912,7 @@ function openEpisodeEditor(ep) {
   document.getElementById("episode-edit-namefull").value = ep.name_full_template || "";
   fillAirDateTime("episode-edit", ep.air_datetime || "");
   setSpotFile("edit", null, ep.spot_image || "");
+  setBgFile("edit", null, ep.stream_background || "");
   const details = document.getElementById("episode-edit-details");
   details.open = true;
   activateTab("episodes");
@@ -1899,8 +1937,28 @@ function bindSpotDrop(kind) {
   });
 }
 
+function bindBgDrop(kind) {
+  const box = document.getElementById(kind === "edit" ? "episode-edit-bg" : "episode-start-bg");
+  const input = document.getElementById(kind === "edit" ? "episode-edit-bg-file" : "episode-start-bg-file");
+  if (!box || !input) return;
+  bindFileDrop(box, (files) => takeBgFile(kind, files));
+  box.addEventListener("paste", (ev) => {
+    const files = ev.clipboardData && ev.clipboardData.files;
+    if (!files || !files.length) return;
+    ev.preventDefault();
+    takeBgFile(kind, files);
+  });
+  box.addEventListener("click", () => input.click());
+  input.addEventListener("change", (ev) => {
+    takeBgFile(kind, ev.target.files);
+    ev.target.value = "";
+  });
+}
+
 bindSpotDrop("start");
 bindSpotDrop("edit");
+bindBgDrop("start");
+bindBgDrop("edit");
 bindAirDateTime("episode-start");
 bindAirDateTime("episode-edit");
 bindAirCalendar();
@@ -2185,11 +2243,15 @@ document.getElementById("episode-start-form").addEventListener("submit", async (
     if (startSpotFile && created && created.id) {
       await uploadEpisodeSpot(created.id, startSpotFile);
     }
+    if (startBgFile && created && created.id) {
+      await uploadStreamBackground(created.id, startBgFile);
+    }
     toast("episode started");
     ev.target.reset();
     document.getElementById("episode-start-airtz").value = DEFAULT_AIR_TZ;
     fillAirDateTime("episode-start", "");
     setSpotFile("start", null);
+    setBgFile("start", null);
     await refreshAll();
   } catch (err) {
     toast(err.message, true);
@@ -2303,9 +2365,13 @@ document.getElementById("episode-edit-form").addEventListener("submit", async (e
     if (editSpotFile) {
       await uploadEpisodeSpot(id, editSpotFile);
     }
+    if (editBgFile) {
+      await uploadStreamBackground(id, editBgFile);
+    }
     toast("episode updated · listeners re-resolved");
     document.getElementById("episode-edit-details").open = false;
     setSpotFile("edit", null);
+    setBgFile("edit", null);
     await refreshAll();
   } catch (err) {
     toast(err.message, true);
@@ -3584,7 +3650,7 @@ document.getElementById("api-password-copy").addEventListener("click", async () 
   }
 });
 
-document.getElementById("api-catalog").addEventListener("click", async (ev) => {
+document.addEventListener("click", async (ev) => {
   const btn = ev.target.closest("[data-copy-path]");
   if (!btn) return;
   const path = btn.getAttribute("data-copy-path") || "";

@@ -21,6 +21,7 @@ func (s *Server) registerEpisodeAPI(mux *http.ServeMux) {
 	mux.Handle("POST /api/episodes/absorb", s.basicAuth(http.HandlerFunc(s.handleAbsorbEpisode)))
 	mux.Handle("PATCH /api/episodes/{id}", s.basicAuth(http.HandlerFunc(s.handlePatchEpisode)))
 	mux.Handle("POST /api/episodes/{id}/spot", s.basicAuth(http.HandlerFunc(s.handleUploadEpisodeSpot)))
+	mux.Handle("POST /api/episodes/{id}/stream-background", s.basicAuth(http.HandlerFunc(s.handleUploadStreamBackground)))
 	mux.Handle("DELETE /api/episodes/{id}", s.basicAuth(http.HandlerFunc(s.handleCeaseEpisode)))
 
 	mux.Handle("GET /api/episode-templates", s.basicAuth(http.HandlerFunc(s.handleListEpisodeTemplates)))
@@ -52,43 +53,81 @@ type episodeListenerDTO struct {
 }
 
 type episodeDTO struct {
-	ID               int64                `json:"id"`
-	Show             string               `json:"show"`
-	ShowSlug         string               `json:"show_slug"`
-	Episode          int                  `json:"episode"`
-	EpisodeShort     string               `json:"episode_short"`
-	EpisodeLong      string               `json:"episode_long"`
-	Name             string               `json:"name"`
-	TwitchSuffix     string               `json:"twitch_suffix"`
-	NameFullTemplate string               `json:"name_full_template"`
-	EpisodeNameFull  string               `json:"episode_name_full"`
-	AirDateTime      string               `json:"air_datetime"`
-	SpotImage        string               `json:"spot_image"`
-	Since            string               `json:"since"`
-	State            string               `json:"state"` // live
-	Listeners        []episodeListenerDTO `json:"listeners"`
-	PublicURL        string               `json:"public_url"`
+	ID                  int64                `json:"id"`
+	Show                string               `json:"show"`
+	ShowSlug            string               `json:"show_slug"`
+	Episode             int                  `json:"episode"`
+	EpisodeShort        string               `json:"episode_short"`
+	EpisodeLong         string               `json:"episode_long"`
+	Name                string               `json:"name"`
+	TwitchSuffix        string               `json:"twitch_suffix"`
+	NameFullTemplate    string               `json:"name_full_template"`
+	EpisodeNameFull     string               `json:"episode_name_full"`
+	AirDateTime         string               `json:"air_datetime"`
+	SpotImage           string               `json:"spot_image"`
+	StreamBackground    string               `json:"stream_background"`
+	StreamBackgroundURL string               `json:"stream_background_url"`
+	Since               string               `json:"since"`
+	State               string               `json:"state"` // live
+	Listeners           []episodeListenerDTO `json:"listeners"`
+	PublicURL           string               `json:"public_url"`
 }
 
-func toEpisodeDTO(e db.Episode, listeners []episodeListenerDTO) episodeDTO {
+func (s *Server) toEpisodeDTO(r *http.Request, e db.Episode, listeners []episodeListenerDTO) episodeDTO {
+	bg, bgURL := s.streamBackgroundFields(r)
 	return episodeDTO{
-		ID:               e.ID,
-		Show:             e.Show,
-		ShowSlug:         e.ShowSlug,
-		Episode:          e.Episode,
-		EpisodeShort:     e.Short(),
-		EpisodeLong:      e.Long(),
-		Name:             e.Name,
-		TwitchSuffix:     e.TwitchSuffix,
-		NameFullTemplate: e.NameFullTemplate,
-		EpisodeNameFull:  e.NameFull(),
-		AirDateTime:      e.AirDateTime,
-		SpotImage:        e.SpotURL(),
-		Since:            e.ActiveFrom.UTC().Format(time.RFC3339),
-		State:            "live",
-		Listeners:        listeners,
-		PublicURL:        "/api/get/episode/" + e.ShowSlug,
+		ID:                  e.ID,
+		Show:                e.Show,
+		ShowSlug:            e.ShowSlug,
+		Episode:             e.Episode,
+		EpisodeShort:        e.Short(),
+		EpisodeLong:         e.Long(),
+		Name:                e.Name,
+		TwitchSuffix:        e.TwitchSuffix,
+		NameFullTemplate:    e.NameFullTemplate,
+		EpisodeNameFull:     e.NameFull(),
+		AirDateTime:         e.AirDateTime,
+		SpotImage:           e.SpotURL(),
+		StreamBackground:    bg,
+		StreamBackgroundURL: bgURL,
+		Since:               e.ActiveFrom.UTC().Format(time.RFC3339),
+		State:               "live",
+		Listeners:           listeners,
+		PublicURL:           "/api/get/episode/" + e.ShowSlug,
 	}
+}
+
+func (s *Server) streamBackgroundFields(r *http.Request) (path, absURL string) {
+	if s.store == nil || !s.store.HasStreamBackground() {
+		return "", ""
+	}
+	return db.StreamBackgroundPublicPath, requestAbsoluteURL(r, db.StreamBackgroundPublicPath)
+}
+
+// requestAbsoluteURL prefixes path with the host the client used (Caddy X-Forwarded-* first).
+func requestAbsoluteURL(r *http.Request, path string) string {
+	if r == nil || path == "" {
+		return ""
+	}
+	host := strings.TrimSpace(r.Header.Get("X-Forwarded-Host"))
+	if host == "" {
+		host = r.Host
+	}
+	if i := strings.Index(host, ","); i >= 0 {
+		host = strings.TrimSpace(host[:i])
+	}
+	proto := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto"))
+	if proto == "" {
+		if r.TLS != nil {
+			proto = "https"
+		} else {
+			proto = "http"
+		}
+	}
+	if i := strings.Index(proto, ","); i >= 0 {
+		proto = strings.TrimSpace(proto[:i])
+	}
+	return proto + "://" + host + path
 }
 
 type episodeTemplateDTO struct {
@@ -193,7 +232,7 @@ func (s *Server) handleListEpisodes(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		out = append(out, toEpisodeDTO(e, listeners))
+		out = append(out, s.toEpisodeDTO(r, e, listeners))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"episodes": out})
 }
@@ -203,7 +242,7 @@ type startEpisodeBody struct {
 	Episode      int     `json:"episode"`
 	Name         string  `json:"name"`
 	TwitchSuffix *string `json:"twitch_suffix"` // nil = use template default
-	AirDateTime  string  `json:"air_datetime"` // RFC3339 with offset; empty = unset
+	AirDateTime  string  `json:"air_datetime"`  // RFC3339 with offset; empty = unset
 }
 
 func (s *Server) handleStartEpisode(w http.ResponseWriter, r *http.Request) {
@@ -277,7 +316,7 @@ func (s *Server) handleStartEpisode(w http.ResponseWriter, r *http.Request) {
 		"name":       ep.Name,
 		"source":     "admin_ui",
 	}, true)
-	writeJSON(w, http.StatusOK, toEpisodeDTO(*ep, listeners))
+	writeJSON(w, http.StatusOK, s.toEpisodeDTO(r, *ep, listeners))
 }
 
 // absorbEpisodeBody links already-live orphan listeners into an existing live episode.
@@ -349,7 +388,7 @@ func (s *Server) handleAbsorbEpisode(w http.ResponseWriter, r *http.Request) {
 		"picture_linked": len(pics),
 		"source":         "admin_ui",
 	}, true)
-	writeJSON(w, http.StatusOK, toEpisodeDTO(*ep, listeners))
+	writeJSON(w, http.StatusOK, s.toEpisodeDTO(r, *ep, listeners))
 }
 
 func (s *Server) handleListUnlinkedListeners(w http.ResponseWriter, r *http.Request) {
@@ -544,7 +583,7 @@ func (s *Server) handlePatchEpisode(w http.ResponseWriter, r *http.Request) {
 		"name":       ep.Name,
 		"source":     "admin_ui",
 	}, true)
-	writeJSON(w, http.StatusOK, toEpisodeDTO(*ep, listeners))
+	writeJSON(w, http.StatusOK, s.toEpisodeDTO(r, *ep, listeners))
 }
 
 func (s *Server) handleUploadEpisodeSpot(w http.ResponseWriter, r *http.Request) {
@@ -601,7 +640,63 @@ func (s *Server) handleUploadEpisodeSpot(w http.ResponseWriter, r *http.Request)
 		"show":       ep.Show,
 		"source":     "admin_ui",
 	}, true)
-	writeJSON(w, http.StatusOK, toEpisodeDTO(*ep, listeners))
+	writeJSON(w, http.StatusOK, s.toEpisodeDTO(r, *ep, listeners))
+}
+
+func (s *Server) handleUploadStreamBackground(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id < 1 {
+		writeErr(w, http.StatusBadRequest, "invalid episode id")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, db.MaxStreamBackgroundBytes+1<<20)
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	fh, header, err := r.FormFile("file")
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "file is required")
+		return
+	}
+	defer fh.Close()
+	data, err := io.ReadAll(io.LimitReader(fh, db.MaxStreamBackgroundBytes+1))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "read file: "+err.Error())
+		return
+	}
+	if len(data) == 0 {
+		writeErr(w, http.StatusBadRequest, "empty file")
+		return
+	}
+	if len(data) > db.MaxStreamBackgroundBytes {
+		writeErr(w, http.StatusRequestEntityTooLarge, "stream background is over 15 MB")
+		return
+	}
+	ct := header.Header.Get("Content-Type")
+	if !pictures.IsImageContentType(ct) {
+		ct = http.DetectContentType(data)
+	}
+	if !pictures.IsImageContentType(ct) {
+		writeErr(w, http.StatusBadRequest, "stream background must be jpeg, png, webp, or gif")
+		return
+	}
+	ep, err := s.store.SaveStreamBackground(r.Context(), id, data)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	listeners, err := s.episodeListenersDTO(r.Context(), ep.ID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	_ = s.store.LogActivity(r.Context(), "episode_stream_background_updated", map[string]any{
+		"episode_id": ep.ID,
+		"show":       ep.Show,
+		"source":     "admin_ui",
+	}, true)
+	writeJSON(w, http.StatusOK, s.toEpisodeDTO(r, *ep, listeners))
 }
 
 // syncEpisodeListenersFromStubs re-applies stub name/playlist templates after an episode rename.

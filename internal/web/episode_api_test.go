@@ -86,6 +86,12 @@ func TestEpisodeTemplatesAndPublicGet(t *testing.T) {
 	if _, ok := pub["spot_image"]; !ok {
 		t.Fatalf("public missing spot_image: %+v", pub)
 	}
+	if _, ok := pub["stream_background"]; !ok {
+		t.Fatalf("public missing stream_background: %+v", pub)
+	}
+	if _, ok := pub["stream_background_url"]; !ok {
+		t.Fatalf("public missing stream_background_url: %+v", pub)
+	}
 	listeners, ok := pub["listeners"].([]any)
 	if !ok || len(listeners) != 2 {
 		t.Fatalf("public listeners: %+v", pub["listeners"])
@@ -367,6 +373,16 @@ func TestEpisodeAirDateAndSpot(t *testing.T) {
 	if ep.SpotImage != "" {
 		t.Fatalf("spot should be empty, got %q", ep.SpotImage)
 	}
+	if ep.StreamBackground != "" || ep.StreamBackgroundURL != "" {
+		t.Fatalf("stream background should be empty, got %q %q", ep.StreamBackground, ep.StreamBackgroundURL)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/media/stream-background/latest", nil)
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("latest before upload: %d", rec.Code)
+	}
 
 	idPath := "/api/episodes/" + strconv.FormatInt(ep.ID, 10)
 	req = httptest.NewRequest(http.MethodPatch, idPath, strings.NewReader(`{"air_datetime":"2026-10-01T20:00:00+02:00"}`))
@@ -404,6 +420,38 @@ func TestEpisodeAirDateAndSpot(t *testing.T) {
 		t.Fatalf("spot url: %q", ep.SpotImage)
 	}
 
+	buf.Reset()
+	mw = multipart.NewWriter(&buf)
+	fw, err = mw.CreateFormFile("file", "bg.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fw.Write(png1x1); err != nil {
+		t.Fatal(err)
+	}
+	if err := mw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req = httptest.NewRequest(http.MethodPost, idPath+"/stream-background", &buf)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Header.Set("X-Forwarded-Host", "obs.example")
+	req.SetBasicAuth("admin", "test-pass")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("stream-background: %d %s", rec.Code, rec.Body.String())
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &ep); err != nil {
+		t.Fatal(err)
+	}
+	if ep.StreamBackground != "/media/stream-background/latest" {
+		t.Fatalf("stream_background: %q", ep.StreamBackground)
+	}
+	if ep.StreamBackgroundURL != "https://obs.example/media/stream-background/latest" {
+		t.Fatalf("stream_background_url: %q", ep.StreamBackgroundURL)
+	}
+
 	req = httptest.NewRequest(http.MethodGet, "/api/get/episode/sesh-sofa", nil)
 	rec = httptest.NewRecorder()
 	s.httpServer.Handler.ServeHTTP(rec, req)
@@ -420,6 +468,36 @@ func TestEpisodeAirDateAndSpot(t *testing.T) {
 	spot, _ := pub["spot_image"].(string)
 	if !strings.HasPrefix(spot, "/media/episodes/") {
 		t.Fatalf("public spot_image: %+v", pub)
+	}
+	if pub["stream_background"] != "/media/stream-background/latest" {
+		t.Fatalf("public stream_background: %+v", pub)
+	}
+	bgURL, _ := pub["stream_background_url"].(string)
+	if !strings.HasSuffix(bgURL, "/media/stream-background/latest") || !strings.Contains(bgURL, "://") {
+		t.Fatalf("public stream_background_url: %+v", pub)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/media/stream-background/latest", nil)
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("latest media: %d", rec.Code)
+	}
+	if rec.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("latest cache: %q", rec.Header().Get("Cache-Control"))
+	}
+	if rec.Body.Len() < 8 || rec.Body.Bytes()[0] != 0x89 {
+		t.Fatalf("latest body is not png")
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/stream-background", nil)
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("stream-background page: %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "<html") {
+		t.Fatalf("stream-background page body: %q", rec.Body.String())
 	}
 
 	req = httptest.NewRequest(http.MethodGet, spot, nil)

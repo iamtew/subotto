@@ -135,20 +135,23 @@ func (s *Server) handlePublicGetEpisode(w http.ResponseWriter, r *http.Request) 
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	bg, bgURL := s.streamBackgroundFields(r)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"show":              ep.Show,
-		"show_slug":         ep.ShowSlug,
-		"episode":           ep.Episode,
-		"episode_short":     ep.Short(),
-		"episode_long":      ep.Long(),
-		"name":              ep.Name,
-		"twitch_suffix":     ep.TwitchSuffix,
-		"episode_name_full": ep.NameFull(),
-		"air_datetime":      ep.AirDateTime,
-		"spot_image":        ep.SpotURL(),
-		"since":             ep.ActiveFrom.UTC().Format(time.RFC3339),
-		"state":             "live",
-		"listeners":         publicEpisodeListeners(listeners),
+		"show":                  ep.Show,
+		"show_slug":             ep.ShowSlug,
+		"episode":               ep.Episode,
+		"episode_short":         ep.Short(),
+		"episode_long":          ep.Long(),
+		"name":                  ep.Name,
+		"twitch_suffix":         ep.TwitchSuffix,
+		"episode_name_full":     ep.NameFull(),
+		"air_datetime":          ep.AirDateTime,
+		"spot_image":            ep.SpotURL(),
+		"stream_background":     bg,
+		"stream_background_url": bgURL,
+		"since":                 ep.ActiveFrom.UTC().Format(time.RFC3339),
+		"state":                 "live",
+		"listeners":             publicEpisodeListeners(listeners),
 	})
 }
 

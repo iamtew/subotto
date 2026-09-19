@@ -4,7 +4,7 @@
 // Meat Bag: Admin is http://localhost:50770 (Basic Auth: admin / ADMIN_PASSWORD).
 // Broadcast fire also accepts api / API_PASSWORD on GET /api/broadcasts/{slug}/fire.
 // Public (no password): /slideshow/..., /api/slideshow/..., /api/get/{content|picture}/{channel},
-// /api/get/episode/{show}, GET /oauth/callback (Google YouTube OAuth).
+// /api/get/episode/{show}, /stream-background, /media/stream-background/latest, GET /oauth/callback (Google YouTube OAuth).
 package web
 
 import (

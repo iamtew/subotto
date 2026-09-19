@@ -18,6 +18,8 @@ func (s *Server) registerPublic(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/slideshow/{slug}", s.handleSlideshowFeed)
 	mux.HandleFunc("GET /media/pictures/{slug}/{file}", s.handlePictureMedia)
 	mux.HandleFunc("GET /media/episodes/{id}/{file}", s.handleEpisodeSpotMedia)
+	mux.HandleFunc("GET /stream-background", s.handleStreamBackgroundPage)
+	mux.HandleFunc("GET /media/stream-background/latest", s.handleStreamBackgroundLatest)
 	mux.HandleFunc("GET /api/get/episode/{show}", s.handlePublicGetEpisode)
 	mux.HandleFunc("GET /api/get/{kind}/{channel}", s.handlePublicGetListener)
 	mux.HandleFunc("GET /oauth/callback", s.handleYouTubeOAuthCallback)
@@ -182,4 +184,17 @@ func (s *Server) handleEpisodeSpotMedia(w http.ResponseWriter, r *http.Request) 
 	}
 	w.Header().Set("Cache-Control", "public, max-age=60")
 	http.ServeFile(w, r, abs)
+}
+
+func (s *Server) handleStreamBackgroundPage(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, filepath.Join(s.webroot, "stream-background.html"))
+}
+
+func (s *Server) handleStreamBackgroundLatest(w http.ResponseWriter, r *http.Request) {
+	if s.store == nil || !s.store.HasStreamBackground() {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	http.ServeFile(w, r, s.store.StreamBackgroundFile())
 }

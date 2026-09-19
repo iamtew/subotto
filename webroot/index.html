@@ -484,7 +484,11 @@
       <section class="panel" id="episodes-section">
         <div class="panel-head">
           <h2>LIVE EPISODES</h2>
-          <p>Air datetime (CET/CEST default) + spot image on start or <strong>Edit</strong> · one live episode per show · public <code>/api/get/episode/{show_slug}</code></p>
+          <p>Air datetime (CET/CEST default) + spot + stream background on start or <strong>Edit</strong> · one live episode per show · public <code>/api/get/episode/{show_slug}</code></p>
+          <p class="episode-bg-links">
+            <button type="button" class="secondary" data-copy-path="/stream-background">Copy OBS URL</button>
+            <button type="button" class="secondary" data-copy-path="/media/stream-background/latest">Copy image URL</button>
+          </p>
         </div>
 
         <form id="episode-start-form" class="announce-form">
@@ -533,6 +537,7 @@
               </label>
               <p class="air-datetime-preview mono" id="episode-start-airiso"></p>
             </div>
+            <div class="episode-drops">
             <div class="spot-drop" id="episode-start-spot" tabindex="0" data-drop="drop spot image">
               <input id="episode-start-spot-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
               <img class="spot-drop-preview" alt="" hidden>
@@ -542,12 +547,22 @@
               </div>
               <button type="button" class="secondary spot-drop-pick" id="episode-start-spot-pick" title="pick image">+</button>
             </div>
+            <div class="spot-drop" id="episode-start-bg" tabindex="0" data-drop="drop stream background">
+              <input id="episode-start-bg-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+              <img class="spot-drop-preview" alt="" hidden>
+              <div class="spot-drop-copy">
+                <strong>Stream background</strong>
+                <span class="spot-drop-hint">one photo, 15 MB · drop, paste, or click</span>
+              </div>
+              <button type="button" class="secondary spot-drop-pick" id="episode-start-bg-pick" title="pick image">+</button>
+            </div>
+            </div>
           </div>
           <button type="submit">START EPISODE</button>
         </form>
 
         <details class="ops-details" id="episode-edit-details">
-          <summary>Edit episode (air datetime, spot, name)</summary>
+          <summary>Edit episode (air datetime, spot, stream background, name)</summary>
           <form id="episode-edit-form" class="announce-form episode-edit-form">
             <input type="hidden" name="id" id="episode-edit-id" value="">
             <p class="panel-note">Show + episode # stay fixed. Changing name re-resolves linked listener labels from the template stubs (playlist title on YouTube when possible; slideshow slug stays put).</p>
@@ -591,6 +606,7 @@
               </label>
               <p class="air-datetime-preview mono" id="episode-edit-airiso"></p>
             </div>
+            <div class="episode-drops">
             <div class="spot-drop" id="episode-edit-spot" tabindex="0" data-drop="drop spot image">
               <input id="episode-edit-spot-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
               <img class="spot-drop-preview" alt="" hidden>
@@ -599,6 +615,16 @@
                 <span class="spot-drop-hint">drop, paste, or click</span>
               </div>
               <button type="button" class="secondary spot-drop-pick" id="episode-edit-spot-pick" title="pick image">+</button>
+            </div>
+            <div class="spot-drop" id="episode-edit-bg" tabindex="0" data-drop="drop stream background">
+              <input id="episode-edit-bg-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+              <img class="spot-drop-preview" alt="" hidden>
+              <div class="spot-drop-copy">
+                <strong>Stream background</strong>
+                <span class="spot-drop-hint">one photo, 15 MB · drop, paste, or click</span>
+              </div>
+              <button type="button" class="secondary spot-drop-pick" id="episode-edit-bg-pick" title="pick image">+</button>
+            </div>
             </div>
             <button type="submit">SAVE EPISODE</button>
           </form>

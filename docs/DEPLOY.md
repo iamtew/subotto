@@ -16,15 +16,15 @@ just package-linux
 Produces `dist/subotto-linux.zip` with:
 
 - `subotto-linux` — amd64 Linux binary  
-- `webroot/` — Admin UI **and** `webroot/slideshow/` (OBS overlay)  
+- `webroot/` — Admin UI **and** `webroot/slideshow/` (OBS overlay) + `webroot/stream-background.html`  
 - `.env.example` — secret template  
 - `deploy/subotto.service` — sample systemd unit  
 - `docs/DEPLOY.md` — this guide  
 
-**Not in the zip:** live `.env` or `data/` (copy those yourself — DB **and** `data/pictures/` / `data/episode-spots/` if you already collected images).
+**Not in the zip:** live `.env` or `data/` (copy those yourself — DB **and** `data/pictures/` / `data/episode-spots/` / `data/stream-background/` if you already collected images).
 
-Public slideshow URLs (no Basic Auth): `/slideshow/latest`, `/slideshow/{slug}`, `/media/pictures/...`, `/media/episodes/{id}/...`.  
-Streamer.bot GETs (no Basic Auth): `GET /api/get/content/{channel-name}`, `GET /api/get/picture/{channel-name}`, and `GET /api/get/episode/{show}` — live listener / episode JSON (`air_datetime` RFC3339 with offset, `spot_image` on the episode). Channel name is the Discord name without `#`; Discord must be connected.  
+Public slideshow URLs (no Basic Auth): `/slideshow/latest`, `/slideshow/{slug}`, `/media/pictures/...`, `/media/episodes/{id}/...`, `/stream-background` (OBS Browser Source, live-updates), `/media/stream-background/latest` (raw image).  
+Streamer.bot GETs (no Basic Auth): `GET /api/get/content/{channel-name}`, `GET /api/get/picture/{channel-name}`, and `GET /api/get/episode/{show}` — live listener / episode JSON (`air_datetime` RFC3339 with offset, `spot_image`, `stream_background`, `stream_background_url` on the episode). Channel name is the Discord name without `#`; Discord must be connected.  
 Broadcast fire (Basic Auth): `GET /api/broadcasts/{slug}/fire` — user `api` / `API_PASSWORD` (or `admin` / `ADMIN_PASSWORD`). Sends every message of that named broadcast to its mapped channels.  
 YouTube re-auth (Admin): `GET /api/youtube/auth` (Basic Auth) → Google → public `GET /oauth/callback` (no password). Caddy must proxy `/oauth/callback` without extra auth.  
 If you put Caddy in front, proxy the whole port (Admin + public slideshow + OAuth callback) or expose slideshow paths publicly and keep Admin locked down as you prefer — **except** `/oauth/callback`, which Google must reach unauthenticated.
@@ -48,7 +48,7 @@ YouTube login is a **browser** OAuth dance. After Subotto is running, re-auth fr
 | `episodes` / `episode_templates` | Show episodes |
 | `broadcasts` | Named Discord broadcasts |
 
-Also copy **`data/pictures/`** and **`data/episode-spots/`** if present — picture-listener galleries and episode spot stills live next to the DB.
+Also copy **`data/pictures/`**, **`data/episode-spots/`**, and **`data/stream-background/`** if present — galleries, episode spots, and the global OBS stream background live next to the DB.
 
 `.env` still holds Discord bot token + YouTube **client** ID/secret. Same Discord/Google apps — no re-registration.
 

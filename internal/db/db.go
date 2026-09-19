@@ -23,6 +23,7 @@ type DB struct {
 	path        string // absolute-ish path to the SQLite file
 	picturesDir string // on-disk gallery root: <data dir>/pictures
 	spotsDir    string // episode promo stills: <data dir>/episode-spots
+	streamBgDir string // one global OBS still: <data dir>/stream-background/latest
 }
 
 // Open creates the parent directory if needed, opens SQLite, and runs migrations.
@@ -44,6 +45,11 @@ func Open(path string) (*DB, error) {
 	if err := os.MkdirAll(spotsDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create episode-spots directory %q: %w", spotsDir, err)
 	}
+	// Global stream background: data/stream-background/latest (no extension — OBS URL stays put).
+	streamBgDir := filepath.Join(dir, "stream-background")
+	if err := os.MkdirAll(streamBgDir, 0o755); err != nil {
+		return nil, fmt.Errorf("create stream-background directory %q: %w", streamBgDir, err)
+	}
 
 	// _pragma=foreign_keys(1) turns on foreign keys for this connection.
 	dsn := path + "?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"
@@ -60,7 +66,7 @@ func Open(path string) (*DB, error) {
 		return nil, fmt.Errorf("ping sqlite: %w", err)
 	}
 
-	d := &DB{sql: sqlDB, path: path, picturesDir: picturesDir, spotsDir: spotsDir}
+	d := &DB{sql: sqlDB, path: path, picturesDir: picturesDir, spotsDir: spotsDir, streamBgDir: streamBgDir}
 	if err := d.migrate(); err != nil {
 		_ = sqlDB.Close()
 		return nil, fmt.Errorf("migrate schema: %w", err)

@@ -38,7 +38,7 @@ type EpisodeListenerStub struct {
 	Kind             string `json:"kind"` // content | picture
 	GuildID          string `json:"guild_id"`
 	DiscordChannelID string `json:"discord_channel_id"`
-	Name             string `json:"name"`                      // may contain {{placeholders}}
+	Name             string `json:"name"`                     // may contain {{placeholders}}
 	PlaylistTitle    string `json:"playlist_title,omitempty"` // content; may contain placeholders
 	Slug             string `json:"slug,omitempty"`           // picture; may contain placeholders
 }
@@ -72,12 +72,12 @@ func EpisodeLong(n int) string {
 // EpisodeFieldMap builds placeholder values for template resolve (without name_full yet).
 func EpisodeFieldMap(show string, episode int, name, twitchSuffix string) map[string]string {
 	return map[string]string{
-		"show":           show,
-		"episode":        strconv.Itoa(episode),
-		"episode_short":  EpisodeShort(episode),
-		"episode_long":   EpisodeLong(episode),
-		"name":           name,
-		"twitch_suffix":  twitchSuffix,
+		"show":          show,
+		"episode":       strconv.Itoa(episode),
+		"episode_short": EpisodeShort(episode),
+		"episode_long":  EpisodeLong(episode),
+		"name":          name,
+		"twitch_suffix": twitchSuffix,
 	}
 }
 
@@ -323,6 +323,51 @@ func (d *DB) AbsoluteEpisodeSpotPath(storedRel string) (string, error) {
 		return "", fmt.Errorf("invalid episode spot path")
 	}
 	return filepath.Join(d.spotsDir, name), nil
+}
+
+// StreamBackgroundPublicPath is the never-changing OBS image URL.
+const StreamBackgroundPublicPath = "/media/stream-background/latest"
+
+// MaxStreamBackgroundBytes is 15 MiB (spot stays at Discord's 10 MiB).
+const MaxStreamBackgroundBytes = 15 << 20
+
+// StreamBackgroundFile is data/stream-background/latest.
+func (d *DB) StreamBackgroundFile() string {
+	if d == nil {
+		return ""
+	}
+	return filepath.Join(d.streamBgDir, "latest")
+}
+
+// HasStreamBackground is true when the global still is on disk.
+func (d *DB) HasStreamBackground() bool {
+	if d == nil {
+		return false
+	}
+	st, err := os.Stat(d.StreamBackgroundFile())
+	return err == nil && st.Mode().IsRegular() && st.Size() > 0
+}
+
+// SaveStreamBackground overwrites the one global still. Episode must be live
+// (same gate as spot) even though the file is not per-episode.
+func (d *DB) SaveStreamBackground(ctx context.Context, episodeID int64, data []byte) (*Episode, error) {
+	e, err := d.GetEpisodeByID(ctx, episodeID)
+	if err != nil {
+		return nil, err
+	}
+	if e == nil {
+		return nil, fmt.Errorf("episode %d not found", episodeID)
+	}
+	if e.ActiveUntil != nil {
+		return nil, fmt.Errorf("episode %d is ceased", episodeID)
+	}
+	if len(data) == 0 {
+		return nil, fmt.Errorf("empty file")
+	}
+	if err := os.WriteFile(d.StreamBackgroundFile(), data, 0o644); err != nil {
+		return nil, fmt.Errorf("write stream background: %w", err)
+	}
+	return e, nil
 }
 
 // SaveEpisodeSpot writes {id}{ext} and records spot_path. Replaces a previous still.
