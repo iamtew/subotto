@@ -2,7 +2,7 @@
 <html lang="en-GB">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>SUBOTTO // ADMIN</title>
   <link rel="stylesheet" href="https://fonts.cdnfonts.com/css/better-vcr">
   <link rel="stylesheet" href="https://fonts.cdnfonts.com/css/inter">
@@ -832,10 +832,13 @@
 
           <div class="form-actions">
             <button type="submit" id="broadcast-save">SAVE BROADCAST</button>
+            <button type="button" class="secondary" id="broadcast-cancel" hidden>Cancel</button>
             <button type="button" class="secondary" id="broadcast-reset">New / clear</button>
           </div>
         </form>
+      </section>
 
+      <section class="panel" id="broadcasts-list-section">
         <div class="table-wrap">
           <table id="broadcasts-table">
             <thead>
@@ -843,7 +846,7 @@
                 <th>Name</th>
                 <th>Slug</th>
                 <th>Scope</th>
-                <th>Messages</th>
+                <th class="th-messages">Messages</th>
                 <th>Fire URL</th>
                 <th>Actions</th>
               </tr>

@@ -103,7 +103,10 @@ footer,
   justify-content: space-between;
   gap: 0.65rem 1.25rem;
   align-items: center;
-  padding: 0.85rem clamp(0.85rem, 2.5vw, 1.75rem);
+  padding: max(0.85rem, env(safe-area-inset-top, 0px))
+    max(clamp(0.85rem, 2.5vw, 1.75rem), env(safe-area-inset-right, 0px))
+    0.85rem
+    max(clamp(0.85rem, 2.5vw, 1.75rem), env(safe-area-inset-left, 0px));
   border-bottom: 1px solid var(--line);
   background: linear-gradient(180deg, rgba(26, 33, 24, 0.92), rgba(16, 20, 15, 0.65));
   backdrop-filter: blur(8px);
@@ -216,7 +219,8 @@ button.pill.pill-action:disabled {
   gap: 0.35rem;
   max-width: 96rem;
   margin: 0 auto;
-  padding: 0.75rem clamp(1rem, 3vw, 2.25rem) 0;
+  padding: 0.75rem max(clamp(1rem, 3vw, 2.25rem), env(safe-area-inset-right, 0px)) 0
+    max(clamp(1rem, 3vw, 2.25rem), env(safe-area-inset-left, 0px));
   border-bottom: 1px solid var(--line);
 }
 
@@ -419,6 +423,13 @@ button.linkish:hover {
   text-transform: none;
   letter-spacing: 0;
   font-family: var(--font-body);
+  white-space: nowrap;
+}
+
+.chat-msg .when .when-toggle {
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
 }
 
 .chat-msg .body {
@@ -812,7 +823,9 @@ button.linkish:hover {
 main {
   max-width: 96rem;
   margin: 0 auto;
-  padding: 1.25rem clamp(1rem, 3vw, 2.25rem) 2.5rem;
+  padding: 1.25rem max(clamp(1rem, 3vw, 2.25rem), env(safe-area-inset-right, 0px))
+    max(2.5rem, env(safe-area-inset-bottom, 0px))
+    max(clamp(1rem, 3vw, 2.25rem), env(safe-area-inset-left, 0px));
   display: grid;
   gap: 1.15rem;
 }
@@ -1104,6 +1117,8 @@ label .optional {
   margin: 0;
   color: var(--cyan);
   font-size: 0.8rem;
+  white-space: nowrap;
+  overflow-x: auto;
 }
 
 .air-date-row {
@@ -1421,6 +1436,32 @@ button:disabled {
   filter: none;
 }
 
+button.when-toggle {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--olive);
+  cursor: pointer;
+  white-space: nowrap;
+  word-break: normal;
+  vertical-align: baseline;
+}
+
+button.when-toggle:hover {
+  filter: none;
+  transform: none;
+  box-shadow: none;
+  background: none;
+  color: var(--chartreuse);
+}
+
 .table-wrap {
   overflow-x: auto;
   border: 1px solid var(--line);
@@ -1466,6 +1507,13 @@ td.mono,
   letter-spacing: 0.02em;
   color: var(--olive);
   word-break: break-all;
+}
+
+td:has(.when-toggle),
+button.when-toggle {
+  word-break: normal;
+  overflow-wrap: normal;
+  white-space: nowrap;
 }
 
 td.empty {
@@ -1574,7 +1622,9 @@ span.api-get.muted {
 }
 
 footer {
-  padding: 0 1.25rem 2rem;
+  padding: 0 max(1.25rem, env(safe-area-inset-right, 0px))
+    max(2rem, env(safe-area-inset-bottom, 0px))
+    max(1.25rem, env(safe-area-inset-left, 0px));
   text-align: center;
   color: var(--gray);
   font-size: 0.8rem;
@@ -1588,8 +1638,8 @@ footer code {
 
 .toast {
   position: fixed;
-  right: 1rem;
-  bottom: 1rem;
+  right: max(1rem, env(safe-area-inset-right, 0px));
+  bottom: max(1rem, env(safe-area-inset-bottom, 0px));
   max-width: min(24rem, calc(100vw - 2rem));
   padding: 0.75rem 0.9rem;
   font-family: var(--font-display);
@@ -1702,7 +1752,151 @@ footer code {
   font-size: 0.84rem;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 720px) {
+  .bc-msg-split {
+    grid-template-columns: 1fr;
+  }
+
+  .top {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+  }
+
+  .brand {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .top > a.secondary {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .pills {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: flex-start;
+    max-width: none;
+  }
+
+  .tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    position: sticky;
+    top: 0;
+    z-index: 6;
+    background: rgba(16, 20, 15, 0.94);
+    backdrop-filter: blur(8px);
+    scrollbar-width: thin;
+  }
+
+  .tab-btn {
+    flex: 0 0 auto;
+    padding: 0.7rem 0.95rem;
+  }
+
+  .panel {
+    padding: 0.9rem 0.85rem 1rem;
+  }
+
+  .tab-panel,
+  .panel,
+  .mapping-form,
+  .picture-form,
+  .picture-form-start,
+  label,
+  select,
+  input,
+  textarea,
+  .table-wrap {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .mapping-form,
+  .picture-form,
+  .picture-form-start,
+  .stub-card {
+    grid-template-columns: 1fr;
+  }
+
+  .pill {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .episode-identity,
+  .air-datetime,
+  #episode-edit-form .air-datetime,
+  .sampling-row,
+  .spot-drop,
+  .chat-compose,
+  .hesh-chat-compose,
+  .api-row {
+    grid-template-columns: 1fr;
+  }
+
+  .chat-compose {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .chat-compose textarea {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .hesh-chat-compose {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .hesh-chat-compose textarea {
+    grid-column: 1 / -1;
+  }
+
+  .spot-drop {
+    min-width: 0;
+    grid-template-columns: auto 1fr;
+  }
+
+  .spot-drop-pick {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .sampling-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .sampling-row span:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .operator-list li {
+    flex-wrap: wrap;
+    align-items: stretch;
+  }
+
+  label .label-text {
+    white-space: normal;
+  }
+
+  input[type="text"],
+  input[type="number"],
+  input[type="date"],
+  input[type="password"],
+  select,
+  textarea,
+  .bc-msg-body {
+    font-size: 16px;
+  }
+
+  button,
+  a.secondary {
+    padding: 0.7rem 0.9rem;
+  }
+
   .actions {
     flex-direction: column;
     align-items: stretch;
@@ -1710,6 +1904,57 @@ footer code {
 
   .brand h1 {
     letter-spacing: 0.04em;
+  }
+
+  .bc-fire-url {
+    display: inline-block;
+    max-width: 7.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    word-break: normal;
+  }
+
+  .th-messages {
+    white-space: nowrap;
+  }
+
+  .table-wrap table {
+    width: 100%;
+  }
+
+  .table-wrap thead th {
+    overflow: visible;
+    white-space: nowrap;
+    text-overflow: unset;
+    max-width: none;
+  }
+
+  .table-wrap tbody td:not(.actions):not(.empty):not(:has(.when-toggle)) {
+    max-width: 8.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    word-break: normal;
+  }
+
+  .table-wrap tbody td:has(.when-toggle) {
+    max-width: none;
+    overflow: visible;
+    white-space: nowrap;
+    word-break: normal;
+  }
+
+  .table-wrap td.actions {
+    overflow: visible;
+    white-space: normal;
+    max-width: none;
+  }
+
+  .table-wrap .details-pre {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 

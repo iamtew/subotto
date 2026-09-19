@@ -343,13 +343,12 @@ async function loadAILogs() {
     }
     tbody.innerHTML = rows
       .map((e) => {
-        const when = fmtWhen(e.timestamp);
         const levelName = e.level || "info";
         const levelClass = { info: 1, warning: 1, error: 1, critical: 1 }[levelName]
           ? levelName
           : "info";
         return `<tr>
-          <td>${esc(when)}</td>
+          <td>${whenCell(e.timestamp)}</td>
           <td class="mono ai-log-${levelClass}">${esc(levelName)}</td>
           <td class="mono">${esc(e.trigger || "")}</td>
           <td><pre class="details-pre">${esc(fmtAILogWhat(e))}</pre></td>
@@ -732,6 +731,57 @@ function fmtWhen(iso) {
   return m[1] + " " + m[2] + " " + tz;
 }
 
+/** Largest unit only: 3w / 2d / 5h / 12m, past vs future. */
+function fmtRel(iso) {
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return fmtWhen(iso);
+  const sec = Math.round((t - Date.now()) / 1000);
+  const abs = Math.abs(sec);
+  if (abs < 60) return "now";
+  let n;
+  let u;
+  if (abs >= 86400 * 7) {
+    n = Math.floor(abs / (86400 * 7));
+    u = "w";
+  } else if (abs >= 86400) {
+    n = Math.floor(abs / 86400);
+    u = "d";
+  } else if (abs >= 3600) {
+    n = Math.floor(abs / 3600);
+    u = "h";
+  } else {
+    n = Math.floor(abs / 60);
+    u = "m";
+  }
+  const body = n + u;
+  return sec < 0 ? body + " ago" : "in " + body;
+}
+
+function whenCell(iso, empty) {
+  const s = String(iso || "").trim();
+  if (!s) return empty || "—";
+  const abs = fmtWhen(s);
+  return `<button type="button" class="when-toggle" data-iso="${esc(s)}" data-abs="0" title="${esc(abs)}">${esc(fmtRel(s))}</button>`;
+}
+
+document.addEventListener("click", (ev) => {
+  const el = ev.target.closest(".when-toggle");
+  if (!el) return;
+  const iso = el.getAttribute("data-iso") || "";
+  const absOn = el.getAttribute("data-abs") === "1";
+  const stamp = fmtWhen(iso);
+  const rel = fmtRel(iso);
+  if (absOn) {
+    el.textContent = rel;
+    el.setAttribute("data-abs", "0");
+    el.title = stamp;
+  } else {
+    el.textContent = stamp;
+    el.setAttribute("data-abs", "1");
+    el.title = rel;
+  }
+});
+
 /** Human-readable uptime from process started_at (RFC3339). */
 function fmtUptime(startedAt) {
   if (!startedAt) return "—";
@@ -795,12 +845,12 @@ function renderStatusHealth() {
   if (s.scheduler_enabled) {
     const hours = s.resync_interval_hours || "?";
     const last = s.scheduler_last_run_at
-      ? fmtWhen(s.scheduler_last_run_at)
+      ? whenCell(s.scheduler_last_run_at)
       : "never";
     const err = s.scheduler_last_error
       ? ` · <span class="ok-no">err: ${esc(s.scheduler_last_error)}</span>`
       : "";
-    sched = `<span class="state-on">ON</span> · every ${esc(String(hours))}h · last ${esc(last)}${err}`;
+    sched = `<span class="state-on">ON</span> · every ${esc(String(hours))}h · last ${last}${err}`;
   }
   const on = s.listens_enabled ?? s.airs_enabled ?? s.mappings_enabled ?? 0;
   const tot = s.listens_total ?? s.airs_total ?? s.mappings_total ?? 0;
@@ -809,7 +859,7 @@ function renderStatusHealth() {
   host.innerHTML = `<dl class="status-health-grid">
     <div><dt>Discord</dt><dd>${discord}</dd></div>
     <div><dt>YouTube</dt><dd>${yt}</dd></div>
-    <div><dt>Uptime</dt><dd class="mono">${esc(fmtUptime(s.started_at))} <span class="muted">since ${esc(fmtWhen(s.started_at))}</span></dd></div>
+    <div><dt>Uptime</dt><dd class="mono">${esc(fmtUptime(s.started_at))} <span class="muted">since ${whenCell(s.started_at)}</span></dd></div>
     <div><dt>Listen addr</dt><dd class="mono">${esc(s.listen_addr || "—")}</dd></div>
     <div><dt>Scheduler</dt><dd>${sched}</dd></div>
     <div><dt>Counts</dt><dd>content ${esc(String(on))}/${esc(String(tot))} · pics ${esc(String(picOn))}/${esc(String(picTot))} · log ${esc(String(s.activity_total ?? 0))}</dd></div>
@@ -847,11 +897,10 @@ function renderStatusEpisodes() {
         })
         .join(", ");
       const apiPath = e.public_url || `/api/get/episode/${e.show_slug}`;
-      const since = fmtWhen(e.since);
       return `<tr>
         <td>${esc(e.episode_name_full || e.name)}<br><span class="mono">${esc(e.show)} · ${esc(e.episode_short)}</span></td>
         <td>${listeners || "—"}</td>
-        <td class="mono">${esc(since)}</td>
+        <td class="mono">${whenCell(e.since)}</td>
         <td><a class="api-get" href="${esc(apiPath)}" target="_blank" rel="noopener">GET</a></td>
         <td class="actions">
           <button type="button" class="secondary" data-status-act="ep-edit" data-id="${e.id}">Edit</button>
@@ -879,7 +928,6 @@ function renderStatusContent() {
       const state = m.enabled
         ? `<span class="state-on">LISTENING</span>`
         : `<span class="state-off">PAUSED</span>`;
-      const since = fmtWhen(m.active_from);
       const orphan = orphans.has(m.discord_channel_id)
         ? ` <span class="status-orphan-flag" title="Not linked to a show episode">orphan</span>`
         : "";
@@ -887,7 +935,7 @@ function renderStatusContent() {
         <td>${esc(m.name) || "—"}${orphan}</td>
         <td class="mono" title="${ch}">${chLabel}</td>
         <td class="mono">${esc(m.youtube_playlist_id)}</td>
-        <td class="mono">${esc(since)}</td>
+        <td class="mono">${whenCell(m.active_from)}</td>
         <td>${state}</td>
         <td class="actions">
           <button type="button" class="secondary" data-status-act="content-toggle" data-channel="${ch}" data-enabled="${m.enabled}">
@@ -916,7 +964,6 @@ function renderStatusPictures() {
       const state = p.enabled
         ? `<span class="state-on">LISTENING</span>`
         : `<span class="state-off">PAUSED</span>`;
-      const since = fmtWhen(p.active_from);
       const url = p.slideshow_url || ("/slideshow/" + p.slug);
       const orphan = orphans.has(p.discord_channel_id)
         ? ` <span class="status-orphan-flag" title="Not linked to a show episode">orphan</span>`
@@ -926,7 +973,7 @@ function renderStatusPictures() {
         <td class="mono" title="${ch}">${chLabel}</td>
         <td class="mono">${esc(p.picture_count)}</td>
         <td><a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a></td>
-        <td class="mono">${esc(since)}</td>
+        <td class="mono">${whenCell(p.active_from)}</td>
         <td>${state}</td>
         <td class="actions">
           <button type="button" class="secondary" data-status-act="picture-toggle" data-channel="${ch}" data-enabled="${p.enabled}">
@@ -948,13 +995,12 @@ function renderStatusActivity() {
   }
   tbody.innerHTML = rows
     .map((e) => {
-      const when = fmtWhen(e.timestamp);
       const details = esc(fmtDetails(e.details));
       const ok = e.success
         ? `<span class="ok-yes">YES</span>`
         : `<span class="ok-no">NO</span>`;
       return `<tr>
-        <td>${esc(when)}</td>
+        <td>${whenCell(e.timestamp)}</td>
         <td class="mono">${esc(e.event_type)}</td>
         <td>${ok}</td>
         <td><pre class="details-pre">${details}</pre></td>
@@ -1182,11 +1228,10 @@ function renderChatMessages(messages) {
   log.innerHTML = list
     .map((m) => {
       const mine = m.self ? " mine" : "";
-      const when = fmtWhen(m.timestamp);
       const body = (m.content || "").trim();
       const bodyHTML = body ? `<div class="body">${renderChatMarkdown(body)}</div>` : "";
       return `<article class="chat-msg${mine}">
-        <div class="who">${esc(m.author || "unknown")}<span class="when">${esc(when)}</span></div>
+        <div class="who">${esc(m.author || "unknown")}<span class="when">${whenCell(m.timestamp)}</span></div>
         ${bodyHTML}
         ${chatAttachHTML(m)}
       </article>`;
@@ -1393,7 +1438,6 @@ async function loadListens() {
         const state = m.enabled
           ? `<span class="state-on">LISTENING</span>`
           : `<span class="state-off">PAUSED</span>`;
-        const since = fmtWhen(m.active_from);
         const apiCell = chName
           ? `<a class="api-get" href="/api/get/content/${encodeURIComponent(chName)}" target="_blank" rel="noopener">GET</a>`
           : `<span class="api-get muted" title="Discord channel name unavailable">GET</span>`;
@@ -1401,7 +1445,7 @@ async function loadListens() {
           <td>${esc(m.name) || "—"}</td>
           <td class="mono" title="${ch}">${chLabel}</td>
           <td class="mono">${esc(m.youtube_playlist_id)}</td>
-          <td class="mono">${esc(since)}</td>
+          <td class="mono">${whenCell(m.active_from)}</td>
           <td>${state}</td>
           <td class="api-cell">${apiCell}</td>
           <td class="actions">
@@ -1440,7 +1484,6 @@ async function loadPictureListens() {
         const state = p.enabled
           ? `<span class="state-on">LISTENING</span>`
           : `<span class="state-off">PAUSED</span>`;
-        const since = fmtWhen(p.active_from);
         const url = p.slideshow_url || ("/slideshow/" + p.slug);
         const apiCell = chName
           ? `<a class="api-get" href="/api/get/picture/${encodeURIComponent(chName)}" target="_blank" rel="noopener">GET</a>`
@@ -1450,7 +1493,7 @@ async function loadPictureListens() {
           <td class="mono" title="${ch}">${chLabel}</td>
           <td class="mono">${esc(p.picture_count)}</td>
           <td><a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a></td>
-          <td class="mono">${esc(since)}</td>
+          <td class="mono">${whenCell(p.active_from)}</td>
           <td>${state}</td>
           <td class="api-cell">${apiCell}</td>
           <td class="actions">
@@ -1484,13 +1527,12 @@ async function loadActivity() {
     }
     tbody.innerHTML = rows
       .map((e) => {
-        const when = fmtWhen(e.timestamp);
         const details = esc(fmtDetails(e.details));
         const ok = e.success
           ? `<span class="ok-yes">YES</span>`
           : `<span class="ok-no">NO</span>`;
         return `<tr>
-          <td>${esc(when)}</td>
+          <td>${whenCell(e.timestamp)}</td>
           <td class="mono">${esc(e.event_type)}</td>
           <td>${ok}</td>
           <td><pre class="details-pre">${details}</pre></td>
@@ -1577,10 +1619,10 @@ function renderSchedGlance() {
     return;
   }
   const last = s.scheduler_last_run_at
-    ? fmtWhen(s.scheduler_last_run_at)
+    ? whenCell(s.scheduler_last_run_at)
     : "never";
-  const err = s.scheduler_last_error ? " · last error: " + s.scheduler_last_error : "";
-  el.textContent = "On · every " + (s.resync_interval_hours || "?") + "h · last run " + last + err;
+  const err = s.scheduler_last_error ? " · last error: " + esc(s.scheduler_last_error) : "";
+  el.innerHTML = "On · every " + esc(String(s.resync_interval_hours || "?")) + "h · last run " + last + err;
 }
 
 async function loadSchedulerTab() {
@@ -2071,10 +2113,10 @@ async function loadEpisodes() {
           <td>${esc(e.show)}<br><code class="mono">${esc(e.show_slug)}</code></td>
           <td>${esc(e.episode_short)} · ${esc(e.name)}</td>
           <td class="mono">${esc(e.episode_name_full)}</td>
-          <td class="mono">${esc(fmtWhen(e.air_datetime))}</td>
+          <td class="mono">${whenCell(e.air_datetime)}</td>
           <td>${spot}</td>
           <td>${listeners || "—"}</td>
-          <td class="mono">${esc(fmtWhen(e.since))}</td>
+          <td class="mono">${whenCell(e.since)}</td>
           <td><a class="api-get" href="${esc(apiPath)}" target="_blank" rel="noopener">GET</a></td>
           <td class="actions">
             <button type="button" class="secondary" data-ep-edit="${e.id}">Edit</button>
@@ -2615,7 +2657,7 @@ async function loadBroadcasts() {
           <td><code>${esc(b.slug)}</code></td>
           <td>${scope}</td>
           <td>${n}</td>
-          <td><code class="bc-fire-url">${esc(b.fire_url || "")}</code></td>
+          <td><code class="bc-fire-url" title="${esc(b.fire_url || "")}">${esc(b.fire_url || "")}</code></td>
           <td class="actions">
             <button type="button" class="secondary" data-bc-fire="${esc(b.slug)}">Fire</button>
             <button type="button" class="secondary" data-bc-edit="${b.id}">Edit</button>
@@ -2800,9 +2842,17 @@ function resetBroadcastForm() {
   document.getElementById("broadcast-id").value = "";
   document.getElementById("broadcast-name").value = "";
   document.getElementById("broadcast-slug").value = "";
+  document.getElementById("broadcast-slug").dataset.touched = "";
   document.getElementById("broadcast-template-select").value = "";
   document.getElementById("broadcast-messages").innerHTML = "";
   syncBroadcastMessagesEmpty();
+  syncBroadcastEditButtons();
+}
+
+function syncBroadcastEditButtons() {
+  const editing = !!document.getElementById("broadcast-id").value;
+  document.getElementById("broadcast-cancel").hidden = !editing;
+  document.getElementById("broadcast-reset").hidden = editing;
 }
 
 async function fillBroadcastForm(b) {
@@ -2821,6 +2871,7 @@ async function fillBroadcastForm(b) {
     for (const m of msgs) await addBroadcastMessageRow(m);
   }
   syncBroadcastMessagesEmpty();
+  syncBroadcastEditButtons();
 }
 
 document.getElementById("broadcast-msg-add").addEventListener("click", () => {
@@ -2828,6 +2879,7 @@ document.getElementById("broadcast-msg-add").addEventListener("click", () => {
 });
 
 document.getElementById("broadcast-reset").addEventListener("click", resetBroadcastForm);
+document.getElementById("broadcast-cancel").addEventListener("click", resetBroadcastForm);
 
 document.getElementById("broadcast-name").addEventListener("input", (ev) => {
   const slug = document.getElementById("broadcast-slug");
@@ -3828,6 +3880,6 @@ document.addEventListener("click", async (ev) => {
 });
 
 refreshAll();
-setInterval(refreshAll, 15000);
+setInterval(refreshAll, 15000); // ponytail: rebuild resets when-toggle to relative
 bindAISampling();
 bindAIMemory();
