@@ -243,22 +243,21 @@ html, body {
   margin-right: auto;
 }
 
-/* Author name + static reaction stack on one row. */
+/* Author name, then reactions on the next row. */
 .credit-row {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: calc(0.45rem * var(--credit-scale)) calc(0.55rem * var(--credit-scale));
+  flex-direction: column;
+  gap: calc(0.45rem * var(--credit-scale));
 }
 
 .credit.tr .credit-row,
 .credit.br .credit-row {
-  justify-content: flex-end;
+  align-items: flex-end;
 }
 
 .credit.tl .credit-row,
 .credit.bl .credit-row {
-  justify-content: flex-start;
+  align-items: flex-start;
 }
 
 .credit-row:has(#credit-name[hidden]):has(#credit-reactions[hidden]) {
