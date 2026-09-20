@@ -500,8 +500,8 @@
     <div class="tab-panel" id="tab-episodes" role="tabpanel" data-tab="episodes" hidden>
       <section class="panel" id="episodes-section">
         <div class="panel-head">
-          <h2>LIVE EPISODES</h2>
-          <p>Air datetime (CET/CEST default) + spot + stream background on start or <strong>Edit</strong> · one live episode per show · public <code>/api/get/episode/{show_slug}</code></p>
+          <h2>EPISODES</h2>
+          <p>Air datetime (CET/CEST default) + spot + stream background on start or <strong>Edit</strong> · one live episode per show · ceased rows stay here · public <code>/api/get/episode/{show_slug}</code> is live only</p>
           <p class="episode-bg-links">
             <button type="button" class="secondary" data-copy-path="/stream-background">Copy OBS URL</button>
             <button type="button" class="secondary" data-copy-path="/media/stream-background/latest">Copy image URL</button>
@@ -673,12 +673,14 @@
                 <th>Spot</th>
                 <th>Listeners</th>
                 <th>Since</th>
+                <th>Until</th>
+                <th>State</th>
                 <th>API</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              <tr><td colspan="9" class="empty">loading…</td></tr>
+              <tr><td colspan="11" class="empty">loading…</td></tr>
             </tbody>
           </table>
         </div>

@@ -153,6 +153,27 @@ func TestEpisodeTemplatesAndPublicGet(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("want 404 after cease, got %d", rec.Code)
 	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/episodes", nil)
+	req.SetBasicAuth("admin", "test-pass")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list after cease: %d %s", rec.Code, rec.Body.String())
+	}
+	var listed struct {
+		Episodes []episodeDTO `json:"episodes"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &listed); err != nil {
+		t.Fatal(err)
+	}
+	if len(listed.Episodes) != 1 {
+		t.Fatalf("want 1 history row, got %+v", listed.Episodes)
+	}
+	got := listed.Episodes[0]
+	if got.ID != ep.ID || got.State != "ceased" || got.Until == "" {
+		t.Fatalf("ceased dto: %+v", got)
+	}
 }
 
 func TestAbsorbLiveListeners(t *testing.T) {

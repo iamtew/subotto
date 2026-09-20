@@ -739,6 +739,10 @@ let lastPictureResyncChannel = "";
 let cachedListens = [];
 let cachedPictureListens = [];
 let cachedEpisodes = [];
+
+function liveEpisodes() {
+  return (cachedEpisodes || []).filter((e) => e.state !== "ceased");
+}
 let cachedStatus = null;
 let cachedActivity = [];
 let cachedUnlinked = { content: [], picture: [], total: 0 };
@@ -947,7 +951,7 @@ function renderStatusOrphans() {
 function renderStatusEpisodes() {
   const tbody = document.querySelector("#status-episodes-table tbody");
   if (!tbody) return;
-  const list = cachedEpisodes || [];
+  const list = liveEpisodes();
   if (!list.length) {
     tbody.innerHTML = `<tr><td colspan="5" class="empty">none live</td></tr>`;
     return;
@@ -2150,26 +2154,28 @@ async function loadEpisodes() {
     const data = await api("/api/episodes");
     const list = data.episodes || [];
     cachedEpisodes = list;
+    const live = liveEpisodes();
     if (absorbSel) {
       const cur = absorbSel.value;
       absorbSel.innerHTML =
         `<option value="">— pick live episode —</option>` +
-        list
+        live
           .map(
             (e) =>
               `<option value="${e.id}">${esc(e.show)} · ${esc(e.episode_short)} · ${esc(e.name)}</option>`
           )
           .join("");
-      if (cur && list.some((e) => String(e.id) === cur)) {
+      if (cur && live.some((e) => String(e.id) === cur)) {
         absorbSel.value = cur;
       }
     }
     if (!list.length) {
-      tbody.innerHTML = `<tr><td colspan="9" class="empty">no live episodes</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="11" class="empty">no episodes yet</td></tr>`;
       return;
     }
     tbody.innerHTML = list
       .map((e) => {
+        const ceased = e.state === "ceased";
         const listeners = (e.listeners || [])
           .map((l) => `${esc(l.kind)}:${esc(l.name || l.discord_channel_id || l.channel)}`)
           .join(", ");
@@ -2177,6 +2183,16 @@ async function loadEpisodes() {
         const spot = e.spot_image
           ? `<img class="spot-thumb" src="${esc(e.spot_image)}" alt="">`
           : "—";
+        const stateCell = ceased
+          ? `<span class="state-off">CEASED</span>`
+          : `<span class="state-on">LIVE</span>`;
+        const apiCell = ceased
+          ? "—"
+          : `<a class="api-get" href="${esc(apiPath)}" target="_blank" rel="noopener">GET</a>`;
+        const actions = ceased
+          ? "—"
+          : `<button type="button" class="secondary" data-ep-edit="${e.id}">Edit</button>
+            <button type="button" class="danger" data-ep-cease="${e.id}">Cease</button>`;
         return `<tr data-id="${e.id}">
           <td>${esc(e.show)}<br><code class="mono">${esc(e.show_slug)}</code></td>
           <td>${esc(e.episode_short)} · ${esc(e.name)}</td>
@@ -2185,17 +2201,16 @@ async function loadEpisodes() {
           <td>${spot}</td>
           <td>${listeners || "—"}</td>
           <td class="mono">${whenCell(e.since)}</td>
-          <td><a class="api-get" href="${esc(apiPath)}" target="_blank" rel="noopener">GET</a></td>
-          <td class="actions">
-            <button type="button" class="secondary" data-ep-edit="${e.id}">Edit</button>
-            <button type="button" class="danger" data-ep-cease="${e.id}">Cease</button>
-          </td>
+          <td class="mono">${whenCell(e.until)}</td>
+          <td>${stateCell}</td>
+          <td>${apiCell}</td>
+          <td class="actions">${actions}</td>
         </tr>`;
       })
       .join("");
   } catch (err) {
     cachedEpisodes = [];
-    tbody.innerHTML = `<tr><td colspan="9" class="empty">load failed: ${esc(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" class="empty">load failed: ${esc(err.message)}</td></tr>`;
   }
   updateAllBcMsgPreviews();
 }
@@ -2451,7 +2466,7 @@ document.getElementById("episode-absorb-form").addEventListener("submit", async 
     toast("pick the live show episode to absorb into", true);
     return;
   }
-  const ep = (cachedEpisodes || []).find((e) => e.id === episodeID);
+  const ep = liveEpisodes().find((e) => e.id === episodeID);
   const destLabel = ep
     ? `${ep.show} · ${ep.episode_short} · ${ep.name}`
     : `episode #${episodeID}`;
@@ -2516,7 +2531,7 @@ document.getElementById("episodes-table").addEventListener("click", async (ev) =
   const edit = ev.target.closest("[data-ep-edit]");
   if (!edit) return;
   const id = Number(edit.getAttribute("data-ep-edit"));
-  const ep = (cachedEpisodes || []).find((e) => e.id === id);
+  const ep = liveEpisodes().find((e) => e.id === id);
   if (!ep) {
     toast("episode not found in list — refresh", true);
     return;
@@ -2827,7 +2842,7 @@ function broadcastPreviewFields() {
   if (!tid) return null;
   const tmpl = (cachedEpisodeTemplates || []).find((t) => String(t.id) === String(tid));
   if (!tmpl) return null;
-  const ep = (cachedEpisodes || []).find((e) => e.show_slug === tmpl.show_slug);
+  const ep = liveEpisodes().find((e) => e.show_slug === tmpl.show_slug);
   if (!ep) return null;
   return episodePlaceholderFields(ep);
 }
@@ -3739,7 +3754,7 @@ document.getElementById("tab-status").addEventListener("click", async (ev) => {
 
   if (act === "ep-edit") {
     const id = Number(btn.getAttribute("data-id"));
-    const ep = (cachedEpisodes || []).find((e) => e.id === id);
+    const ep = liveEpisodes().find((e) => e.id === id);
     if (!ep) {
       toast("episode not found in list — refresh", true);
       return;

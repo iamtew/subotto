@@ -107,9 +107,23 @@ func TestEpisodeCRUDAndTemplateResolve(t *testing.T) {
 		t.Fatalf("after cease: %+v err=%v", live, err)
 	}
 
+	all, err := store.ListEpisodes(ctx)
+	if err != nil || len(all) != 1 || all[0].ID != ep.ID || all[0].ActiveUntil == nil {
+		t.Fatalf("list after cease: %+v err=%v", all, err)
+	}
+
 	// New episode same show ok after cease.
-	if _, err := store.CreateEpisode(ctx, "Sesh Sofa", 21, "Next", "LIVE", "", "", nil); err != nil {
+	next, err := store.CreateEpisode(ctx, "Sesh Sofa", 21, "Next", "LIVE", "", "", nil)
+	if err != nil {
 		t.Fatal(err)
+	}
+	all, err = store.ListEpisodes(ctx)
+	if err != nil || len(all) != 2 || all[0].ID != next.ID || all[0].ActiveUntil != nil || all[1].ID != ep.ID {
+		t.Fatalf("list live-first: %+v err=%v", all, err)
+	}
+	onlyLive, err := store.ListLiveEpisodes(ctx)
+	if err != nil || len(onlyLive) != 1 || onlyLive[0].ID != next.ID {
+		t.Fatalf("list live: %+v err=%v", onlyLive, err)
 	}
 }
 

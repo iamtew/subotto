@@ -300,12 +300,22 @@ func (d *DB) GetLiveEpisodeByShowSlug(ctx context.Context, slug string) (*Episod
 
 // ListLiveEpisodes returns every live episode, newest first.
 func (d *DB) ListLiveEpisodes(ctx context.Context) ([]Episode, error) {
-	rows, err := d.sql.QueryContext(ctx, `
-		SELECT `+episodeSelectCols+`
-		FROM episodes
-		WHERE active_until IS NULL
-		ORDER BY id DESC
-	`)
+	return d.listEpisodes(ctx, true)
+}
+
+// ListEpisodes returns live episodes first, then ceased (newest id first in each group).
+func (d *DB) ListEpisodes(ctx context.Context) ([]Episode, error) {
+	return d.listEpisodes(ctx, false)
+}
+
+func (d *DB) listEpisodes(ctx context.Context, liveOnly bool) ([]Episode, error) {
+	q := `SELECT ` + episodeSelectCols + ` FROM episodes`
+	if liveOnly {
+		q += ` WHERE active_until IS NULL ORDER BY id DESC`
+	} else {
+		q += ` ORDER BY CASE WHEN active_until IS NULL THEN 0 ELSE 1 END, id DESC`
+	}
+	rows, err := d.sql.QueryContext(ctx, q)
 	if err != nil {
 		return nil, fmt.Errorf("list episodes: %w", err)
 	}

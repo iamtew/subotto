@@ -68,13 +68,20 @@ type episodeDTO struct {
 	StreamBackground    string               `json:"stream_background"`
 	StreamBackgroundURL string               `json:"stream_background_url"`
 	Since               string               `json:"since"`
-	State               string               `json:"state"` // live
+	Until               string               `json:"until"`
+	State               string               `json:"state"` // live | ceased
 	Listeners           []episodeListenerDTO `json:"listeners"`
 	PublicURL           string               `json:"public_url"`
 }
 
 func (s *Server) toEpisodeDTO(r *http.Request, e db.Episode, listeners []episodeListenerDTO) episodeDTO {
 	bg, bgURL := s.streamBackgroundFields(r)
+	state := "live"
+	until := ""
+	if e.ActiveUntil != nil {
+		state = "ceased"
+		until = e.ActiveUntil.UTC().Format(time.RFC3339)
+	}
 	return episodeDTO{
 		ID:                  e.ID,
 		Show:                e.Show,
@@ -91,7 +98,8 @@ func (s *Server) toEpisodeDTO(r *http.Request, e db.Episode, listeners []episode
 		StreamBackground:    bg,
 		StreamBackgroundURL: bgURL,
 		Since:               e.ActiveFrom.UTC().Format(time.RFC3339),
-		State:               "live",
+		Until:               until,
+		State:               state,
 		Listeners:           listeners,
 		PublicURL:           "/api/get/episode/" + e.ShowSlug,
 	}
@@ -220,7 +228,7 @@ func publicEpisodeListeners(in []episodeListenerDTO) []episodeListenerDTO {
 // ---------- Episodes ----------
 
 func (s *Server) handleListEpisodes(w http.ResponseWriter, r *http.Request) {
-	list, err := s.store.ListLiveEpisodes(r.Context())
+	list, err := s.store.ListEpisodes(r.Context())
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
