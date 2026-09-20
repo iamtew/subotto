@@ -2630,8 +2630,6 @@ document.getElementById("episode-templates-table").addEventListener("click", asy
 /* ---------- Broadcasts ---------- */
 
 let cachedBroadcasts = [];
-let bcGuildCache = null; // [{id,name}]
-const bcChannelCache = {}; // guildID -> [{id,name}]
 const bcChannelNameByID = {}; // channelID -> name (for chips)
 
 function bcNewMsgId() {
@@ -2650,20 +2648,23 @@ function bcChannelLabel(id) {
 }
 
 async function ensureBcGuilds() {
-  if (bcGuildCache) return bcGuildCache;
   const data = await api("/api/discord/guilds");
-  bcGuildCache = data.guilds || [];
-  return bcGuildCache;
+  return data.guilds || [];
 }
 
 async function ensureBcChannels(guildID) {
   if (!guildID) return [];
-  if (bcChannelCache[guildID]) return bcChannelCache[guildID];
   const data = await api("/api/discord/guilds/" + encodeURIComponent(guildID) + "/channels");
   const channels = (data.channels || []).filter((c) => c.can_send !== false);
   for (const c of channels) rememberBcChannelName(c.id, c.name);
-  bcChannelCache[guildID] = channels;
   return channels;
+}
+
+function rememberBcChannelNamesFromSelect(sel) {
+  if (!sel) return;
+  for (const o of sel.options) {
+    if (o.value) rememberBcChannelName(o.value, o.textContent);
+  }
 }
 
 /** Warm id→name map so edit chips can show #name instead of raw snowflakes. */
@@ -2979,27 +2980,8 @@ document.getElementById("broadcast-messages").addEventListener("change", async (
   if (!guildSel) return;
   const row = guildSel.closest(".bc-msg");
   const chanSel = row.querySelector(".bc-channel-select");
-  const guildID = guildSel.value;
-  if (!guildID) {
-    chanSel.disabled = true;
-    chanSel.innerHTML = `<option value="">— pick a server first —</option>`;
-    return;
-  }
-  chanSel.disabled = true;
-  chanSel.innerHTML = `<option value="">loading…</option>`;
-  try {
-    const channels = await ensureBcChannels(guildID);
-    if (!channels.length) {
-      chanSel.innerHTML = `<option value="">— no text channels —</option>`;
-      return;
-    }
-    chanSel.innerHTML =
-      `<option value="">— select channel —</option>` +
-      channels.map((c) => `<option value="${esc(c.id)}">#${esc(c.name)}</option>`).join("");
-    chanSel.disabled = false;
-  } catch (err) {
-    chanSel.innerHTML = `<option value="">— ${esc(err.message)} —</option>`;
-  }
+  await loadChannelsForGuild(guildSel.value, chanSel, { sendable: true });
+  rememberBcChannelNamesFromSelect(chanSel);
 });
 
 document.getElementById("broadcast-messages").addEventListener("click", (ev) => {
