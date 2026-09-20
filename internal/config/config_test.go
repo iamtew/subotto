@@ -38,3 +38,22 @@ func TestLoadReadsDiscordOAuth(t *testing.T) {
 		t.Fatalf("redirect %q", cfg.DiscordOAuthRedirectURL)
 	}
 }
+
+func TestLoadTwitchOAuthDefaults(t *testing.T) {
+	t.Setenv("ADMIN_PASSWORD", "x")
+	t.Setenv("ADMIN_PORT", "50770")
+	t.Setenv("DATABASE_PATH", "./data/subotto.db")
+	t.Setenv("LOG_LEVEL", "info")
+	t.Setenv("TWITCH_CLIENT_ID", "tcid")
+	t.Setenv("TWITCH_CLIENT_SECRET", "tsec")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.TwitchClientID != "tcid" || cfg.TwitchClientSecret != "tsec" {
+		t.Fatalf("twitch fields: %+v", cfg)
+	}
+	if cfg.TwitchRedirectURL != "http://localhost:50770/auth/twitch/callback" {
+		t.Fatalf("redirect %q", cfg.TwitchRedirectURL)
+	}
+}

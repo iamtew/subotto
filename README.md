@@ -18,7 +18,8 @@ Shipped in code:
 - **Show episodes** — templates + start/cease + absorb live listeners + public `/api/get/episode/{show}` (`air_datetime`, `spot_image`, `stream_background` + host URL)
 - **Broadcasts** — named multi-channel Discord sends (Admin Fire or `GET /api/broadcasts/{slug}/fire` with Basic Auth `api` / `API_PASSWORD`)
 - **Admin login** — public landing at `/`; Discord OAuth (needs `SUPERADMIN_DISCORD_ID` + Discord app client id/secret) and optional Basic `admin` / `ADMIN_PASSWORD`
-- **Hesh Helper** — Discord mention / reply-to-bot chat via OpenRouter (Admin **AI** tab for the model, system prompt, sampling sliders, optional channel memory, and test chat)
+- **Hesh Helper** — Discord mention / reply-to-bot and Twitch @login / reply-to-bot via OpenRouter (Admin **AI** tab for the model, system prompt, sampling sliders, optional channel memory, and test chat)
+- **Twitch chat** — optional: authorize a Twitch user in Admin Status, join one channel (any login), reply as that account when addressed
 
 Parked: bi-weekly schedules, richer show-runner Discord announce.
 
@@ -27,6 +28,7 @@ Parked: bi-weekly schedules, richer show-runner Discord announce.
 ## What Subotto Does
 
 - Watches Discord text channels you configure.
+- Optional **Twitch chat**: Hesh replies in one joined channel when @mentioned or replied to, as the authorized Twitch user.
 - **Content:** detects YouTube links and adds them to that channel’s playlist.
 - **Pictures:** saves image attachments under `data/pictures/` and serves an OBS slideshow.
 - Both listener types may be live on the **same channel** at once.
@@ -45,19 +47,21 @@ Superadmin **❌** on a bot-stamped post hides picture-listener images, or skips
 - Google Cloud project with YouTube Data API v3 + OAuth 2.0 Client ID/Secret
 - A Discord server where you can invite the bot
 - YouTube playlists owned by the Google account you authorize (or create them in Admin)
+- Optional: Twitch application (chat:read, chat:edit) + redirect `http://localhost:50770/auth/twitch/callback`
 
 ---
 
 ## DEV setup (Windows)
 
-1. Copy `.env.example` → `.env` and fill in tokens. Set `SUPERADMIN_DISCORD_ID` plus `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` for Discord login. Set a real `ADMIN_PASSWORD` for Basic fallback, or `ADMIN_PASSWORD=` to turn Basic off. Optional `API_PASSWORD` for Streamer.bot broadcast fire; optional `OPENROUTER_API_KEY` for Hesh Helper.
+1. Copy `.env.example` → `.env` and fill in tokens. Set `SUPERADMIN_DISCORD_ID` plus `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` for Discord login. Set a real `ADMIN_PASSWORD` for Basic fallback, or `ADMIN_PASSWORD=` to turn Basic off. Optional `API_PASSWORD` for Streamer.bot broadcast fire; optional `OPENROUTER_API_KEY` for Hesh Helper; optional `TWITCH_CLIENT_ID` / `TWITCH_CLIENT_SECRET` for Twitch chat.
 2. Google Cloud: enable YouTube Data API v3, create OAuth client, add redirect  
    `http://localhost:50770/oauth/callback`.
 3. Discord Developer Portal: add redirect `http://localhost:50770/auth/discord/callback` (OAuth2, identify).
 4. `just auth-youtube` once (browser login; refresh token saved in SQLite). After that, Admin **Status → Authorize YouTube** can re-auth without stopping the bot.
-5. `just run` (do **not** run auth and the bot on port **50770** at the same time).
-6. Open `http://localhost:50770` — Continue with Discord, or Password login (`admin` / `ADMIN_PASSWORD`) if Basic is on. Admin UI is `/admin`.
-7. Start a content listener, paste a YouTube link → expect **💾** + playlist update.
+5. Optional Twitch: add redirect `http://localhost:50770/auth/twitch/callback` on the Twitch app, then Admin **Status → Authorize Twitch** and save the chat channel to join.
+6. `just run` (do **not** run auth and the bot on port **50770** at the same time).
+7. Open `http://localhost:50770` — Continue with Discord, or Password login (`admin` / `ADMIN_PASSWORD`) if Basic is on. Admin UI is `/admin`.
+8. Start a content listener, paste a YouTube link → expect **💾** + playlist update.
 
 Short path once secrets exist:
 

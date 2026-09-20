@@ -24,11 +24,11 @@ Produces `dist/subotto-linux.zip` with:
 **Not in the zip:** live `.env` or `data/` (copy those yourself — DB **and** `data/pictures/` / `data/episode-spots/` / `data/stream-background/` if you already collected images).
 
 Public slideshow URLs (no login): `/slideshow/latest`, `/slideshow/{slug}`, `/media/pictures/...`, `/media/episodes/{id}/...` (placeholder `spotplaceholder.jpg` until a still is uploaded), `/stream-background` (OBS Browser Source, live-updates), `/media/stream-background/latest` (raw image).  
-Landing (no login): `GET /`. Discord login callback: `GET /auth/discord/callback`.  
+Landing (no login): `GET /`. Discord login callback: `GET /auth/discord/callback`. Twitch chat callback: `GET /auth/twitch/callback`.  
 Streamer.bot GETs (no login): `GET /api/get/content/{channel-name}`, `GET /api/get/picture/{channel-name}`, and `GET /api/get/episode/{show}` — live listener / episode JSON (`air_datetime` RFC3339 with offset, `spot_image`, `stream_background`, `stream_background_url` on the episode). Channel name is the Discord name without `#`; Discord must be connected.  
 Broadcast fire (Basic Auth): `GET /api/broadcasts/{slug}/fire` — user `api` / `API_PASSWORD` (or Admin login). Sends every message of that named broadcast to its mapped channels.  
-YouTube re-auth (Admin): `GET /api/youtube/auth` (Admin login) → Google → public `GET /oauth/callback`. Caddy must proxy `/oauth/callback` and `/auth/discord/callback` without extra auth.  
-If you put Caddy in front, proxy the whole port (landing + Admin + public slideshow + OAuth callbacks) — **except** do not put edge Basic on `/oauth/callback` or `/auth/discord/callback`.
+YouTube re-auth (Admin): `GET /api/youtube/auth` (Admin login) → Google → public `GET /oauth/callback`. Caddy must proxy `/oauth/callback`, `/auth/discord/callback`, and `/auth/twitch/callback` without extra auth.  
+If you put Caddy in front, proxy the whole port (landing + Admin + public slideshow + OAuth callbacks) — **except** do not put edge Basic on `/oauth/callback`, `/auth/discord/callback`, or `/auth/twitch/callback`.
 
 ---
 
@@ -40,7 +40,7 @@ YouTube login is a **browser** OAuth dance. After Subotto is running, re-auth fr
 
 | Table | Role |
 |-------|------|
-| `oauth_tokens` | YouTube **refresh** token (must travel somehow) |
+| `oauth_tokens` | YouTube **and Twitch** refresh tokens (must travel somehow) |
 | `channel_mappings` | Content listeners / epochs |
 | `processed_videos` | Content dedup history |
 | `picture_listeners` | Picture listeners / epochs |
@@ -51,7 +51,7 @@ YouTube login is a **browser** OAuth dance. After Subotto is running, re-auth fr
 
 Also copy **`data/pictures/`**, **`data/episode-spots/`**, and **`data/stream-background/`** if present — galleries, episode spots, and the global OBS stream background live next to the DB.
 
-`.env` still holds Discord bot token + YouTube **client** ID/secret. Same Discord/Google apps — no re-registration.
+`.env` still holds Discord bot token + YouTube **client** ID/secret + optional Twitch **client** ID/secret. Same Discord/Google/Twitch apps — no re-registration.
 
 ### Steps
 
@@ -65,6 +65,7 @@ Also copy **`data/pictures/`**, **`data/episode-spots/`**, and **`data/stream-ba
    - `DISCORD_OAUTH_REDIRECT_URL` = public HTTPS callback registered in the Discord Developer Portal (path `/auth/discord/callback`)  
    - Optional `API_PASSWORD` for Streamer.bot broadcast fire (`api` user)  
    - Optional `OPENROUTER_API_KEY` for Hesh Helper (empty key = AI off). The model catalog, system prompt, sampling sliders, and conversational memory (channel history window) are stored in SQLite `app_settings`, not `.env` (`OPENROUTER_MODEL` is first-load bootstrap only).  
+   - Optional `TWITCH_CLIENT_ID` / `TWITCH_CLIENT_SECRET` for Twitch chat (empty = off). `TWITCH_REDIRECT_URL` = public HTTPS callback registered on the Twitch app (must match **exactly**, path `/auth/twitch/callback`). Join channel is Admin Status, not `.env`.  
    - `YOUTUBE_REDIRECT_URL` = the public HTTPS callback registered in Google Console (must match **exactly**, path `/oauth/callback`). Leave localhost only if you will use the SSH-tunnel fallback in §3.  
 5. `chmod +x subotto-linux`
 6. **Stop Windows `just run`** (one Discord gateway per bot token).
@@ -83,7 +84,7 @@ Use this when the token is expired/revoked (`invalid_grant`), the DB is empty, o
 
 - `YOUTUBE_REDIRECT_URL` in PROD `.env` is the **public** HTTPS URL Google will call, path `/oauth/callback`.
 - That same URI is listed on the OAuth client in Google Cloud Console (Web application type).
-- Caddy (or Nginx) proxies `/oauth/callback` and `/auth/discord/callback` to Subotto **without** extra login.
+- Caddy (or Nginx) proxies `/oauth/callback`, `/auth/discord/callback`, and `/auth/twitch/callback` to Subotto **without** extra login.
 
 ### Cookbook
 
@@ -98,7 +99,7 @@ Use this when the token is expired/revoked (`invalid_grant`), the DB is empty, o
 | Problem | Fix |
 |---------|-----|
 | Redirect URI mismatch | Console URI must equal `YOUTUBE_REDIRECT_URL` character-for-character |
-| Callback 401 from Caddy | Do not put edge auth on `/oauth/callback` |
+| Callback 401 from Caddy | Do not put edge auth on `/oauth/callback`, `/auth/discord/callback`, or `/auth/twitch/callback` |
 | “invalid or expired OAuth state” | Start again from Admin (state lasts 10 minutes, one-shot) |
 | Wrong Google account | Use the account that owns the target playlists |
 
@@ -156,7 +157,7 @@ ADMIN_HOST=127.0.0.1
 ADMIN_PORT=50770
 ```
 
-Point Caddy (or Nginx) at `http://127.0.0.1:50770`. TLS, hostnames, and edge auth are up to the operator — Subotto login is Discord OAuth and/or Basic (`admin` / `ADMIN_PASSWORD`) on `/admin`. Leave **`/oauth/callback`** and **`/auth/discord/callback`** public at the edge.
+Point Caddy (or Nginx) at `http://127.0.0.1:50770`. TLS, hostnames, and edge auth are up to the operator — Subotto login is Discord OAuth and/or Basic (`admin` / `ADMIN_PASSWORD`) on `/admin`. Leave **`/oauth/callback`**, **`/auth/discord/callback`**, and **`/auth/twitch/callback`** public at the edge.
 
 ---
 
@@ -178,6 +179,7 @@ If you prefer online backups later, use SQLite’s `.backup` / `sqlite3` backup 
 - [ ] `subotto-linux` runs; logs look healthy  
 - [ ] Admin login works (Discord and/or Basic via Caddy or direct `/admin`)  
 - [ ] YouTube token present (Admin Status **AUTHORIZED**, or re-auth via **Authorize YouTube**)  
+- [ ] Twitch optional: token + join channel on Status, IRC UP when you want chat replies  
 - [ ] At least one enabled listener  
 - [ ] Paste a YouTube link → **💾** (or expected ♻️ / 🛑)  
 - [ ] Windows DEV bot is **not** running with the same token  

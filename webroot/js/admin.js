@@ -31,6 +31,7 @@ const API_CATALOG = [
       { method: "GET", path: "/api/slideshow/{slug}", note: "Picture slideshow feed JSON for one listener slug." },
       { method: "GET", path: "/oauth/callback", note: "Google OAuth redirect (no login). Caddy must not lock this path." },
       { method: "GET", path: "/auth/discord/callback", note: "Discord login redirect (no login). Caddy must not lock this path." },
+      { method: "GET", path: "/auth/twitch/callback", note: "Twitch chat OAuth redirect (no login). Caddy must not lock this path." },
     ],
   },
   {
@@ -44,10 +45,12 @@ const API_CATALOG = [
     title: "Admin",
     blurb: "Discord session cookie or Basic Auth user admin / ADMIN_PASSWORD.",
     routes: [
-      { method: "GET", path: "/api/status", note: "Wire health: Discord, YouTube, listener counts, scheduler, API password." },
+      { method: "GET", path: "/api/status", note: "Wire health: Discord, YouTube, Twitch, listener counts, scheduler, API password." },
       { method: "GET", path: "/api/operators", note: "Allowlisted Discord user IDs (superadmin can PUT extra_ids)." },
       { method: "PUT", path: "/api/operators", note: "Replace extra operator Discord IDs (superadmin or Basic admin only)." },
       { method: "GET", path: "/api/youtube/auth", note: "Start YouTube OAuth (browser redirect to Google). Use Authorize YouTube on Status." },
+      { method: "GET", path: "/api/twitch/auth", note: "Start Twitch OAuth (browser redirect to Twitch). Use Authorize Twitch on Status." },
+      { method: "PUT", path: "/api/twitch", note: "Save the Twitch chat channel to join (login, not necessarily yours)." },
       { method: "GET", path: "/api/activity", note: "Recent ops log." },
       { method: "GET", path: "/api/listens", note: "All content listeners (channel → YouTube playlist)." },
       { method: "POST", path: "/api/listens", note: "Start or upsert a content listener." },
@@ -89,8 +92,8 @@ const API_CATALOG = [
       { method: "GET", path: "/api/broadcasts/{id}", note: "One broadcast by numeric id." },
       { method: "PATCH", path: "/api/broadcasts/{id}", note: "Update a broadcast." },
       { method: "DELETE", path: "/api/broadcasts/{id}", note: "Delete a broadcast." },
-      { method: "GET", path: "/api/ai", note: "Hesh Helper model catalog, key configured?, enabled?, memory, saved system prompt, sampling." },
-      { method: "PUT", path: "/api/ai", note: "Save system prompt, sampling, enabled flag, memory, and/or model catalog." },
+      { method: "GET", path: "/api/ai", note: "Hesh Helper model catalog, key configured?, Discord/Twitch enabled?, memory, saved system prompt, sampling." },
+      { method: "PUT", path: "/api/ai", note: "Save system prompt, sampling, Discord/Twitch enabled flags, memory, and/or model catalog." },
       { method: "POST", path: "/api/ai/chat", note: "Test chat using the saved system prompt." },
       { method: "GET", path: "/api/ai/logs", note: "Hesh Helper request log (filter: all / warning / error / critical)." },
     ],
@@ -207,14 +210,16 @@ async function loadAITab() {
     const data = await api("/api/ai");
     const model = data.model || "—";
     const key = data.configured ? "API key set" : "API key missing (set OPENROUTER_API_KEY)";
-    const on = data.enabled !== false;
-    status.textContent = "Model: " + model + " · " + key + " · Discord " + (on ? "on" : "off");
+    const discordOn = data.enabled !== false;
+    const twitchOn = data.twitch_enabled !== false;
+    status.textContent = "Model: " + model + " · " + key + " · Discord " + (discordOn ? "on" : "off") + " · Twitch " + (twitchOn ? "on" : "off");
     document.getElementById("ai-system-prompt").value = data.system_prompt || "";
     fillAISampling(data.sampling || {});
     fillAIModels(data);
     fillAIMemory(data);
     document.getElementById("ai-chat-send").disabled = !data.configured;
-    syncAIEnabledToggle(on);
+    syncAIToggle("ai-discord-toggle", discordOn, "Discord");
+    syncAIToggle("ai-twitch-toggle", twitchOn, "Twitch");
   } catch (err) {
     status.textContent = err.message;
   }
@@ -360,10 +365,10 @@ async function loadAILogs() {
   }
 }
 
-function syncAIEnabledToggle(on) {
-  const btn = document.getElementById("ai-enabled-toggle");
+function syncAIToggle(id, on, label) {
+  const btn = document.getElementById(id);
   if (!btn) return;
-  btn.textContent = on ? "Disable" : "Enable";
+  btn.textContent = on ? "Disable " + label : "Enable " + label;
   btn.setAttribute("data-enabled", on ? "true" : "false");
 }
 
@@ -558,6 +563,21 @@ function discordStatusPill(connected) {
     await loadStatus();
   });
   return btn;
+}
+
+function twitchStatusPill(s) {
+  if (!s || !s.twitch_configured) {
+    return pill("twitch off", "muted");
+  }
+  if (s.twitch_connected) {
+    const who = s.twitch_login || "irc";
+    const chan = s.twitch_channel ? " #" + s.twitch_channel : "";
+    return pill("twitch " + who + chan, true);
+  }
+  if (s.twitch_authorized) {
+    return pill("twitch idle", "muted");
+  }
+  return pill("twitch missing", false);
 }
 
 function esc(s) {
@@ -841,6 +861,27 @@ function renderStatusHealth() {
     yt = `<span class="state-off">EXPIRED / REVOKED</span>`;
   }
   yt += ` <a class="secondary" href="/api/youtube/auth">Authorize YouTube</a>`;
+  let tw = `<span class="state-off">NOT CONFIGURED</span>`;
+  if (s.twitch_configured) {
+    if (s.twitch_authorized && s.twitch_login) {
+      const irc = s.twitch_connected
+        ? `<span class="state-on">IRC UP</span>`
+        : `<span class="state-off">IRC DOWN</span>`;
+      tw = `<span class="state-on">AUTHORIZED</span> · ${esc(s.twitch_login)} · ${irc}`;
+    } else if (s.twitch_authorized) {
+      tw = `<span class="state-off">TOKEN SAVED</span>`;
+    } else {
+      tw = `<span class="state-off">NOT AUTHORIZED</span>`;
+    }
+    tw += ` <a class="secondary" href="/api/twitch/auth">Authorize Twitch</a>`;
+  }
+  const twChan = esc(s.twitch_channel || "");
+  tw += `<form id="twitch-channel-form" class="mapping-form" style="margin-top:.6rem">
+    <label>Chat channel
+      <input id="twitch-channel" name="channel" value="${twChan}" placeholder="login (not necessarily yours)" autocomplete="off" spellcheck="false">
+    </label>
+    <button type="submit">Save channel</button>
+  </form>`;
   let sched = `<span class="state-off">OFF</span>`;
   if (s.scheduler_enabled) {
     const hours = s.resync_interval_hours || "?";
@@ -859,6 +900,7 @@ function renderStatusHealth() {
   host.innerHTML = `<dl class="status-health-grid">
     <div><dt>Discord</dt><dd>${discord}</dd></div>
     <div><dt>YouTube</dt><dd>${yt}</dd></div>
+    <div><dt>Twitch</dt><dd>${tw}</dd></div>
     <div><dt>Uptime</dt><dd class="mono">${esc(fmtUptime(s.started_at))} <span class="muted">since ${whenCell(s.started_at)}</span></dd></div>
     <div><dt>Listen addr</dt><dd class="mono">${esc(s.listen_addr || "—")}</dd></div>
     <div><dt>Scheduler</dt><dd>${sched}</dd></div>
@@ -1300,6 +1342,7 @@ async function loadStatus() {
     host.replaceChildren(
       discordStatusPill(!!s.discord_connected),
       pill((s.youtube_authorized && s.youtube_channel) ? "youtube ok" : (s.youtube_authorized ? "youtube expired" : "youtube missing"), !!(s.youtube_authorized && s.youtube_channel)),
+      twitchStatusPill(s),
       pill(`content ${on}/${tot}`, true),
       pill(`pics ${picOn}/${picTot}`, true),
       pill(`log ${s.activity_total}`, "muted")
@@ -3643,9 +3686,12 @@ document.getElementById("picture-resync-channel").addEventListener("change", (ev
 (function toastYouTubeOAuthReturn() {
   const params = new URLSearchParams(location.search);
   const yt = params.get("youtube");
-  if (!yt) return;
+  const tw = params.get("twitch");
+  if (!yt && !tw) return;
   if (yt === "ok") toast("YouTube authorized");
-  else toast("YouTube authorization failed", true);
+  else if (yt) toast("YouTube authorization failed", true);
+  if (tw === "ok") toast("Twitch authorized");
+  else if (tw) toast("Twitch authorization failed", true);
   history.replaceState({}, "", location.pathname);
 })();
 
@@ -3656,6 +3702,21 @@ loadGuilds();
 loadAnnounce();
 loadPictureAnnounce();
 syncEpisodeStubsEmpty();
+
+document.getElementById("tab-status").addEventListener("submit", async (ev) => {
+  const form = ev.target.closest("#twitch-channel-form");
+  if (!form) return;
+  ev.preventDefault();
+  const input = form.querySelector("#twitch-channel");
+  const channel = input ? input.value : "";
+  try {
+    await api("/api/twitch", { method: "PUT", body: JSON.stringify({ channel }) });
+    toast("Twitch channel saved");
+    await refreshAll();
+  } catch (err) {
+    toast(err.message || "Twitch channel save failed", true);
+  }
+});
 
 /* Status tab actions — Pause/Resume, Cease episode, Discord reconnect.
    Absorb stays on Episodes only. */
@@ -3766,7 +3827,7 @@ document.getElementById("ai-model-remove").addEventListener("click", async () =>
   }
 });
 
-document.getElementById("ai-enabled-toggle").addEventListener("click", async (ev) => {
+document.getElementById("ai-discord-toggle").addEventListener("click", async (ev) => {
   const btn = ev.currentTarget;
   const on = btn.getAttribute("data-enabled") !== "false";
   btn.disabled = true;
@@ -3775,7 +3836,25 @@ document.getElementById("ai-enabled-toggle").addEventListener("click", async (ev
       method: "PUT",
       body: JSON.stringify({ enabled: !on }),
     });
-    toast(!on ? "Hesh Helper enabled" : "Hesh Helper disabled");
+    toast(!on ? "Discord AI on" : "Discord AI off");
+    await loadAITab();
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("ai-twitch-toggle").addEventListener("click", async (ev) => {
+  const btn = ev.currentTarget;
+  const on = btn.getAttribute("data-enabled") !== "false";
+  btn.disabled = true;
+  try {
+    await api("/api/ai", {
+      method: "PUT",
+      body: JSON.stringify({ twitch_enabled: !on }),
+    });
+    toast(!on ? "Twitch AI on" : "Twitch AI off");
     await loadAITab();
   } catch (err) {
     toast(err.message, true);

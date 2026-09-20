@@ -23,6 +23,7 @@ func (s *Server) registerPublic(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/get/episode/{show}", s.handlePublicGetEpisode)
 	mux.HandleFunc("GET /api/get/{kind}/{channel}", s.handlePublicGetListener)
 	mux.HandleFunc("GET /oauth/callback", s.handleYouTubeOAuthCallback)
+	mux.HandleFunc("GET /auth/twitch/callback", s.handleTwitchOAuthCallback)
 	mux.HandleFunc("GET /{$}", s.handleLanding)
 	mux.HandleFunc("GET /auth/discord", s.handleDiscordAuthStart)
 	mux.HandleFunc("GET /auth/discord/callback", s.handleDiscordOAuthCallback)

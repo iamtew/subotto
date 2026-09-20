@@ -6,7 +6,8 @@
 // Broadcast fire also accepts api / API_PASSWORD on GET /api/broadcasts/{slug}/fire.
 // Public (no login): /, /slideshow/..., /api/slideshow/..., /api/get/{content|picture}/{channel},
 // /api/get/episode/{show}, /stream-background, /media/stream-background/latest,
-// GET /oauth/callback (Google), GET /auth/discord/callback (Discord login).
+// GET /oauth/callback (Google), GET /auth/discord/callback (Discord login),
+// GET /auth/twitch/callback (Twitch chat).
 package web
 
 import (
@@ -27,6 +28,7 @@ import (
 	"subotto/internal/db"
 	"subotto/internal/discord"
 	"subotto/internal/scheduler"
+	"subotto/internal/twitch"
 	"subotto/internal/youtube"
 )
 
@@ -70,12 +72,17 @@ type Server struct {
 	httpServer  *http.Server
 	startedAt   time.Time
 	youtubeName string // optional; filled by Ping at boot / after Admin OAuth
+	twitch      *twitch.Client
 	envHours    int    // RESYNC_INTERVAL_HOURS until Admin saves scheduler row
 	envAIModel  string // OPENROUTER_MODEL until Admin saves ai_models
 
 	ytClientID     string
 	ytClientSecret string
 	ytRedirectURL  string
+
+	twitchClientID     string
+	twitchClientSecret string
+	twitchRedirectURL  string
 
 	discordClientID     string
 	discordClientSecret string
@@ -91,6 +98,10 @@ type Server struct {
 		state string
 		until time.Time
 	}
+	twitchOAuthPending struct {
+		state string
+		until time.Time
+	}
 
 	// exchangeFn / youtubePing let tests stub Google (no live OAuth).
 	exchangeFn  func(ctx context.Context, code string) (*oauth2.Token, error)
@@ -99,6 +110,9 @@ type Server struct {
 	// discordExchangeFn / discordMeFn let tests stub Discord login (no live OAuth).
 	discordExchangeFn func(ctx context.Context, code string) (*oauth2.Token, error)
 	discordMeFn       func(ctx context.Context, accessToken string) (string, error)
+
+	twitchExchangeFn func(ctx context.Context, code string) (*oauth2.Token, error)
+	twitchUserFn     func(ctx context.Context, accessToken string) (twitch.User, error)
 
 	// createPlaylistFn lets tests stub YouTube playlist create (episode start).
 	createPlaylistFn func(ctx context.Context, title, description string) (string, error)
@@ -127,6 +141,10 @@ type Options struct {
 	YouTubeClientID         string
 	YouTubeClientSecret     string
 	YouTubeRedirectURL      string
+	Twitch                  *twitch.Client
+	TwitchClientID          string
+	TwitchClientSecret      string
+	TwitchRedirectURL       string
 	DiscordClientID         string
 	DiscordClientSecret     string
 	DiscordOAuthRedirectURL string
@@ -178,6 +196,10 @@ func New(opts Options) (*Server, error) {
 		ytClientID:          opts.YouTubeClientID,
 		ytClientSecret:      opts.YouTubeClientSecret,
 		ytRedirectURL:       opts.YouTubeRedirectURL,
+		twitch:              opts.Twitch,
+		twitchClientID:      strings.TrimSpace(opts.TwitchClientID),
+		twitchClientSecret:  strings.TrimSpace(opts.TwitchClientSecret),
+		twitchRedirectURL:   strings.TrimSpace(opts.TwitchRedirectURL),
 		discordClientID:     strings.TrimSpace(opts.DiscordClientID),
 		discordClientSecret: strings.TrimSpace(opts.DiscordClientSecret),
 		discordRedirectURL:  strings.TrimSpace(opts.DiscordOAuthRedirectURL),

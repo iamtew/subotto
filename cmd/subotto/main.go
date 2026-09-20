@@ -24,6 +24,7 @@ import (
 	"subotto/internal/db"
 	"subotto/internal/discord"
 	"subotto/internal/scheduler"
+	"subotto/internal/twitch"
 	"subotto/internal/web"
 	"subotto/internal/youtube"
 )
@@ -153,6 +154,28 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 		slog.Info("hesh helper disabled — set OPENROUTER_API_KEY in .env")
 	}
 
+	tw := twitch.New(twitch.Options{
+		Store:              store,
+		AI:                 aiClient,
+		OpenRouterModel:    cfg.OpenRouterModel,
+		TwitchClientID:     cfg.TwitchClientID,
+		TwitchClientSecret: cfg.TwitchClientSecret,
+		TwitchRedirectURL:  cfg.TwitchRedirectURL,
+	})
+	if !tw.Configured() {
+		slog.Info("twitch chat disabled — set TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET in .env")
+	} else if hasTwitch, err := twitch.HasStoredToken(ctx, store); err != nil {
+		slog.Error("failed to check twitch token", "err", err)
+		os.Exit(1)
+	} else if !hasTwitch {
+		slog.Warn("no Twitch token yet — authorize in Admin (Status → Authorize Twitch)")
+	} else if err := tw.ReloadToken(ctx); err != nil {
+		slog.Warn("twitch client not ready", "err", err)
+	} else {
+		st := tw.Status(ctx)
+		slog.Info("twitch oauth ready", "login", st.Login, "channel", st.Channel)
+	}
+
 	if err := store.LogActivity(ctx, "startup", map[string]any{"message": "Phase 8 boot", "phase": 8}, true); err != nil {
 		slog.Error("failed to write startup activity", "err", err)
 		os.Exit(1)
@@ -193,6 +216,10 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 		YouTubeClientID:         cfg.YouTubeClientID,
 		YouTubeClientSecret:     cfg.YouTubeClientSecret,
 		YouTubeRedirectURL:      cfg.YouTubeRedirectURL,
+		Twitch:                  tw,
+		TwitchClientID:          cfg.TwitchClientID,
+		TwitchClientSecret:      cfg.TwitchClientSecret,
+		TwitchRedirectURL:       cfg.TwitchRedirectURL,
 		DiscordClientID:         cfg.DiscordClientID,
 		DiscordClientSecret:     cfg.DiscordClientSecret,
 		DiscordOAuthRedirectURL: cfg.DiscordOAuthRedirectURL,
@@ -216,6 +243,7 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 
 	// Keep Discord online in the background — do not exit if the first Open fails.
 	go bot.Maintain(runCtx)
+	go tw.Maintain(runCtx)
 	go sched.Run(runCtx)
 
 	slog.Info("listening for content + picture listeners — Ctrl+C to stop")

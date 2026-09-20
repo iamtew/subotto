@@ -17,6 +17,7 @@ import (
 	"subotto/internal/db"
 	"subotto/internal/discord"
 	"subotto/internal/scheduler"
+	"subotto/internal/twitch"
 	"subotto/internal/youtube"
 )
 
@@ -52,6 +53,8 @@ func (s *Server) registerAPI(mux *http.ServeMux) {
 	mux.Handle("GET /api/settings/resync-scheduler", s.requireAdmin(http.HandlerFunc(s.handleGetResyncScheduler)))
 	mux.Handle("PUT /api/settings/resync-scheduler", s.requireAdmin(http.HandlerFunc(s.handlePutResyncScheduler)))
 	mux.Handle("GET /api/youtube/auth", s.requireAdmin(http.HandlerFunc(s.handleYouTubeAuthStart)))
+	mux.Handle("GET /api/twitch/auth", s.requireAdmin(http.HandlerFunc(s.handleTwitchAuthStart)))
+	mux.Handle("PUT /api/twitch", s.requireAdmin(http.HandlerFunc(s.handlePutTwitch)))
 	mux.Handle("GET /api/operators", s.requireAdmin(http.HandlerFunc(s.handleGetOperators)))
 	mux.Handle("PUT /api/operators", s.requireAdmin(http.HandlerFunc(s.handlePutOperators)))
 }
@@ -158,6 +161,21 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	picsTotal, _ := s.store.CountPictureListeners(ctx)
 	picsEnabled, _ := s.store.CountEnabledPictureListeners(ctx)
 
+	tw := twitch.Status{}
+	if s.twitch != nil {
+		tw = s.twitch.Status(ctx)
+	} else {
+		hasTwitch, err := twitch.HasStoredToken(ctx, s.store)
+		if err == nil {
+			tw.Authorized = hasTwitch
+		}
+		tw.Login, _ = s.store.TwitchLogin(ctx)
+		tw.Display, _ = s.store.TwitchDisplay(ctx)
+		tw.Channel, _ = s.store.TwitchChannel(ctx)
+		tw.Channel = twitch.NormalizeChannel(tw.Channel)
+		tw.Configured = s.twitchClientID != "" && s.twitchClientSecret != ""
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":                      true,
 		"phase":                   8,
@@ -165,6 +183,12 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"discord_connected":       discordOK,
 		"youtube_authorized":      hasTok,
 		"youtube_channel":         s.youtubeName,
+		"twitch_configured":       tw.Configured,
+		"twitch_authorized":       tw.Authorized,
+		"twitch_connected":        tw.Connected,
+		"twitch_login":            tw.Login,
+		"twitch_display":          tw.Display,
+		"twitch_channel":          tw.Channel,
 		"mappings_total":          mappings,
 		"mappings_enabled":        enabled,
 		"airs_total":              mappings,

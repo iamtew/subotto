@@ -37,6 +37,8 @@ const (
 	SettingAISystemPrompt = "ai_system_prompt"
 	// Hesh Helper Discord replies. Missing → enabled.
 	SettingAIEnabled = "ai_enabled"
+	// Hesh Helper Twitch replies. Missing → follow Discord ai_enabled.
+	SettingAITwitchEnabled = "ai_twitch_enabled"
 	// Hesh Helper OpenRouter sampling knobs (Admin AI sliders). JSON blob.
 	SettingAISampling = "ai_sampling"
 	// Hesh Helper active model + catalog (Admin AI tab). JSON blob.
@@ -47,6 +49,12 @@ const (
 	SettingAIMemoryWindow = "ai_memory_window"
 	// Extra Discord user IDs allowed into Admin (JSON string array). Superadmin is env-only.
 	SettingAdminDiscordIDs = "admin_discord_ids"
+
+	// Twitch IRC join target (login, no #). Empty = do not join.
+	SettingTwitchChannel = "twitch_channel"
+	// Authorized Twitch account login / display name (filled after OAuth).
+	SettingTwitchLogin   = "twitch_login"
+	SettingTwitchDisplay = "twitch_display"
 
 	DefaultAIMemoryWindow = 8
 	MinAIMemoryWindow     = 1
@@ -347,29 +355,60 @@ func (d *DB) AISystemPrompt(ctx context.Context) (string, error) {
 	return strings.TrimSpace(v), nil
 }
 
-// AIEnabled is whether Discord mention/reply chat is on. Missing key → true.
+// AIEnabled is whether Discord addressed chat is on. Missing key → true.
 func (d *DB) AIEnabled(ctx context.Context) (bool, error) {
-	v, present, err := d.getSettingPresent(ctx, SettingAIEnabled)
+	return d.aiFlag(ctx, SettingAIEnabled, true)
+}
+
+func (d *DB) SetAIEnabled(ctx context.Context, on bool) error {
+	return d.setAIFlag(ctx, SettingAIEnabled, on)
+}
+
+// AITwitchEnabled is whether Twitch addressed chat is on.
+// Missing key follows Discord so an old global off still silences Twitch.
+func (d *DB) AITwitchEnabled(ctx context.Context) (bool, error) {
+	v, present, err := d.getSettingPresent(ctx, SettingAITwitchEnabled)
 	if err != nil {
 		return false, err
 	}
 	if !present {
-		return true, nil
+		return d.AIEnabled(ctx)
 	}
-	switch strings.ToLower(strings.TrimSpace(v)) {
-	case "0", "false", "off", "no":
-		return false, nil
-	default:
-		return true, nil
-	}
+	return parseAIFlag(v, true), nil
 }
 
-func (d *DB) SetAIEnabled(ctx context.Context, on bool) error {
+func (d *DB) SetAITwitchEnabled(ctx context.Context, on bool) error {
+	return d.setAIFlag(ctx, SettingAITwitchEnabled, on)
+}
+
+func (d *DB) aiFlag(ctx context.Context, key string, missingDefault bool) (bool, error) {
+	v, present, err := d.getSettingPresent(ctx, key)
+	if err != nil {
+		return false, err
+	}
+	if !present {
+		return missingDefault, nil
+	}
+	return parseAIFlag(v, missingDefault), nil
+}
+
+func (d *DB) setAIFlag(ctx context.Context, key string, on bool) error {
 	val := "0"
 	if on {
 		val = "1"
 	}
-	return d.SetSetting(ctx, SettingAIEnabled, val)
+	return d.SetSetting(ctx, key, val)
+}
+
+func parseAIFlag(v string, fallback bool) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "0", "false", "off", "no":
+		return false
+	case "1", "true", "on", "yes":
+		return true
+	default:
+		return fallback
+	}
 }
 
 // AIMemoryEnabled is whether Discord replies include recent channel messages.
@@ -555,4 +594,41 @@ func IsDiscordSnowflake(id string) bool {
 		}
 	}
 	return true
+}
+
+// TwitchChannel is the IRC join login (no #). Missing/empty = not joining.
+func (d *DB) TwitchChannel(ctx context.Context) (string, error) {
+	v, err := d.GetSetting(ctx, SettingTwitchChannel)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(v), nil
+}
+
+func (d *DB) SetTwitchChannel(ctx context.Context, channel string) error {
+	return d.SetSetting(ctx, SettingTwitchChannel, strings.TrimSpace(channel))
+}
+
+// TwitchLogin is the authorized account nick (Helix login).
+func (d *DB) TwitchLogin(ctx context.Context) (string, error) {
+	v, err := d.GetSetting(ctx, SettingTwitchLogin)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(v), nil
+}
+
+func (d *DB) TwitchDisplay(ctx context.Context) (string, error) {
+	v, err := d.GetSetting(ctx, SettingTwitchDisplay)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(v), nil
+}
+
+func (d *DB) SetTwitchIdentity(ctx context.Context, login, display string) error {
+	return d.SetSettings(ctx, map[string]string{
+		SettingTwitchLogin:   strings.TrimSpace(login),
+		SettingTwitchDisplay: strings.TrimSpace(display),
+	})
 }

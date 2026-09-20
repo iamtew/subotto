@@ -274,6 +274,30 @@ func TestAIEnabledDefaultAndSave(t *testing.T) {
 	if on {
 		t.Fatal("expected disabled")
 	}
+	follow, err := store.AITwitchEnabled(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if follow {
+		t.Fatal("twitch should follow Discord until its own key is saved")
+	}
+	if err := store.SetAITwitchEnabled(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	follow, err = store.AITwitchEnabled(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !follow {
+		t.Fatal("expected twitch on after independent save")
+	}
+	on, err = store.AIEnabled(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if on {
+		t.Fatal("discord should stay off")
+	}
 }
 
 func TestAISamplingDefaultRoundTripAndClamp(t *testing.T) {

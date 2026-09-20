@@ -33,6 +33,11 @@ type Config struct {
 	YouTubeClientSecret string
 	YouTubeRedirectURL  string
 
+	// Twitch user OAuth (optional). Empty client id/secret = Twitch chat off.
+	TwitchClientID     string
+	TwitchClientSecret string
+	TwitchRedirectURL  string
+
 	// Admin UI
 	AdminPassword string
 	APIPassword   string // optional; Basic Auth user "api" for broadcast fire GETs
@@ -68,6 +73,9 @@ func Load() (*Config, error) {
 		YouTubeClientID:         os.Getenv("YOUTUBE_CLIENT_ID"),
 		YouTubeClientSecret:     os.Getenv("YOUTUBE_CLIENT_SECRET"),
 		YouTubeRedirectURL:      envOr("YOUTUBE_REDIRECT_URL", "http://localhost:50770/oauth/callback"),
+		TwitchClientID:          strings.TrimSpace(os.Getenv("TWITCH_CLIENT_ID")),
+		TwitchClientSecret:      strings.TrimSpace(os.Getenv("TWITCH_CLIENT_SECRET")),
+		TwitchRedirectURL:       envOr("TWITCH_REDIRECT_URL", "http://localhost:50770/auth/twitch/callback"),
 		AdminPassword:           envDefaultIfUnset("ADMIN_PASSWORD", "change-me-please"),
 		APIPassword:             strings.TrimSpace(os.Getenv("API_PASSWORD")),
 		AdminHost:               envOr("ADMIN_HOST", "0.0.0.0"),

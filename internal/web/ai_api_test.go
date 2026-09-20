@@ -35,6 +35,9 @@ func TestAIGetPutAndChatUnconfigured(t *testing.T) {
 	if got["enabled"] != true {
 		t.Fatalf("enabled default: %#v", got["enabled"])
 	}
+	if got["twitch_enabled"] != true {
+		t.Fatalf("twitch_enabled default: %#v", got["twitch_enabled"])
+	}
 	sampling, _ := json.Marshal(got["sampling"])
 	var samp ai.Sampling
 	if err := json.Unmarshal(sampling, &samp); err != nil {
@@ -94,6 +97,24 @@ func TestAIGetPutAndChatUnconfigured(t *testing.T) {
 	if got["enabled"] != false {
 		t.Fatalf("disabled: %#v", got["enabled"])
 	}
+	if got["twitch_enabled"] != false {
+		t.Fatalf("twitch should follow Discord until set: %#v", got["twitch_enabled"])
+	}
+
+	twOff := httptest.NewRequest(http.MethodPut, "/api/ai", strings.NewReader(`{"twitch_enabled":true}`))
+	twOff.SetBasicAuth("admin", "test-pass")
+	twOff.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, twOff)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("twitch enable: %d %s", rec.Code, rec.Body.String())
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["enabled"] != false || got["twitch_enabled"] != true {
+		t.Fatalf("split flags: enabled=%v twitch=%v", got["enabled"], got["twitch_enabled"])
+	}
 
 	put := httptest.NewRequest(http.MethodPut, "/api/ai", strings.NewReader(`{"system_prompt":"be brief"}`))
 	put.SetBasicAuth("admin", "test-pass")
@@ -108,6 +129,9 @@ func TestAIGetPutAndChatUnconfigured(t *testing.T) {
 	}
 	if got["enabled"] != false || got["system_prompt"] != "be brief" {
 		t.Fatalf("prompt save should keep enabled=false: %#v", got)
+	}
+	if got["twitch_enabled"] != true {
+		t.Fatalf("prompt save should keep twitch_enabled=true: %#v", got["twitch_enabled"])
 	}
 
 	chat := httptest.NewRequest(http.MethodPost, "/api/ai/chat", strings.NewReader(`{"message":"hi"}`))

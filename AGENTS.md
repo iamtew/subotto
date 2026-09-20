@@ -1,7 +1,7 @@
 # AGENTS.md
 
 Operator-owned Go bot. Just, no Docker. Maintainer: Windows 10 DEV → Linux VPS
-native binary. Maintainer owns keys, Discord app, YouTube OAuth, deploy, approval.
+native binary. Maintainer owns keys, Discord app, YouTube OAuth, Twitch OAuth, deploy, approval.
 
 ## Product
 - Content listener: Discord channel → YouTube playlist (start/cease). One live per channel.
@@ -9,7 +9,8 @@ native binary. Maintainer owns keys, Discord app, YouTube OAuth, deploy, approva
 - Both may be live on the same channel. Collection window = operator choice (SIGINT vibe, not broadcast).
 - Broadcasts: named multi-channel Discord sends; standalone or show-template `{{…}}` from live episode; Admin Fire or `GET /api/broadcasts/{slug}/fire` (Basic `api` / `API_PASSWORD`).
 - Admin: public `/` landing; Discord OAuth if `SUPERADMIN_DISCORD_ID` + Discord client id/secret; extra Discord IDs in Admin Status (superadmin); optional Basic `admin` / `ADMIN_PASSWORD`. UI at `/admin`. Superadmin **❌** on a bot-stamped listener post hides pictures or skips a playlist video.
-- Hesh Helper: OpenRouter on mention or reply-to-bot; model, system prompt, and optional channel memory in Admin **AI**.
+- Hesh Helper: OpenRouter on mention or reply-to-bot (Discord) or @login / reply-to-bot (Twitch); model, system prompt, and optional channel memory in Admin **AI**.
+- Twitch chat: optional user OAuth; Subotto chats as that account in one Admin-chosen channel (not necessarily that account’s).
 - Show episodes: templates + start/cease + absorb existing live listeners (link only, after deploy/restart) + public `/api/get/episode/{show}`. Parked: bi-weekly schedules, richer show-runner announce.
 
 ## Agent
