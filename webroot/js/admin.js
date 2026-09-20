@@ -352,7 +352,9 @@ async function loadAILogs() {
         const levelClass = { info: 1, warning: 1, error: 1, critical: 1 }[levelName]
           ? levelName
           : "info";
-        return `<tr>
+        const key = aiLogKey(e);
+        const exp = expandedLogRows.has(key) ? " is-expanded" : "";
+        return `<tr class="${exp.trim()}" data-log-key="${esc(key)}">
           <td>${whenCell(e.timestamp)}</td>
           <td class="mono ai-log-${levelClass}">${esc(levelName)}</td>
           <td class="mono">${esc(e.trigger || "")}</td>
@@ -784,6 +786,27 @@ function whenCell(iso, empty) {
   return `<button type="button" class="when-toggle" data-iso="${esc(s)}" data-abs="0" title="${esc(abs)}">${esc(fmtRel(s))}</button>`;
 }
 
+const expandedLogRows = new Set();
+
+function activityLogKey(e) {
+  return "act\t" + (e.timestamp || "") + "\t" + (e.event_type || "");
+}
+
+function aiLogKey(e) {
+  return "ai\t" + (e.timestamp || "") + "\t" + (e.trigger || "") + "\t" + (e.level || "");
+}
+
+document.addEventListener("click", (ev) => {
+  if (ev.target.closest("button, a")) return;
+  const tr = ev.target.closest("#status-activity-table tbody tr, #ai-log-table tbody tr");
+  if (!tr || tr.querySelector("td.empty")) return;
+  tr.classList.toggle("is-expanded");
+  const key = tr.getAttribute("data-log-key") || "";
+  if (!key) return;
+  if (tr.classList.contains("is-expanded")) expandedLogRows.add(key);
+  else expandedLogRows.delete(key);
+});
+
 document.addEventListener("click", (ev) => {
   const el = ev.target.closest(".when-toggle");
   if (!el) return;
@@ -1041,7 +1064,9 @@ function renderStatusActivity() {
       const ok = e.success
         ? `<span class="ok-yes">YES</span>`
         : `<span class="ok-no">NO</span>`;
-      return `<tr>
+      const key = activityLogKey(e);
+      const exp = expandedLogRows.has(key) ? " is-expanded" : "";
+      return `<tr class="${exp.trim()}" data-log-key="${esc(key)}">
         <td>${whenCell(e.timestamp)}</td>
         <td class="mono">${esc(e.event_type)}</td>
         <td>${ok}</td>

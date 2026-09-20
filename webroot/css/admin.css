@@ -1956,6 +1956,27 @@ footer code {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+
+  #status-activity-table tbody tr:not(:has(.empty)),
+  #ai-log-table tbody tr:not(:has(.empty)) {
+    cursor: pointer;
+  }
+
+  #status-activity-table tbody tr.is-expanded td:not(.empty):not(:has(.when-toggle)),
+  #ai-log-table tbody tr.is-expanded td:not(.empty):not(:has(.when-toggle)) {
+    max-width: none;
+    overflow: visible;
+    text-overflow: unset;
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  #status-activity-table tbody tr.is-expanded .details-pre,
+  #ai-log-table tbody tr.is-expanded .details-pre {
+    overflow: visible;
+    text-overflow: unset;
+    white-space: pre-wrap;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
