@@ -53,27 +53,33 @@
       position: relative;
       display: flex;
       flex-direction: column;
-      align-items: center;
+      align-items: stretch;
       gap: 1.25rem;
       width: min(28rem, 100%);
     }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+    }
     .login-logo {
-      width: 7.5rem;
-      height: auto;
+      height: 4.5rem;
+      width: auto;
       display: block;
+      flex-shrink: 0;
     }
     h1 {
-      margin: 0 0 0.35rem;
+      margin: 0;
       font-family: var(--font-display);
-      font-size: 1.35rem;
-      letter-spacing: 0.12em;
+      font-size: 2rem;
+      letter-spacing: 0.06em;
       font-weight: 400;
       color: var(--chartreuse);
       text-shadow: 0 0 24px rgba(229, 242, 13, 0.25);
     }
     p { color: var(--muted); line-height: 1.45; }
     .err { color: var(--red); }
-    .actions { display: flex; flex-direction: column; gap: 0.65rem; margin-top: 1.25rem; }
+    .actions { display: flex; flex-direction: column; gap: 0.65rem; margin-top: 1rem; }
     a.btn {
       display: block;
       text-align: center;
@@ -97,9 +103,11 @@
 <body>
   <div class="bg-glow" aria-hidden="true"></div>
   <div class="login">
-    <img class="login-logo" src="/img/SUBOTTO.png" alt="">
+    <div class="brand">
+      <img class="login-logo" src="/img/SUBOTTO.png" alt="">
+      <h1>SUBOTTO</h1>
+    </div>
     <div class="card">
-    <h1>SUBOTTO</h1>
     <p>Authorized users only</p>
     {{if .Err}}<p class="err">{{.Err}}</p>{{end}}
     <div class="actions">
