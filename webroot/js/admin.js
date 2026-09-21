@@ -907,7 +907,10 @@ function renderStatusHealth() {
     <label>Chat channel
       <input id="twitch-channel" name="channel" value="${twChan}" placeholder="login (not necessarily yours)" autocomplete="off" spellcheck="false">
     </label>
-    <button type="submit">Save channel</button>
+    <div class="form-actions">
+      <button type="submit">Save channel</button>
+      <button type="button" class="secondary" id="twitch-channel-cancel">Cancel</button>
+    </div>
   </form>`;
   let sched = `<span class="state-off">OFF</span>`;
   if (s.scheduler_enabled) {
@@ -2087,6 +2090,18 @@ function bindAirCalendar() {
   });
 }
 
+function closeEpisodeEditor() {
+  document.getElementById("episode-edit-id").value = "";
+  document.getElementById("episode-edit-label").value = "";
+  document.getElementById("episode-edit-name").value = "";
+  document.getElementById("episode-edit-suffix").value = "";
+  document.getElementById("episode-edit-namefull").value = "";
+  fillAirDateTime("episode-edit", "");
+  setSpotFile("edit", null);
+  setBgFile("edit", null);
+  document.getElementById("episode-edit-details").open = false;
+}
+
 function openEpisodeEditor(ep) {
   document.getElementById("episode-edit-id").value = String(ep.id);
   document.getElementById("episode-edit-label").value =
@@ -2383,6 +2398,13 @@ function resetEpisodeTemplateForm() {
   document.getElementById("episode-template-namefull").value = "";
   clearEpisodeStubPanels();
   document.getElementById("episode-template-save").textContent = "SAVE TEMPLATE";
+  syncEpisodeTemplateEditButtons();
+}
+
+function syncEpisodeTemplateEditButtons() {
+  const editing = !!document.getElementById("episode-template-id").value;
+  document.getElementById("episode-template-cancel").hidden = !editing;
+  document.getElementById("episode-template-reset").hidden = editing;
 }
 
 async function fillEpisodeTemplateForm(t) {
@@ -2395,6 +2417,7 @@ async function fillEpisodeTemplateForm(t) {
     await addEpisodeStubPanel(stub);
   }
   document.getElementById("episode-template-save").textContent = "UPDATE TEMPLATE";
+  syncEpisodeTemplateEditButtons();
 }
 
 document.getElementById("episode-stub-add-content").addEventListener("click", () => {
@@ -2566,9 +2589,7 @@ document.getElementById("episode-edit-form").addEventListener("submit", async (e
       await uploadStreamBackground(id, editBgFile);
     }
     toast("episode updated · listeners re-resolved");
-    document.getElementById("episode-edit-details").open = false;
-    setSpotFile("edit", null);
-    setBgFile("edit", null);
+    closeEpisodeEditor();
     await refreshAll();
   } catch (err) {
     toast(err.message, true);
@@ -2619,6 +2640,8 @@ document.getElementById("episode-template-form").addEventListener("submit", asyn
 });
 
 document.getElementById("episode-template-reset").addEventListener("click", resetEpisodeTemplateForm);
+document.getElementById("episode-template-cancel").addEventListener("click", resetEpisodeTemplateForm);
+document.getElementById("episode-edit-cancel").addEventListener("click", closeEpisodeEditor);
 
 document.getElementById("episode-templates-table").addEventListener("click", async (ev) => {
   const edit = ev.target.closest("[data-tmpl-edit]");
@@ -3319,6 +3342,16 @@ document.getElementById("scheduler-form").addEventListener("change", (ev) => {
   if (ev.target && ev.target.name === "scope") syncSchedScope();
 });
 
+document.getElementById("announce-cancel").addEventListener("click", () => {
+  loadAnnounce();
+});
+document.getElementById("picture-announce-cancel").addEventListener("click", () => {
+  loadPictureAnnounce();
+});
+document.getElementById("scheduler-cancel").addEventListener("click", () => {
+  loadSchedulerTab();
+});
+
 document.getElementById("announce-form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const form = ev.target;
@@ -3725,6 +3758,12 @@ loadAnnounce();
 loadPictureAnnounce();
 syncEpisodeStubsEmpty();
 
+document.getElementById("tab-status").addEventListener("click", (ev) => {
+  if (!ev.target.closest("#twitch-channel-cancel")) return;
+  const input = document.getElementById("twitch-channel");
+  if (input) input.value = (cachedStatus && cachedStatus.twitch_channel) || "";
+});
+
 document.getElementById("tab-status").addEventListener("submit", async (ev) => {
   const form = ev.target.closest("#twitch-channel-form");
   if (!form) return;
@@ -3883,6 +3922,10 @@ document.getElementById("ai-twitch-toggle").addEventListener("click", async (ev)
   } finally {
     btn.disabled = false;
   }
+});
+
+document.getElementById("ai-prompt-cancel").addEventListener("click", () => {
+  loadAITab();
 });
 
 document.getElementById("ai-prompt-form").addEventListener("submit", async (ev) => {

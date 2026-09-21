@@ -259,7 +259,10 @@
             OFFLINE notice
             <textarea name="stop_message" id="stop-message" rows="5" spellcheck="true"></textarea>
           </label>
-          <button type="submit">SAVE NOTICES</button>
+          <div class="form-actions">
+            <button type="submit">SAVE NOTICES</button>
+            <button type="button" class="secondary" id="announce-cancel">Cancel</button>
+          </div>
         </form>
       </section>
 
@@ -461,7 +464,10 @@
             OFFLINE notice
             <textarea name="stop_message" id="picture-stop-message" rows="5" spellcheck="true"></textarea>
           </label>
-          <button type="submit">SAVE NOTICES</button>
+          <div class="form-actions">
+            <button type="submit">SAVE NOTICES</button>
+            <button type="button" class="secondary" id="picture-announce-cancel">Cancel</button>
+          </div>
         </form>
       </section>
 
@@ -644,7 +650,10 @@
               <button type="button" class="secondary spot-drop-pick" id="episode-edit-bg-pick" title="pick image">+</button>
             </div>
             </div>
-            <button type="submit">SAVE EPISODE</button>
+            <div class="form-actions">
+              <button type="submit">SAVE EPISODE</button>
+              <button type="button" class="secondary" id="episode-edit-cancel">Cancel</button>
+            </div>
           </form>
         </details>
 
@@ -725,6 +734,7 @@
 
           <div class="form-actions">
             <button type="submit" id="episode-template-save">SAVE TEMPLATE</button>
+            <button type="button" class="secondary" id="episode-template-cancel" hidden>Cancel</button>
             <button type="button" class="secondary" id="episode-template-reset">New / clear</button>
           </div>
         </form>
@@ -788,7 +798,10 @@
               <div id="sched-picture-list" class="sched-check-list"></div>
             </div>
           </div>
-          <button type="submit">SAVE SCHEDULER</button>
+          <div class="form-actions">
+            <button type="submit">SAVE SCHEDULER</button>
+            <button type="button" class="secondary" id="scheduler-cancel">Cancel</button>
+          </div>
         </form>
       </section>
     </div>
@@ -949,6 +962,7 @@
           </details>
           <div class="form-actions">
             <button type="submit">SAVE</button>
+            <button type="button" class="secondary" id="ai-prompt-cancel">Cancel</button>
           </div>
         </form>
       </section>
