@@ -2669,20 +2669,27 @@ document.getElementById("episode-templates-table").addEventListener("click", asy
 
 let cachedBroadcasts = [];
 const bcChannelNameByID = {}; // channelID -> name (for chips)
+const bcGuildNameByChannelID = {}; // channelID -> guild name
 
 function bcNewMsgId() {
   return "m" + Math.random().toString(16).slice(2) + Date.now().toString(16);
 }
 
-function rememberBcChannelName(id, name) {
+function rememberBcChannelName(id, name, guildName) {
   id = String(id || "").trim();
   name = String(name || "").replace(/^#/, "").trim();
   if (id && name) bcChannelNameByID[id] = name;
+  guildName = String(guildName || "").trim();
+  if (id && guildName) bcGuildNameByChannelID[id] = guildName;
 }
 
-function bcChannelLabel(id) {
+function bcChannelLabel(id, fullGuild) {
   const name = bcChannelNameByID[id];
-  return name ? "#" + name : "#" + id;
+  const chan = name ? "#" + name : "#" + id;
+  const g = bcGuildNameByChannelID[id];
+  if (!g) return chan;
+  if (!fullGuild && g.length > 8) return g.slice(0, 8) + "... // " + chan;
+  return g + " // " + chan;
 }
 
 async function ensureBcGuilds() {
@@ -2690,30 +2697,32 @@ async function ensureBcGuilds() {
   return data.guilds || [];
 }
 
-async function ensureBcChannels(guildID) {
+async function ensureBcChannels(guildID, guildName) {
   if (!guildID) return [];
   const data = await api("/api/discord/guilds/" + encodeURIComponent(guildID) + "/channels");
   const channels = (data.channels || []).filter((c) => c.can_send !== false);
-  for (const c of channels) rememberBcChannelName(c.id, c.name);
+  for (const c of channels) rememberBcChannelName(c.id, c.name, guildName);
   return channels;
 }
 
-function rememberBcChannelNamesFromSelect(sel) {
+function rememberBcChannelNamesFromSelect(sel, guildName) {
   if (!sel) return;
   for (const o of sel.options) {
-    if (o.value) rememberBcChannelName(o.value, o.textContent);
+    if (o.value) rememberBcChannelName(o.value, o.textContent, guildName);
   }
 }
 
 /** Warm id→name map so edit chips can show #name instead of raw snowflakes. */
 async function warmBcChannelNames(channelIDs) {
-  const missing = (channelIDs || []).filter((id) => id && !bcChannelNameByID[id]);
+  const missing = (channelIDs || []).filter(
+    (id) => id && (!bcChannelNameByID[id] || !bcGuildNameByChannelID[id])
+  );
   if (!missing.length) return;
   try {
     const guilds = await ensureBcGuilds();
     for (const g of guilds) {
-      await ensureBcChannels(g.id);
-      if (missing.every((id) => bcChannelNameByID[id])) break;
+      await ensureBcChannels(g.id, g.name);
+      if (missing.every((id) => bcChannelNameByID[id] && bcGuildNameByChannelID[id])) break;
     }
   } catch {
     /* chips fall back to id */
@@ -2894,7 +2903,7 @@ function renderBcChannelChips(row, channelIDs) {
   wrap.innerHTML = ids
     .map(
       (id) =>
-        `<button type="button" class="bc-chan-chip" data-channel-id="${esc(id)}" title="remove ${esc(bcChannelLabel(id))}">${esc(bcChannelLabel(id))} ×</button>`
+        `<button type="button" class="bc-chan-chip" data-channel-id="${esc(id)}" title="remove ${esc(bcChannelLabel(id, true))}">${esc(bcChannelLabel(id))} ×</button>`
     )
     .join("");
 }
@@ -3019,7 +3028,8 @@ document.getElementById("broadcast-messages").addEventListener("change", async (
   const row = guildSel.closest(".bc-msg");
   const chanSel = row.querySelector(".bc-channel-select");
   await loadChannelsForGuild(guildSel.value, chanSel, { sendable: true });
-  rememberBcChannelNamesFromSelect(chanSel);
+  const guildOpt = guildSel.selectedOptions && guildSel.selectedOptions[0];
+  rememberBcChannelNamesFromSelect(chanSel, guildOpt && guildOpt.textContent);
 });
 
 document.getElementById("broadcast-messages").addEventListener("click", (ev) => {
@@ -3047,7 +3057,9 @@ document.getElementById("broadcast-messages").addEventListener("click", (ev) => 
       return;
     }
     const opt = chanSel.selectedOptions && chanSel.selectedOptions[0];
-    if (opt) rememberBcChannelName(id, opt.textContent);
+    const guildSel = row.querySelector(".bc-guild-select");
+    const guildOpt = guildSel && guildSel.selectedOptions && guildSel.selectedOptions[0];
+    if (opt) rememberBcChannelName(id, opt.textContent, guildOpt && guildOpt.textContent);
     const existing = [...row.querySelectorAll(".bc-chan-chip")].map((c) =>
       c.getAttribute("data-channel-id")
     );
