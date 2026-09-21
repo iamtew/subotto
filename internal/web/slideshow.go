@@ -33,6 +33,9 @@ func (s *Server) registerPublic(mux *http.ServeMux) {
 	staticDir := filepath.Join(s.webroot, "slideshow")
 	mux.Handle("GET /slideshow/static/", http.StripPrefix("/slideshow/static/",
 		http.FileServer(http.Dir(staticDir))))
+	// Brand logo (landing is public; /css/ is Admin-only).
+	mux.Handle("GET /img/", http.StripPrefix("/img/",
+		http.FileServer(http.Dir(filepath.Join(s.webroot, "img")))))
 }
 
 func (s *Server) handleSlideshowLatest(w http.ResponseWriter, r *http.Request) {

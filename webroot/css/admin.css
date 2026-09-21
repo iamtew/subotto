@@ -136,6 +136,20 @@ footer,
   color: var(--cyan);
 }
 
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.brand-logo {
+  height: 2.15rem;
+  width: auto;
+  display: block;
+  flex-shrink: 0;
+}
+
 .brand h1 {
   font-family: var(--font-display);
   font-size: clamp(1.35rem, 3.2vw, 2rem);
@@ -1903,7 +1917,7 @@ footer code {
   }
 
   .brand h1 {
-    letter-spacing: 0.04em;
+    display: none;
   }
 
   .bc-fire-url {

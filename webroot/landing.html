@@ -43,11 +43,24 @@
     }
     .card {
       position: relative;
-      width: min(28rem, 100%);
+      width: 100%;
       padding: 1.75rem 1.5rem;
       border: 1px solid var(--line);
       background: rgba(26, 33, 24, 0.92);
       box-shadow: 0 0 0 1px rgba(154, 172, 98, 0.12), 0 12px 40px rgba(0, 0, 0, 0.45);
+    }
+    .login {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.25rem;
+      width: min(28rem, 100%);
+    }
+    .login-logo {
+      width: 7.5rem;
+      height: auto;
+      display: block;
     }
     h1 {
       margin: 0 0 0.35rem;
@@ -55,6 +68,8 @@
       font-size: 1.35rem;
       letter-spacing: 0.12em;
       font-weight: 400;
+      color: var(--chartreuse);
+      text-shadow: 0 0 24px rgba(229, 242, 13, 0.25);
     }
     p { color: var(--muted); line-height: 1.45; }
     .err { color: var(--red); }
@@ -81,14 +96,17 @@
 </head>
 <body>
   <div class="bg-glow" aria-hidden="true"></div>
-  <div class="card">
+  <div class="login">
+    <img class="login-logo" src="/img/SUBOTTO.png" alt="">
+    <div class="card">
     <h1>SUBOTTO</h1>
-    <p>Discord listeners, YouTube playlists, picture slideshows, show episodes.</p>
+    <p>Authorized users only</p>
     {{if .Err}}<p class="err">{{.Err}}</p>{{end}}
     <div class="actions">
       {{if .DiscordOAuth}}<a class="btn" href="/auth/discord">Continue with Discord</a>{{end}}
       {{if .Basic}}<a class="btn secondary" href="/admin">Password login</a>{{end}}
       {{if not .DiscordOAuth}}{{if not .Basic}}<p>No Admin login is configured. Set SUPERADMIN_DISCORD_ID plus Discord OAuth, or ADMIN_PASSWORD.</p>{{end}}{{end}}
+    </div>
     </div>
   </div>
 </body>
