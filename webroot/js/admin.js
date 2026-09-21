@@ -2688,8 +2688,8 @@ function bcChannelLabel(id, fullGuild) {
   const chan = name ? "#" + name : "#" + id;
   const g = bcGuildNameByChannelID[id];
   if (!g) return chan;
-  if (!fullGuild && g.length > 8) return g.slice(0, 8) + "... // " + chan;
-  return g + " // " + chan;
+  if (!fullGuild && g.length > 8) return g.slice(0, 8) + "... " + chan;
+  return g + " " + chan;
 }
 
 async function ensureBcGuilds() {
