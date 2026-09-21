@@ -105,6 +105,30 @@ func unescapeTag(s string) string {
 	return b.String()
 }
 
+func ircChannel(msg ircLine) string {
+	if len(msg.Params) == 0 {
+		return ""
+	}
+	return NormalizeChannel(msg.Params[0])
+}
+
+func joinLine(channels []string) string {
+	parts := make([]string, 0, len(channels))
+	seen := map[string]bool{}
+	for _, c := range channels {
+		c = NormalizeChannel(c)
+		if c == "" || seen[c] {
+			continue
+		}
+		seen[c] = true
+		parts = append(parts, "#"+c)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "JOIN " + strings.Join(parts, ",") + "\r\n"
+}
+
 func (l ircLine) text() string {
 	if len(l.Params) == 0 {
 		return ""

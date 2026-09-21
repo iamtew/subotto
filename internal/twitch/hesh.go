@@ -5,7 +5,9 @@ import (
 	"errors"
 	"log/slog"
 	"math/rand/v2"
+	"strconv"
 	"strings"
+	"time"
 
 	"subotto/internal/ai"
 	"subotto/internal/db"
@@ -13,13 +15,39 @@ import (
 
 const twitchPromptExtra = "You are in Twitch chat. Keep replies short (one or two sentences), no markdown, stay under 400 characters."
 
-func (c *Client) handlePRIVMSG(msg ircLine, selfLogin, channel string) {
+func (c *Client) handlePRIVMSG(msg ircLine, selfLogin string) {
 	if c == nil {
+		return
+	}
+	channel := ircChannel(msg)
+	if channel == "" {
 		return
 	}
 	nick := strings.ToLower(strings.TrimSpace(msg.Nick))
 	text := msg.text()
-	if nick == "" || nick == selfLogin {
+	who := msg.tag("display-name")
+	if who == "" {
+		who = nick
+	}
+	self := nick != "" && nick == selfLogin
+	ts := time.Now().UTC().Format(time.RFC3339)
+	if ms := msg.tag("tmi-sent-ts"); ms != "" {
+		if n, err := strconv.ParseInt(ms, 10, 64); err == nil {
+			ts = time.UnixMilli(n).UTC().Format(time.RFC3339)
+		}
+	}
+	c.rememberChat(channel, ChatMessage{
+		ID:        msg.tag("id"),
+		Author:    who,
+		AuthorID:  nick,
+		Content:   text,
+		Timestamp: ts,
+		Self:      self,
+	})
+	if nick == "" || self {
+		return
+	}
+	if c.store == nil {
 		return
 	}
 	display, _ := c.store.TwitchDisplay(context.Background())

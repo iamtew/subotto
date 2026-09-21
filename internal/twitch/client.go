@@ -44,6 +44,9 @@ type Client struct {
 
 	memMu sync.Mutex
 	mem   []memLine
+
+	chatMu  sync.Mutex
+	chatLog map[string][]ChatMessage
 }
 
 type memLine struct {
@@ -159,18 +162,23 @@ func (c *Client) Maintain(ctx context.Context) {
 				continue
 			}
 		}
-		channel, err := c.store.TwitchChannel(ctx)
+		channels, err := c.store.TwitchChannels(ctx)
 		if err != nil {
 			slog.Error("twitch channel load failed", "err", err)
 			waitIdle(ctx, c.wake, idleWait)
 			continue
 		}
-		channel = NormalizeChannel(channel)
-		if channel == "" {
+		var cleaned []string
+		for _, ch := range channels {
+			if n := NormalizeChannel(ch); n != "" {
+				cleaned = append(cleaned, n)
+			}
+		}
+		if len(cleaned) == 0 {
 			waitIdle(ctx, c.wake, idleWait)
 			continue
 		}
-		err = c.runSession(ctx, channel)
+		err = c.runSession(ctx, cleaned)
 		if ctx.Err() != nil {
 			return
 		}
@@ -188,7 +196,7 @@ func (c *Client) Maintain(ctx context.Context) {
 	}
 }
 
-func (c *Client) runSession(ctx context.Context, channel string) error {
+func (c *Client) runSession(ctx context.Context, channels []string) error {
 	access, err := c.accessToken()
 	if err != nil {
 		return err
@@ -230,10 +238,14 @@ func (c *Client) runSession(ctx context.Context, channel string) error {
 		}
 	}()
 
-	if err := c.ircWrite(fmt.Sprintf("PASS oauth:%s\r\nNICK %s\r\nCAP REQ :twitch.tv/tags twitch.tv/commands\r\nJOIN #%s\r\n", access, login, channel)); err != nil {
+	join := joinLine(channels)
+	if join == "" {
+		return nil
+	}
+	if err := c.ircWrite(fmt.Sprintf("PASS oauth:%s\r\nNICK %s\r\nCAP REQ :twitch.tv/tags twitch.tv/commands\r\n%s", access, login, join)); err != nil {
 		return err
 	}
-	slog.Info("twitch irc joined", "as", login, "channel", channel)
+	slog.Info("twitch irc joined", "as", login, "channels", channels)
 
 	br := bufio.NewReader(conn)
 	for {
@@ -258,7 +270,7 @@ func (c *Client) runSession(ctx context.Context, channel string) error {
 		case "RECONNECT":
 			return errors.New("twitch requested reconnect")
 		case "PRIVMSG":
-			c.handlePRIVMSG(msg, login, channel)
+			c.handlePRIVMSG(msg, login)
 		}
 	}
 }
@@ -294,14 +306,155 @@ func (c *Client) sendPRIVMSG(channel, text, parentID string) error {
 	return c.ircWrite(privmsgOut(channel, text, parentID) + "\r\n")
 }
 
+const chatKeep = 10
+
+// ChatMessage is one Twitch IRC line for the Admin Chat tab (same JSON as Discord).
+type ChatMessage struct {
+	ID        string `json:"id"`
+	Author    string `json:"author"`
+	AuthorID  string `json:"author_id,omitempty"`
+	Content   string `json:"content"`
+	Timestamp string `json:"timestamp"`
+	Bot       bool   `json:"bot"`
+	Self      bool   `json:"self"`
+}
+
+func (c *Client) rememberChat(channel string, m ChatMessage) {
+	if c == nil {
+		return
+	}
+	channel = NormalizeChannel(channel)
+	if channel == "" {
+		return
+	}
+	c.chatMu.Lock()
+	defer c.chatMu.Unlock()
+	if c.chatLog == nil {
+		c.chatLog = map[string][]ChatMessage{}
+	}
+	list := append(c.chatLog[channel], m)
+	if len(list) > chatKeep {
+		list = list[len(list)-chatKeep:]
+	}
+	c.chatLog[channel] = list
+}
+
+func (c *Client) dropChat(channel string) {
+	if c == nil {
+		return
+	}
+	c.chatMu.Lock()
+	delete(c.chatLog, NormalizeChannel(channel))
+	c.chatMu.Unlock()
+}
+
+// ListRecentMessages is the last PRIVMSG lines seen in a joined room (since process start / join).
+func (c *Client) ListRecentMessages(channel string, limit int) []ChatMessage {
+	if c == nil {
+		return []ChatMessage{}
+	}
+	channel = NormalizeChannel(channel)
+	if limit <= 0 || limit > chatKeep {
+		limit = chatKeep
+	}
+	c.chatMu.Lock()
+	defer c.chatMu.Unlock()
+	list := c.chatLog[channel]
+	if len(list) == 0 {
+		return []ChatMessage{}
+	}
+	if len(list) > limit {
+		list = list[len(list)-limit:]
+	}
+	out := make([]ChatMessage, len(list))
+	copy(out, list)
+	return out
+}
+
+// SendChat posts as the authorized Twitch user. Channel must already be joined.
+func (c *Client) SendChat(channel, text string) error {
+	if c == nil {
+		return errors.New("twitch client is nil")
+	}
+	channel = NormalizeChannel(channel)
+	text = strings.TrimSpace(text)
+	if channel == "" || text == "" {
+		return errors.New("channel and message are required")
+	}
+	if err := c.sendPRIVMSG(channel, text, ""); err != nil {
+		return err
+	}
+	c.rememberChat(channel, ChatMessage{
+		Author:    c.selfDisplay(),
+		AuthorID:  c.selfLogin(),
+		Content:   text,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Self:      true,
+	})
+	return nil
+}
+
+func (c *Client) selfDisplay() string {
+	if c.store == nil {
+		return c.selfLogin()
+	}
+	display, _ := c.store.TwitchDisplay(context.Background())
+	if display == "" {
+		return c.selfLogin()
+	}
+	return display
+}
+
+// AfterChannelsChanged JOINs/PARTs on a live IRC session, or Kick()s if idle/empty.
+func (c *Client) AfterChannelsChanged(added, removed string, remaining int) {
+	if c == nil {
+		return
+	}
+	if remaining == 0 {
+		c.Kick()
+		return
+	}
+	if !c.Connected() {
+		c.Kick()
+		return
+	}
+	if added != "" {
+		added = NormalizeChannel(added)
+		if added != "" {
+			_ = c.ircWrite("JOIN #" + added + "\r\n")
+		}
+	}
+	if removed != "" {
+		removed = NormalizeChannel(removed)
+		if removed != "" {
+			_ = c.ircWrite("PART #" + removed + "\r\n")
+			c.dropChat(removed)
+		}
+	}
+}
+
+func ChannelJoined(list []string, channel string) bool {
+	channel = NormalizeChannel(channel)
+	if channel == "" {
+		return false
+	}
+	for _, x := range list {
+		if NormalizeChannel(x) == channel {
+			return true
+		}
+	}
+	return false
+}
+
 // Status is what Admin /api/status shows for Twitch.
 type Status struct {
-	Configured bool   `json:"configured"`
-	Authorized bool   `json:"authorized"`
-	Connected  bool   `json:"connected"`
-	Login      string `json:"login"`
-	Display    string `json:"display"`
-	Channel    string `json:"channel"`
+	Configured bool     `json:"configured"`
+	Authorized bool     `json:"authorized"`
+	Connected  bool     `json:"connected"`
+	Login      string   `json:"login"`
+	Display    string   `json:"display"`
+	Channel    string   `json:"channel"`
+	Channels   []string `json:"channels"`
 }
 
 func (c *Client) Status(ctx context.Context) Status {
@@ -318,7 +471,16 @@ func (c *Client) Status(ctx context.Context) Status {
 	out.Authorized = err == nil && has
 	out.Login, _ = c.store.TwitchLogin(ctx)
 	out.Display, _ = c.store.TwitchDisplay(ctx)
-	out.Channel, _ = c.store.TwitchChannel(ctx)
-	out.Channel = NormalizeChannel(out.Channel)
+	out.Channels, _ = c.store.TwitchChannels(ctx)
+	cleaned := make([]string, 0, len(out.Channels))
+	for _, ch := range out.Channels {
+		if n := NormalizeChannel(ch); n != "" {
+			cleaned = append(cleaned, n)
+		}
+	}
+	out.Channels = cleaned
+	if len(out.Channels) > 0 {
+		out.Channel = out.Channels[0]
+	}
 	return out
 }

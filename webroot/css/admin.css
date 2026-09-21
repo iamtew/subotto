@@ -900,6 +900,31 @@ main {
   margin-bottom: 1.1rem;
 }
 
+.chat-pick-form {
+  grid-template-columns: auto minmax(11rem, 1fr) minmax(11rem, 1fr);
+}
+
+.chat-pick-form.chat-mode-twitch {
+  grid-template-columns: auto minmax(11rem, 1fr);
+}
+
+.chat-pick-form.chat-mode-twitch #chat-guild-wrap {
+  display: none;
+}
+
+#chat-mode-toggle {
+  min-height: 2.4rem;
+}
+
+.chat-window.chat-no-drop.drop-hover {
+  border-color: var(--line);
+  box-shadow: none;
+}
+
+.chat-window.chat-no-drop.drop-hover::after {
+  display: none;
+}
+
 .resync-form {
   grid-template-columns: 1fr;
 }
@@ -1834,6 +1859,11 @@ footer code {
   .picture-form-start,
   .stub-card {
     grid-template-columns: 1fr;
+  }
+
+  .chat-pick-form,
+  .chat-pick-form.chat-mode-twitch {
+    grid-template-columns: auto minmax(0, 1fr);
   }
 
   .pill {

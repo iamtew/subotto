@@ -77,6 +77,16 @@ func TestNormalizeChannel(t *testing.T) {
 	}
 }
 
+func TestJoinLineAndIRCChannel(t *testing.T) {
+	if got := joinLine([]string{" #Foo ", "bar", "foo", "bad chan"}); got != "JOIN #foo,#bar\r\n" {
+		t.Fatalf("got %q", got)
+	}
+	msg, ok := parseIRCLine(":v!v@v.tmi.twitch.tv PRIVMSG #OtherChan :hi")
+	if !ok || ircChannel(msg) != "otherchan" {
+		t.Fatalf("channel %q ok=%v", ircChannel(msg), ok)
+	}
+}
+
 func TestPrivmsgOut(t *testing.T) {
 	got := privmsgOut("Other", "hi\nthere", "id-1")
 	if got != "@reply-parent-msg-id=id-1 PRIVMSG #other :hi there" {

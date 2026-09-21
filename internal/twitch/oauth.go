@@ -1,7 +1,7 @@
 // Package twitch chats as a user account over Twitch IRC (Hesh Helper).
 //
 // Meat Bag: authorize the Twitch account in Admin (Status). Subotto then
-// joins one channel you pick — it does not have to be that account’s channel.
+// joins the chat channels you pick — they do not have to be that account’s.
 package twitch
 
 import (

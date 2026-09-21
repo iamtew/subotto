@@ -420,6 +420,49 @@ func TestAIModelsDefaultBootstrapAndSave(t *testing.T) {
 	}
 }
 
+func TestTwitchChannelsLegacyAndUnique(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "ops.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	ctx := context.Background()
+
+	got, err := store.TwitchChannels(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("want empty, got %v", got)
+	}
+	if err := store.SetSetting(ctx, SettingTwitchChannel, " #Cool_Chan "); err != nil {
+		t.Fatal(err)
+	}
+	got, err = store.TwitchChannels(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0] != "cool_chan" {
+		t.Fatalf("legacy wrap: %v", got)
+	}
+	added, list, err := store.AddTwitchChannel(ctx, "Other")
+	if err != nil || !added || len(list) != 2 || list[1] != "other" {
+		t.Fatalf("add %v %v %v", added, list, err)
+	}
+	added, list, err = store.AddTwitchChannel(ctx, "other")
+	if err != nil || added || len(list) != 2 {
+		t.Fatalf("dup %v %v %v", added, list, err)
+	}
+	removed, list, err := store.RemoveTwitchChannel(ctx, "cool_chan")
+	if err != nil || !removed || len(list) != 1 || list[0] != "other" {
+		t.Fatalf("remove %v %v %v", removed, list, err)
+	}
+	first, err := store.TwitchChannel(ctx)
+	if err != nil || first != "other" {
+		t.Fatalf("first %q %v", first, err)
+	}
+}
+
 func TestExtraAdminDiscordIDs(t *testing.T) {
 	store, err := Open(filepath.Join(t.TempDir(), "ops.db"))
 	if err != nil {

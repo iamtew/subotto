@@ -50,8 +50,12 @@ const (
 	// Extra Discord user IDs allowed into Admin (JSON string array). Superadmin is env-only.
 	SettingAdminDiscordIDs = "admin_discord_ids"
 
-	// Twitch IRC join target (login, no #). Empty = do not join.
+	// Twitch IRC join targets (JSON string array of logins, no #). Empty = do not join.
+	SettingTwitchChannels = "twitch_channels"
+	// Legacy single join target — still read when twitch_channels is missing/empty.
 	SettingTwitchChannel = "twitch_channel"
+	// ponytail: bump if an operator actually joins more rooms than this.
+	MaxTwitchChannels = 20
 	// Authorized Twitch account login / display name (filled after OAuth).
 	SettingTwitchLogin   = "twitch_login"
 	SettingTwitchDisplay = "twitch_display"
@@ -596,17 +600,123 @@ func IsDiscordSnowflake(id string) bool {
 	return true
 }
 
-// TwitchChannel is the IRC join login (no #). Missing/empty = not joining.
-func (d *DB) TwitchChannel(ctx context.Context) (string, error) {
-	v, err := d.GetSetting(ctx, SettingTwitchChannel)
+// TwitchChannels is the IRC join list (logins, no #). Missing/empty = not joining.
+// Falls back to legacy twitch_channel when the JSON list has never been saved.
+func (d *DB) TwitchChannels(ctx context.Context) ([]string, error) {
+	raw, err := d.GetSetting(ctx, SettingTwitchChannels)
 	if err != nil {
+		return nil, err
+	}
+	raw = strings.TrimSpace(raw)
+	if raw != "" {
+		var in []string
+		if err := json.Unmarshal([]byte(raw), &in); err != nil {
+			return nil, fmt.Errorf("twitch channels: %w", err)
+		}
+		return uniqueTwitchLogins(in), nil
+	}
+	legacy, err := d.GetSetting(ctx, SettingTwitchChannel)
+	if err != nil {
+		return nil, err
+	}
+	return uniqueTwitchLogins([]string{legacy}), nil
+}
+
+// TwitchChannel is the first joined login (legacy callers / status field).
+func (d *DB) TwitchChannel(ctx context.Context) (string, error) {
+	list, err := d.TwitchChannels(ctx)
+	if err != nil || len(list) == 0 {
 		return "", err
 	}
-	return strings.TrimSpace(v), nil
+	return list[0], nil
+}
+
+func (d *DB) SaveTwitchChannels(ctx context.Context, channels []string) error {
+	out := uniqueTwitchLogins(channels)
+	if len(out) > MaxTwitchChannels {
+		out = out[:MaxTwitchChannels]
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return err
+	}
+	first := ""
+	if len(out) > 0 {
+		first = out[0]
+	}
+	return d.SetSettings(ctx, map[string]string{
+		SettingTwitchChannels: string(b),
+		SettingTwitchChannel:  first,
+	})
 }
 
 func (d *DB) SetTwitchChannel(ctx context.Context, channel string) error {
-	return d.SetSetting(ctx, SettingTwitchChannel, strings.TrimSpace(channel))
+	channel = strings.TrimSpace(channel)
+	if channel == "" {
+		return d.SaveTwitchChannels(ctx, nil)
+	}
+	return d.SaveTwitchChannels(ctx, []string{channel})
+}
+
+func (d *DB) AddTwitchChannel(ctx context.Context, channel string) (added bool, list []string, err error) {
+	list, err = d.TwitchChannels(ctx)
+	if err != nil {
+		return false, nil, err
+	}
+	norm := uniqueTwitchLogins([]string{channel})
+	if len(norm) == 0 {
+		return false, list, nil
+	}
+	channel = norm[0]
+	for _, x := range list {
+		if x == channel {
+			return false, list, nil
+		}
+	}
+	if len(list) >= MaxTwitchChannels {
+		return false, list, fmt.Errorf("at most %d twitch channels", MaxTwitchChannels)
+	}
+	list = append(list, channel)
+	return true, list, d.SaveTwitchChannels(ctx, list)
+}
+
+func (d *DB) RemoveTwitchChannel(ctx context.Context, channel string) (removed bool, list []string, err error) {
+	list, err = d.TwitchChannels(ctx)
+	if err != nil {
+		return false, nil, err
+	}
+	norm := uniqueTwitchLogins([]string{channel})
+	if len(norm) == 0 {
+		return false, list, nil
+	}
+	channel = norm[0]
+	next := make([]string, 0, len(list))
+	for _, x := range list {
+		if x == channel {
+			removed = true
+			continue
+		}
+		next = append(next, x)
+	}
+	if !removed {
+		return false, list, nil
+	}
+	return true, next, d.SaveTwitchChannels(ctx, next)
+}
+
+func uniqueTwitchLogins(in []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		s = strings.ToLower(strings.TrimSpace(s))
+		s = strings.TrimPrefix(s, "#")
+		if s == "" || seen[s] {
+			continue
+		}
+		seen[s] = true
+		out = append(out, s)
+	}
+	return out
 }
 
 // TwitchLogin is the authorized account nick (Helix login).

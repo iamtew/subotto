@@ -118,10 +118,10 @@ func TestTwitchCallbackHappyPath(t *testing.T) {
 	}
 }
 
-func TestPutTwitchChannel(t *testing.T) {
+func TestPostDeleteTwitchChannel(t *testing.T) {
 	s, store := testServer(t)
 	body := strings.NewReader(`{"channel":"#Cool_Chan"}`)
-	req := httptest.NewRequest(http.MethodPut, "/api/twitch", body)
+	req := httptest.NewRequest(http.MethodPost, "/api/twitch/channels", body)
 	req.Header.Set("Content-Type", "application/json")
 	req.SetBasicAuth("admin", "test-pass")
 	rec := httptest.NewRecorder()
@@ -136,13 +136,51 @@ func TestPutTwitchChannel(t *testing.T) {
 	if out["channel"] != "cool_chan" {
 		t.Fatalf("%v", out)
 	}
-	ch, err := store.TwitchChannel(context.Background())
-	if err != nil || ch != "cool_chan" {
-		t.Fatalf("store %q %v", ch, err)
+	list, err := store.TwitchChannels(context.Background())
+	if err != nil || len(list) != 1 || list[0] != "cool_chan" {
+		t.Fatalf("store %v %v", list, err)
+	}
+
+	body = strings.NewReader(`{"channel":"other"}`)
+	req = httptest.NewRequest(http.MethodPost, "/api/twitch/channels", body)
+	req.Header.Set("Content-Type", "application/json")
+	req.SetBasicAuth("admin", "test-pass")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("second want 200, got %d", rec.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/twitch/channels/nope/messages", nil)
+	req.SetBasicAuth("admin", "test-pass")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("unjoined messages want 404, got %d", rec.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/twitch/channels/cool_chan/messages", nil)
+	req.SetBasicAuth("admin", "test-pass")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("joined messages want 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodDelete, "/api/twitch/channels/cool_chan", nil)
+	req.SetBasicAuth("admin", "test-pass")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("delete want 200, got %d", rec.Code)
+	}
+	list, err = store.TwitchChannels(context.Background())
+	if err != nil || len(list) != 1 || list[0] != "other" {
+		t.Fatalf("after delete %v %v", list, err)
 	}
 
 	bad := strings.NewReader(`{"channel":"nope!"}`)
-	req = httptest.NewRequest(http.MethodPut, "/api/twitch", bad)
+	req = httptest.NewRequest(http.MethodPost, "/api/twitch/channels", bad)
 	req.Header.Set("Content-Type", "application/json")
 	req.SetBasicAuth("admin", "test-pass")
 	rec = httptest.NewRecorder()

@@ -4,6 +4,8 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"golang.org/x/oauth2"
@@ -85,7 +87,7 @@ func (s *Server) handleTwitchOAuthCallback(w http.ResponseWriter, r *http.Reques
 	http.Redirect(w, r, "/admin?twitch=ok", http.StatusFound)
 }
 
-func (s *Server) handlePutTwitch(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handlePostTwitchChannel(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Channel string `json:"channel"`
 	}
@@ -98,14 +100,107 @@ func (s *Server) handlePutTwitch(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := s.store.SetTwitchChannel(r.Context(), channel); err != nil {
+	if channel == "" {
+		writeErr(w, http.StatusBadRequest, "channel is required")
+		return
+	}
+	added, list, err := s.store.AddTwitchChannel(r.Context(), channel)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if s.twitch != nil && added {
+		s.twitch.AfterChannelsChanged(channel, "", len(list))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "channel": channel, "channels": list, "added": added})
+}
+
+func (s *Server) handleDeleteTwitchChannel(w http.ResponseWriter, r *http.Request) {
+	channel, err := twitch.ParseChannel(r.PathValue("channel"))
+	if err != nil || channel == "" {
+		writeErr(w, http.StatusBadRequest, "channel is required")
+		return
+	}
+	removed, list, err := s.store.RemoveTwitchChannel(r.Context(), channel)
+	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if s.twitch != nil {
-		s.twitch.Kick()
+	if s.twitch != nil && removed {
+		s.twitch.AfterChannelsChanged("", channel, len(list))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "channel": channel})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "channel": channel, "channels": list, "removed": removed})
+}
+
+func (s *Server) joinedTwitchChannel(ctx context.Context, channel string) (string, error) {
+	channel, err := twitch.ParseChannel(channel)
+	if err != nil || channel == "" {
+		return "", errChannelNotVisible
+	}
+	list, err := s.store.TwitchChannels(ctx)
+	if err != nil {
+		return "", err
+	}
+	if !twitch.ChannelJoined(list, channel) {
+		return "", errChannelNotVisible
+	}
+	return channel, nil
+}
+
+func (s *Server) handleTwitchMessages(w http.ResponseWriter, r *http.Request) {
+	channel, err := s.joinedTwitchChannel(r.Context(), r.PathValue("channel"))
+	if err != nil {
+		status := http.StatusInternalServerError
+		if err == errChannelNotVisible {
+			status = http.StatusNotFound
+		}
+		writeErr(w, status, err.Error())
+		return
+	}
+	limit := 10
+	if q := r.URL.Query().Get("limit"); q != "" {
+		if n, err := strconv.Atoi(q); err == nil {
+			limit = n
+		}
+	}
+	list := []twitch.ChatMessage{}
+	if s.twitch != nil {
+		list = s.twitch.ListRecentMessages(channel, limit)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"messages": list})
+}
+
+func (s *Server) handleTwitchSendMessage(w http.ResponseWriter, r *http.Request) {
+	if s.twitch == nil {
+		writeErr(w, http.StatusServiceUnavailable, "Twitch chat is not available")
+		return
+	}
+	channel, err := s.joinedTwitchChannel(r.Context(), r.PathValue("channel"))
+	if err != nil {
+		status := http.StatusInternalServerError
+		if err == errChannelNotVisible {
+			status = http.StatusNotFound
+		}
+		writeErr(w, status, err.Error())
+		return
+	}
+	var body struct {
+		Content string `json:"content"`
+	}
+	if err := readJSON(r, &body); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	content := strings.TrimSpace(body.Content)
+	if content == "" {
+		writeErr(w, http.StatusBadRequest, "message is empty")
+		return
+	}
+	if err := s.twitch.SendChat(channel, content); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (s *Server) exchangeTwitchCode(ctx context.Context, code string) (*oauth2.Token, error) {

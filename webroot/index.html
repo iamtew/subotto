@@ -160,8 +160,9 @@
           <p>Talk as the bot · last 10 messages · drag files onto the chat to attach</p>
         </div>
 
-        <form id="chat-pick-form" class="mapping-form">
-          <label>
+        <form id="chat-pick-form" class="mapping-form chat-pick-form">
+          <button type="button" class="secondary" id="chat-mode-toggle" aria-pressed="false">Discord</button>
+          <label id="chat-guild-wrap">
             Server
             <select id="chat-guild-select">
               <option value="">— loading servers —</option>

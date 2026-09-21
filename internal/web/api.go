@@ -54,7 +54,10 @@ func (s *Server) registerAPI(mux *http.ServeMux) {
 	mux.Handle("PUT /api/settings/resync-scheduler", s.requireAdmin(http.HandlerFunc(s.handlePutResyncScheduler)))
 	mux.Handle("GET /api/youtube/auth", s.requireAdmin(http.HandlerFunc(s.handleYouTubeAuthStart)))
 	mux.Handle("GET /api/twitch/auth", s.requireAdmin(http.HandlerFunc(s.handleTwitchAuthStart)))
-	mux.Handle("PUT /api/twitch", s.requireAdmin(http.HandlerFunc(s.handlePutTwitch)))
+	mux.Handle("POST /api/twitch/channels", s.requireAdmin(http.HandlerFunc(s.handlePostTwitchChannel)))
+	mux.Handle("DELETE /api/twitch/channels/{channel}", s.requireAdmin(http.HandlerFunc(s.handleDeleteTwitchChannel)))
+	mux.Handle("GET /api/twitch/channels/{channel}/messages", s.requireAdmin(http.HandlerFunc(s.handleTwitchMessages)))
+	mux.Handle("POST /api/twitch/channels/{channel}/messages", s.requireAdmin(http.HandlerFunc(s.handleTwitchSendMessage)))
 	mux.Handle("GET /api/operators", s.requireAdmin(http.HandlerFunc(s.handleGetOperators)))
 	mux.Handle("PUT /api/operators", s.requireAdmin(http.HandlerFunc(s.handlePutOperators)))
 }
@@ -171,9 +174,21 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		}
 		tw.Login, _ = s.store.TwitchLogin(ctx)
 		tw.Display, _ = s.store.TwitchDisplay(ctx)
-		tw.Channel, _ = s.store.TwitchChannel(ctx)
-		tw.Channel = twitch.NormalizeChannel(tw.Channel)
+		tw.Channels, _ = s.store.TwitchChannels(ctx)
+		cleaned := make([]string, 0, len(tw.Channels))
+		for _, ch := range tw.Channels {
+			if n := twitch.NormalizeChannel(ch); n != "" {
+				cleaned = append(cleaned, n)
+			}
+		}
+		tw.Channels = cleaned
+		if len(tw.Channels) > 0 {
+			tw.Channel = tw.Channels[0]
+		}
 		tw.Configured = s.twitchClientID != "" && s.twitchClientSecret != ""
+	}
+	if tw.Channels == nil {
+		tw.Channels = []string{}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -189,6 +204,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"twitch_login":            tw.Login,
 		"twitch_display":          tw.Display,
 		"twitch_channel":          tw.Channel,
+		"twitch_channels":         tw.Channels,
 		"mappings_total":          mappings,
 		"mappings_enabled":        enabled,
 		"airs_total":              mappings,

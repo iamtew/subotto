@@ -50,7 +50,10 @@ const API_CATALOG = [
       { method: "PUT", path: "/api/operators", note: "Replace extra operator Discord IDs (superadmin or Basic admin only)." },
       { method: "GET", path: "/api/youtube/auth", note: "Start YouTube OAuth (browser redirect to Google). Use Authorize YouTube on Dashboard." },
       { method: "GET", path: "/api/twitch/auth", note: "Start Twitch OAuth (browser redirect to Twitch). Use Authorize Twitch on Dashboard." },
-      { method: "PUT", path: "/api/twitch", note: "Save the Twitch chat channel to join (login, not necessarily yours)." },
+      { method: "POST", path: "/api/twitch/channels", note: "Join a Twitch chat channel (login, not necessarily yours)." },
+      { method: "DELETE", path: "/api/twitch/channels/{channel}", note: "Leave a joined Twitch chat channel." },
+      { method: "GET", path: "/api/twitch/channels/{channel}/messages", note: "Last 10 Twitch chat lines seen since join (in-memory)." },
+      { method: "POST", path: "/api/twitch/channels/{channel}/messages", note: "Send a Twitch chat line as the authorized user." },
       { method: "GET", path: "/api/activity", note: "Recent ops log." },
       { method: "GET", path: "/api/listens", note: "All content listeners (channel → YouTube playlist)." },
       { method: "POST", path: "/api/listens", note: "Start or upsert a content listener." },
@@ -567,13 +570,25 @@ function discordStatusPill(connected) {
   return btn;
 }
 
+function twitchJoinedChannels(s) {
+  s = s || cachedStatus || {};
+  if (Array.isArray(s.twitch_channels) && s.twitch_channels.length) {
+    return s.twitch_channels;
+  }
+  if (s.twitch_channel) return [s.twitch_channel];
+  return [];
+}
+
 function twitchStatusPill(s) {
   if (!s || !s.twitch_configured) {
     return pill("twitch off", "muted");
   }
   if (s.twitch_connected) {
     const who = s.twitch_login || "irc";
-    const chan = s.twitch_channel ? " #" + s.twitch_channel : "";
+    const chans = twitchJoinedChannels(s);
+    let chan = "";
+    if (chans.length === 1) chan = " #" + chans[0];
+    else if (chans.length > 1) chan = " #" + chans[0] + " +" + (chans.length - 1);
     return pill("twitch " + who + chan, true);
   }
   if (s.twitch_authorized) {
@@ -902,14 +917,20 @@ function renderStatusHealth() {
     }
     tw += ` <a class="secondary" href="/api/twitch/auth">Authorize Twitch</a>`;
   }
-  const twChan = esc(s.twitch_channel || "");
-  tw += `<form id="twitch-channel-form" class="mapping-form" style="margin-top:.6rem">
-    <label>Chat channel
-      <input id="twitch-channel" name="channel" value="${twChan}" placeholder="login (not necessarily yours)" autocomplete="off" spellcheck="false">
+  const chans = twitchJoinedChannels(s);
+  const chips = chans
+    .map(
+      (ch) =>
+        `<button type="button" class="bc-chan-chip" data-twitch-part="${esc(ch)}" title="leave #${esc(ch)}">#${esc(ch)} ×</button>`
+    )
+    .join("");
+  tw += `<div class="bc-chan-chips" id="twitch-chan-chips">${chips || `<span class="muted">no chats joined</span>`}</div>
+    <form id="twitch-channel-form" class="mapping-form" style="margin-top:.6rem">
+    <label>Join chat
+      <input id="twitch-channel" name="channel" value="" placeholder="login (not necessarily yours)" autocomplete="off" spellcheck="false">
     </label>
     <div class="form-actions">
-      <button type="submit">Save channel</button>
-      <button type="button" class="secondary" id="twitch-channel-cancel">Cancel</button>
+      <button type="submit">Join</button>
     </div>
   </form>`;
   let sched = `<span class="state-off">OFF</span>`;
@@ -1208,6 +1229,7 @@ let chatPollTimer = 0;
 let chatLoadToken = 0;
 let chatLastChannel = "";
 let chatStaged = [];
+let chatMode = "discord";
 
 function chatGuildID() {
   return (document.getElementById("chat-guild-select").value || "").trim();
@@ -1220,7 +1242,14 @@ function chatChannelID() {
 function setChatComposeEnabled(on) {
   document.getElementById("chat-input").disabled = !on;
   document.getElementById("chat-send").disabled = !on;
-  document.getElementById("chat-attach").disabled = !on;
+  const twitch = chatMode === "twitch";
+  const attach = document.getElementById("chat-attach");
+  attach.hidden = twitch;
+  attach.disabled = !on || twitch;
+  document.getElementById("chat-window").classList.toggle("chat-no-drop", twitch);
+  document.getElementById("chat-input").placeholder = twitch
+    ? "message as Twitch…"
+    : "message as Subotto…";
 }
 
 function clearChatStaged() {
@@ -1245,6 +1274,10 @@ function renderChatStaged() {
 }
 
 function addChatFiles(fileList) {
+  if (chatMode === "twitch") {
+    toast("Twitch chat has no file attachments", true);
+    return;
+  }
   if (!chatChannelID()) {
     toast("pick a channel first", true);
     return;
@@ -1315,6 +1348,10 @@ function renderChatMessages(messages) {
 }
 
 async function loadChatMessages() {
+  if (chatMode === "twitch") {
+    await loadTwitchChatMessages();
+    return;
+  }
   const guild = chatGuildID();
   const channel = chatChannelID();
   const log = document.getElementById("chat-log");
@@ -1343,6 +1380,79 @@ async function loadChatMessages() {
   }
 }
 
+function fillTwitchChatChannels() {
+  const sel = document.getElementById("chat-channel-select");
+  if (!sel) return;
+  const chans = twitchJoinedChannels();
+  const keep = sel.value;
+  if (!chans.length) {
+    sel.disabled = true;
+    sel.innerHTML = `<option value="">— join a Twitch chat on Dashboard —</option>`;
+    return;
+  }
+  sel.innerHTML =
+    `<option value="">— select channel —</option>` +
+    chans.map((c) => `<option value="${esc(c)}">#${esc(c)}</option>`).join("");
+  sel.disabled = false;
+  if (keep && chans.indexOf(keep) >= 0) sel.value = keep;
+}
+
+async function loadTwitchChatMessages() {
+  const channel = chatChannelID();
+  const log = document.getElementById("chat-log");
+  if (!channel) {
+    setChatComposeEnabled(false);
+    log.innerHTML = `<p class="empty">pick a channel</p>`;
+    return;
+  }
+  const token = ++chatLoadToken;
+  try {
+    const data = await api(
+      "/api/twitch/channels/" + encodeURIComponent(channel) + "/messages?limit=10"
+    );
+    if (token !== chatLoadToken) return;
+    chatLastChannel = channel;
+    renderChatMessages(data.messages || []);
+    setChatComposeEnabled(true);
+  } catch (err) {
+    if (token !== chatLoadToken) return;
+    setChatComposeEnabled(false);
+    log.innerHTML = `<p class="empty">load failed: ${esc(err.message)}</p>`;
+  }
+}
+
+function applyChatMode(mode) {
+  chatMode = mode === "twitch" ? "twitch" : "discord";
+  const form = document.getElementById("chat-pick-form");
+  const btn = document.getElementById("chat-mode-toggle");
+  const guildWrap = document.getElementById("chat-guild-wrap");
+  form.classList.toggle("chat-mode-twitch", chatMode === "twitch");
+  btn.textContent = chatMode === "twitch" ? "Twitch" : "Discord";
+  btn.setAttribute("aria-pressed", chatMode === "twitch" ? "true" : "false");
+  guildWrap.hidden = chatMode === "twitch";
+  chatLoadToken++;
+  setChatComposeEnabled(false);
+  clearChatStaged();
+  const log = document.getElementById("chat-log");
+  log.innerHTML = `<p class="empty">pick a channel</p>`;
+  if (chatMode === "twitch") {
+    fillTwitchChatChannels();
+    stopChatPoll();
+    return;
+  }
+  const g = chatGuildID();
+  if (!g) {
+    const sel = document.getElementById("chat-channel-select");
+    sel.disabled = true;
+    sel.innerHTML = `<option value="">— pick a server first —</option>`;
+    stopChatPoll();
+    return;
+  }
+  loadChannelsForGuild(g, "chat-channel-select", { sendable: true }).then(() => {
+    stopChatPoll();
+  });
+}
+
 function stopChatPoll() {
   if (chatPollTimer) {
     clearInterval(chatPollTimer);
@@ -1367,6 +1477,10 @@ async function loadStatus() {
   try {
     const s = await api("/api/status");
     cachedStatus = s;
+    if (chatMode === "twitch") {
+      fillTwitchChatChannels();
+      syncChatPoll();
+    }
     const on = s.listens_enabled ?? s.airs_enabled ?? s.mappings_enabled;
     const tot = s.listens_total ?? s.airs_total ?? s.mappings_total;
     const picOn = s.picture_listens_enabled ?? 0;
@@ -3152,6 +3266,7 @@ document.getElementById("pic-guild-select").addEventListener("change", (ev) => {
   loadChannelsForGuild(ev.target.value, "pic-channel-select");
 });
 document.getElementById("chat-guild-select").addEventListener("change", async (ev) => {
+  if (chatMode === "twitch") return;
   chatLoadToken++;
   setChatComposeEnabled(false);
   clearChatStaged();
@@ -3179,13 +3294,38 @@ document.getElementById("chat-staged").addEventListener("click", (ev) => {
 (function bindChatDrop() {
   bindFileDrop(document.getElementById("chat-window"), addChatFiles);
 })();
+document.getElementById("chat-mode-toggle").addEventListener("click", () => {
+  applyChatMode(chatMode === "twitch" ? "discord" : "twitch");
+});
 document.getElementById("chat-send-form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
-  const guild = chatGuildID();
   const channel = chatChannelID();
   const input = document.getElementById("chat-input");
   const content = (input.value || "").trim();
-  if (!guild || !channel) return;
+  if (!channel) return;
+  if (chatMode === "twitch") {
+    if (!content) return;
+    const btn = document.getElementById("chat-send");
+    btn.disabled = true;
+    try {
+      await api("/api/twitch/channels/" + encodeURIComponent(channel) + "/messages", {
+        method: "POST",
+        body: JSON.stringify({ content }),
+      });
+      input.value = "";
+      await loadChatMessages();
+      const log = document.getElementById("chat-log");
+      log.scrollTop = log.scrollHeight;
+    } catch (err) {
+      toast("send failed: " + err.message, true);
+    } finally {
+      setChatComposeEnabled(!!chatChannelID());
+      input.focus();
+    }
+    return;
+  }
+  const guild = chatGuildID();
+  if (!guild) return;
   if (!content && !chatStaged.length) return;
   const btn = document.getElementById("chat-send");
   btn.disabled = true;
@@ -3220,6 +3360,7 @@ document.getElementById("chat-input").addEventListener("keydown", (ev) => {
   }
 });
 document.getElementById("chat-input").addEventListener("paste", (ev) => {
+  if (chatMode === "twitch") return;
   const files = ev.clipboardData && ev.clipboardData.files;
   if (!files || !files.length) return;
   ev.preventDefault();
@@ -3770,10 +3911,17 @@ loadAnnounce();
 loadPictureAnnounce();
 syncEpisodeStubsEmpty();
 
-document.getElementById("tab-status").addEventListener("click", (ev) => {
-  if (!ev.target.closest("#twitch-channel-cancel")) return;
-  const input = document.getElementById("twitch-channel");
-  if (input) input.value = (cachedStatus && cachedStatus.twitch_channel) || "";
+document.getElementById("tab-status").addEventListener("click", async (ev) => {
+  const chip = ev.target.closest("[data-twitch-part]");
+  if (!chip) return;
+  const channel = chip.getAttribute("data-twitch-part");
+  try {
+    await api("/api/twitch/channels/" + encodeURIComponent(channel), { method: "DELETE" });
+    toast("left #" + channel);
+    await refreshAll();
+  } catch (err) {
+    toast(err.message || "leave failed", true);
+  }
 });
 
 document.getElementById("tab-status").addEventListener("submit", async (ev) => {
@@ -3783,11 +3931,12 @@ document.getElementById("tab-status").addEventListener("submit", async (ev) => {
   const input = form.querySelector("#twitch-channel");
   const channel = input ? input.value : "";
   try {
-    await api("/api/twitch", { method: "PUT", body: JSON.stringify({ channel }) });
-    toast("Twitch channel saved");
+    await api("/api/twitch/channels", { method: "POST", body: JSON.stringify({ channel }) });
+    toast("joined #" + (channel || "").trim().replace(/^#/, "").toLowerCase());
+    if (input) input.value = "";
     await refreshAll();
   } catch (err) {
-    toast(err.message || "Twitch channel save failed", true);
+    toast(err.message || "Twitch join failed", true);
   }
 });
 
