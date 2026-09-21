@@ -6,8 +6,8 @@
    Meat Bag: to add a future tab, push { id, label } here and add a
    matching #tab-{id} panel in index.html. */
 const TAB_REGISTRY = [
-  { id: "status", label: "Status" },
-  { id: "episodes", label: "Episodes" },
+  { id: "status", label: "Dashboard" },
+  { id: "episodes", label: "Streams" },
   { id: "content", label: "Content listeners" },
   { id: "pictures", label: "Picture listeners" },
   { id: "scheduler", label: "Scheduler" },
@@ -48,8 +48,8 @@ const API_CATALOG = [
       { method: "GET", path: "/api/status", note: "Wire health: Discord, YouTube, Twitch, listener counts, scheduler, API password." },
       { method: "GET", path: "/api/operators", note: "Allowlisted Discord user IDs (superadmin can PUT extra_ids)." },
       { method: "PUT", path: "/api/operators", note: "Replace extra operator Discord IDs (superadmin or Basic admin only)." },
-      { method: "GET", path: "/api/youtube/auth", note: "Start YouTube OAuth (browser redirect to Google). Use Authorize YouTube on Status." },
-      { method: "GET", path: "/api/twitch/auth", note: "Start Twitch OAuth (browser redirect to Twitch). Use Authorize Twitch on Status." },
+      { method: "GET", path: "/api/youtube/auth", note: "Start YouTube OAuth (browser redirect to Google). Use Authorize YouTube on Dashboard." },
+      { method: "GET", path: "/api/twitch/auth", note: "Start Twitch OAuth (browser redirect to Twitch). Use Authorize Twitch on Dashboard." },
       { method: "PUT", path: "/api/twitch", note: "Save the Twitch chat channel to join (login, not necessarily yours)." },
       { method: "GET", path: "/api/activity", note: "Recent ops log." },
       { method: "GET", path: "/api/listens", note: "All content listeners (channel → YouTube playlist)." },
@@ -167,7 +167,7 @@ document.getElementById("picture-settings-animated").addEventListener("change", 
 
 function initTabs() {
   const bar = document.getElementById("tab-bar");
-  // First visit → Status; otherwise keep the Meat Bag's last tab.
+  // First visit → Dashboard; otherwise keep the Meat Bag's last tab.
   const saved = localStorage.getItem("subotto_admin_tab") || "status";
   bar.innerHTML = TAB_REGISTRY.map((t) => {
     const sel = t.id === saved ? "true" : "false";
@@ -858,7 +858,7 @@ function unlinkedChannelSet() {
   return ids;
 }
 
-/** Status tab dashboard — composed from caches filled by refreshAll(). */
+/** Dashboard tab — composed from caches filled by refreshAll(). */
 function renderStatusDashboard() {
   renderStatusHealth();
   renderStatusOrphans();
@@ -948,7 +948,7 @@ function renderStatusOrphans() {
     return;
   }
   el.hidden = false;
-  el.innerHTML = `<strong>${esc(String(n))}</strong> live listener${n === 1 ? "" : "s"} not under a show — absorb on the <button type="button" class="linkish" data-status-act="goto-episodes">Episodes</button> tab.`;
+  el.innerHTML = `<strong>${esc(String(n))}</strong> live listener${n === 1 ? "" : "s"} not under a show — absorb on the <button type="button" class="linkish" data-status-act="goto-episodes">Streams</button> tab.`;
 }
 
 function renderStatusEpisodes() {
@@ -1752,7 +1752,7 @@ async function refreshAll() {
   updateAllBcMsgPreviews();
 }
 
-/* ---------- Episodes ---------- */
+/* ---------- Streams (episodes) ---------- */
 
 let cachedEpisodeTemplates = [];
 let startSpotFile = null;
@@ -3791,8 +3791,8 @@ document.getElementById("tab-status").addEventListener("submit", async (ev) => {
   }
 });
 
-/* Status tab actions — Pause/Resume, Cease episode, Discord reconnect.
-   Absorb stays on Episodes only. */
+/* Dashboard tab actions — Pause/Resume, Cease episode, Discord reconnect.
+   Absorb stays on Streams only. */
 document.getElementById("tab-status").addEventListener("click", async (ev) => {
   const btn = ev.target.closest("[data-status-act]");
   if (!btn || btn.disabled) return;

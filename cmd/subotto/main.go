@@ -2,7 +2,7 @@
 //
 // Meat Bag:
 //   - `just run` — Discord bot + Admin UI + YouTube (needs tokens + auth-youtube)
-//   - `just auth-youtube` — DEV Google OAuth (Admin Status can re-auth too)
+//   - `just auth-youtube` — DEV Google OAuth (Admin Dashboard can re-auth too)
 //   - Admin landing at http://localhost:50770 — Discord OAuth and/or Basic admin / ADMIN_PASSWORD
 //   - Admin UI at http://localhost:50770/admin
 package main
@@ -119,7 +119,7 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 		os.Exit(1)
 	}
 	if !hasTok {
-		slog.Warn("no YouTube token yet — authorize in Admin (Status → Authorize YouTube)")
+		slog.Warn("no YouTube token yet — authorize in Admin (Dashboard → Authorize YouTube)")
 	} else if err := yt.Reload(ctx, store, cfg.YouTubeClientID, cfg.YouTubeClientSecret, cfg.YouTubeRedirectURL); err != nil {
 		slog.Warn("YouTube client not ready", "err", err)
 	} else if title, err := yt.Ping(ctx); err != nil {
@@ -168,7 +168,7 @@ func runBot(ctx context.Context, cfg *config.Config, store *db.DB) {
 		slog.Error("failed to check twitch token", "err", err)
 		os.Exit(1)
 	} else if !hasTwitch {
-		slog.Warn("no Twitch token yet — authorize in Admin (Status → Authorize Twitch)")
+		slog.Warn("no Twitch token yet — authorize in Admin (Dashboard → Authorize Twitch)")
 	} else if err := tw.ReloadToken(ctx); err != nil {
 		slog.Warn("twitch client not ready", "err", err)
 	} else {

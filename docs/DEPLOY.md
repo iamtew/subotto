@@ -65,7 +65,7 @@ Also copy **`data/pictures/`**, **`data/episode-spots/`**, and **`data/stream-ba
    - `DISCORD_OAUTH_REDIRECT_URL` = public HTTPS callback registered in the Discord Developer Portal (path `/auth/discord/callback`)  
    - Optional `API_PASSWORD` for Streamer.bot broadcast fire (`api` user)  
    - Optional `OPENROUTER_API_KEY` for Hesh Helper (empty key = AI off). The model catalog, system prompt, sampling sliders, and conversational memory (channel history window) are stored in SQLite `app_settings`, not `.env` (`OPENROUTER_MODEL` is first-load bootstrap only).  
-   - Optional `TWITCH_CLIENT_ID` / `TWITCH_CLIENT_SECRET` for Twitch chat (empty = off). `TWITCH_REDIRECT_URL` = public HTTPS callback registered on the Twitch app (must match **exactly**, path `/auth/twitch/callback`). Join channel is Admin Status, not `.env`.  
+   - Optional `TWITCH_CLIENT_ID` / `TWITCH_CLIENT_SECRET` for Twitch chat (empty = off). `TWITCH_REDIRECT_URL` = public HTTPS callback registered on the Twitch app (must match **exactly**, path `/auth/twitch/callback`). Join channel is Admin Dashboard, not `.env`.  
    - `YOUTUBE_REDIRECT_URL` = the public HTTPS callback registered in Google Console (must match **exactly**, path `/oauth/callback`). Leave localhost only if you will use the SSH-tunnel fallback in §3.  
 5. `chmod +x subotto-linux`
 6. **Stop Windows `just run`** (one Discord gateway per bot token).
@@ -178,8 +178,8 @@ If you prefer online backups later, use SQLite’s `.backup` / `sqlite3` backup 
 
 - [ ] `subotto-linux` runs; logs look healthy  
 - [ ] Admin login works (Discord and/or Basic via Caddy or direct `/admin`)  
-- [ ] YouTube token present (Admin Status **AUTHORIZED**, or re-auth via **Authorize YouTube**)  
-- [ ] Twitch optional: token + join channel on Status, IRC UP when you want chat replies  
+- [ ] YouTube token present (Admin Dashboard **AUTHORIZED**, or re-auth via **Authorize YouTube**)  
+- [ ] Twitch optional: token + join channel on Dashboard, IRC UP when you want chat replies  
 - [ ] At least one enabled listener  
 - [ ] Paste a YouTube link → **💾** (or expected ♻️ / 🛑)  
 - [ ] Windows DEV bot is **not** running with the same token  
