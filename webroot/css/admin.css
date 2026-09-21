@@ -712,6 +712,11 @@ button.linkish:hover {
   align-items: end;
 }
 
+/* Twitch hides +, so drop that first auto column or SEND eats 1fr. */
+.chat-window.chat-no-drop .chat-compose {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .chat-compose textarea {
   min-height: 3.1rem;
   max-height: 8rem;
