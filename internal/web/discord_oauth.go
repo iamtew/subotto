@@ -29,6 +29,14 @@ func discordOAuthConfig(clientID, clientSecret, redirectURL string) *oauth2.Conf
 }
 
 func (s *Server) handleLanding(w http.ResponseWriter, r *http.Request) {
+	// Cookie already logged them in. Opening / again should not look like a new login.
+	if ident, ok := s.sessionIdentity(r); ok {
+		if sub := sessionSubject(ident); sub != "" {
+			s.setSessionCookie(w, r, sub)
+		}
+		http.Redirect(w, r, "/admin", http.StatusFound)
+		return
+	}
 	data := struct {
 		DiscordOAuth bool
 		Basic        bool

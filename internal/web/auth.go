@@ -14,7 +14,10 @@ import (
 
 const (
 	sessionCookieName = "subotto_admin"
-	sessionTTL        = 7 * 24 * time.Hour
+	// basicSessionUser is the cookie subject for password login (no Discord id).
+	basicSessionUser = "basic"
+	// sessionTTL is how long Admin stays logged in after the tab closes.
+	sessionTTL = 7 * 24 * time.Hour
 )
 
 type ctxKey int
@@ -62,11 +65,19 @@ func (s *Server) adminOrAPIAuth(next http.Handler) http.Handler {
 func (s *Server) protect(next http.Handler, allowAPI bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if ident, ok := s.sessionIdentity(r); ok {
+			// Discord's redirect is cross-site. Some browsers keep that cookie
+			// only until the window closes. This response is same-site, so the
+			// 7-day cookie actually sticks.
+			if sub := sessionSubject(ident); sub != "" {
+				s.setSessionCookie(w, r, sub)
+			}
 			next.ServeHTTP(w, r.WithContext(withAdminIdent(r.Context(), ident)))
 			return
 		}
 		user, pass, hasBasic := r.BasicAuth()
 		if hasBasic && s.adminCredsOK(user, pass) {
+			// Browser Basic Auth dies with the tab. This cookie does not.
+			s.setSessionCookie(w, r, basicSessionUser)
 			next.ServeHTTP(w, r.WithContext(withAdminIdent(r.Context(), adminIdent{
 				Superadmin: true,
 				ViaBasic:   true,
@@ -110,6 +121,13 @@ func (s *Server) apiCredsOK(user, pass string) bool {
 	return secureEqual(user, "api") && secureEqual(pass, s.apiPassword)
 }
 
+func sessionSubject(id adminIdent) string {
+	if id.ViaBasic {
+		return basicSessionUser
+	}
+	return id.DiscordID
+}
+
 func (s *Server) sessionIdentity(r *http.Request) (adminIdent, bool) {
 	c, err := r.Cookie(sessionCookieName)
 	if err != nil || c.Value == "" {
@@ -118,6 +136,12 @@ func (s *Server) sessionIdentity(r *http.Request) (adminIdent, bool) {
 	userID, ok := s.parseSessionCookie(c.Value)
 	if !ok {
 		return adminIdent{}, false
+	}
+	if userID == basicSessionUser {
+		if !s.basicEnabled() {
+			return adminIdent{}, false
+		}
+		return adminIdent{Superadmin: true, ViaBasic: true}, true
 	}
 	allowed, super := s.discordUserAllowed(r.Context(), userID)
 	if !allowed {
@@ -206,9 +230,18 @@ func (s *Server) parseSessionCookie(raw string) (string, bool) {
 }
 
 func (s *Server) sessionMAC(userID, exp string) string {
-	mac := hmac.New(sha256.New, []byte(s.discordClientSecret))
+	mac := hmac.New(sha256.New, s.sessionKey())
 	mac.Write([]byte("v1|" + userID + "|" + exp))
 	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// sessionKey signs the admin cookie. Discord login keeps using the Discord
+// secret so old cookies stay valid. Password-only installs use ADMIN_PASSWORD.
+func (s *Server) sessionKey() []byte {
+	if s.discordClientSecret != "" {
+		return []byte(s.discordClientSecret)
+	}
+	return []byte(s.password)
 }
 
 func secureEqual(a, b string) bool {
