@@ -115,6 +115,12 @@ func TestEpisodeCRUDAndTemplateResolve(t *testing.T) {
 	if err := store.CeaseEpisode(ctx, ep.ID); err != nil {
 		t.Fatal(err)
 	}
+	if err := store.DeleteMapping(ctx, "c1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.DeletePictureListener(ctx, "c2"); err != nil {
+		t.Fatal(err)
+	}
 	live, err := store.GetLiveEpisodeByShowSlug(ctx, "sesh-sofa")
 	if err != nil || live != nil {
 		t.Fatalf("after cease: %+v err=%v", live, err)
@@ -123,6 +129,18 @@ func TestEpisodeCRUDAndTemplateResolve(t *testing.T) {
 	all, err := store.ListEpisodes(ctx)
 	if err != nil || len(all) != 1 || all[0].ID != ep.ID || all[0].ActiveUntil == nil {
 		t.Fatalf("list after cease: %+v err=%v", all, err)
+	}
+	byShow, err := store.ListEpisodesByShowSlug(ctx, "SESH-SOFA")
+	if err != nil || len(byShow) != 1 || byShow[0].ID != ep.ID || byShow[0].ActiveUntil == nil {
+		t.Fatalf("list by show after cease: %+v err=%v", byShow, err)
+	}
+	closedMaps, err := store.ListMappingsEverByEpisode(ctx, ep.ID)
+	if err != nil || len(closedMaps) != 1 || closedMaps[0].ActiveUntil == nil {
+		t.Fatalf("closed maps: %+v err=%v", closedMaps, err)
+	}
+	closedPics, err := store.ListPictureListenersEverByEpisode(ctx, ep.ID)
+	if err != nil || len(closedPics) != 1 || closedPics[0].ActiveUntil == nil {
+		t.Fatalf("closed pics: %+v err=%v", closedPics, err)
 	}
 
 	// New episode same show ok after cease.

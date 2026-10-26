@@ -5,7 +5,7 @@
 // Admin UI at /admin (session cookie or admin / ADMIN_PASSWORD).
 // Broadcast fire also accepts api / API_PASSWORD on GET /api/broadcasts/{slug}/fire.
 // Public (no login): /, /slideshow/..., /api/slideshow/..., /api/get/{content|picture}/{channel},
-// /api/get/episode/{show}, /stream-background, /media/stream-background/latest,
+// /api/get/episode/{show}, /api/get/episodes/{show}, /stream-background, /media/stream-background/latest,
 // GET /oauth/callback (Google), GET /auth/discord/callback (Discord login),
 // GET /auth/twitch/callback (Twitch chat).
 package web

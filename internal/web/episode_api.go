@@ -167,11 +167,28 @@ func toEpisodeTemplateDTO(t db.EpisodeTemplate) episodeTemplateDTO {
 }
 
 func (s *Server) episodeListenersDTO(ctx context.Context, episodeID int64) ([]episodeListenerDTO, error) {
-	maps, err := s.store.ListMappingsByEpisode(ctx, episodeID)
+	return s.episodeListenersListed(ctx, episodeID, true)
+}
+
+func (s *Server) episodeListenersListed(ctx context.Context, episodeID int64, liveOnly bool) ([]episodeListenerDTO, error) {
+	var (
+		maps []db.ChannelMapping
+		pics []db.PictureListener
+		err  error
+	)
+	if liveOnly {
+		maps, err = s.store.ListMappingsByEpisode(ctx, episodeID)
+	} else {
+		maps, err = s.store.ListMappingsEverByEpisode(ctx, episodeID)
+	}
 	if err != nil {
 		return nil, err
 	}
-	pics, err := s.store.ListPictureListenersByEpisode(ctx, episodeID)
+	if liveOnly {
+		pics, err = s.store.ListPictureListenersByEpisode(ctx, episodeID)
+	} else {
+		pics, err = s.store.ListPictureListenersEverByEpisode(ctx, episodeID)
+	}
 	if err != nil {
 		return nil, err
 	}

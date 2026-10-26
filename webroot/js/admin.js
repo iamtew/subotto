@@ -26,6 +26,7 @@ const API_CATALOG = [
       { method: "GET", path: "/api/get/content/{channel}", note: "Live content listener by Discord channel name (playlist id, since, listening|paused)." },
       { method: "GET", path: "/api/get/picture/{channel}", note: "Live picture listener by Discord channel name (slideshow URL, since, state)." },
       { method: "GET", path: "/api/get/episode/{show}", note: "Live show episode by show slug (listeners, spot_image, spot_images max 5, stream background, placeholders)." },
+      { method: "GET", path: "/api/get/episodes/{show}", note: "Live + ceased episodes for a show slug (same object fields as live GET, plus until when ceased; no stream background)." },
       { method: "GET", path: "/stream-background", note: "OBS Browser Source page for the global stream background (polls; last upload)." },
       { method: "GET", path: "/media/stream-background/latest", note: "Raw stream background image (no auth; last upload)." },
       { method: "GET", path: "/api/slideshow/{slug}", note: "Picture slideshow feed JSON for one listener slug." },

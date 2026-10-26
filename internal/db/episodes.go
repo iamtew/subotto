@@ -364,7 +364,24 @@ func (d *DB) listEpisodes(ctx context.Context, liveOnly bool) ([]Episode, error)
 	} else {
 		q += ` ORDER BY CASE WHEN active_until IS NULL THEN 0 ELSE 1 END, id DESC`
 	}
-	rows, err := d.sql.QueryContext(ctx, q)
+	return d.queryEpisodes(ctx, q)
+}
+
+// ListEpisodesByShowSlug returns live then ceased rows for one show slug.
+func (d *DB) ListEpisodesByShowSlug(ctx context.Context, slug string) ([]Episode, error) {
+	slug = ShowSlug(slug)
+	if slug == "" {
+		return []Episode{}, nil
+	}
+	q := `SELECT ` + episodeSelectCols + `
+		FROM episodes
+		WHERE show_slug = ?
+		ORDER BY CASE WHEN active_until IS NULL THEN 0 ELSE 1 END, id DESC`
+	return d.queryEpisodes(ctx, q, slug)
+}
+
+func (d *DB) queryEpisodes(ctx context.Context, q string, args ...any) ([]Episode, error) {
+	rows, err := d.sql.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list episodes: %w", err)
 	}
@@ -701,12 +718,21 @@ func (d *DB) ListUnlinkedPictureListeners(ctx context.Context) ([]PictureListene
 
 // ListMappingsByEpisode returns live content listeners linked to an episode.
 func (d *DB) ListMappingsByEpisode(ctx context.Context, episodeID int64) ([]ChannelMapping, error) {
-	rows, err := d.sql.QueryContext(ctx, `
-		SELECT `+mappingSelectCols+`
-		FROM channel_mappings
-		WHERE episode_id = ? AND active_until IS NULL
-		ORDER BY id ASC
-	`, episodeID)
+	return d.listMappingsByEpisode(ctx, episodeID, true)
+}
+
+// ListMappingsEverByEpisode includes ceased content listeners still tagged with this episode.
+func (d *DB) ListMappingsEverByEpisode(ctx context.Context, episodeID int64) ([]ChannelMapping, error) {
+	return d.listMappingsByEpisode(ctx, episodeID, false)
+}
+
+func (d *DB) listMappingsByEpisode(ctx context.Context, episodeID int64, liveOnly bool) ([]ChannelMapping, error) {
+	q := `SELECT ` + mappingSelectCols + ` FROM channel_mappings WHERE episode_id = ?`
+	if liveOnly {
+		q += ` AND active_until IS NULL`
+	}
+	q += ` ORDER BY id ASC`
+	rows, err := d.sql.QueryContext(ctx, q, episodeID)
 	if err != nil {
 		return nil, fmt.Errorf("list mappings by episode: %w", err)
 	}
@@ -730,12 +756,21 @@ func (d *DB) ListMappingsByEpisode(ctx context.Context, episodeID int64) ([]Chan
 
 // ListPictureListenersByEpisode returns live picture listeners linked to an episode.
 func (d *DB) ListPictureListenersByEpisode(ctx context.Context, episodeID int64) ([]PictureListener, error) {
-	rows, err := d.sql.QueryContext(ctx, `
-		SELECT `+pictureSelectCols+`
-		FROM picture_listeners
-		WHERE episode_id = ? AND active_until IS NULL
-		ORDER BY id ASC
-	`, episodeID)
+	return d.listPictureListenersByEpisode(ctx, episodeID, true)
+}
+
+// ListPictureListenersEverByEpisode includes ceased picture listeners still tagged with this episode.
+func (d *DB) ListPictureListenersEverByEpisode(ctx context.Context, episodeID int64) ([]PictureListener, error) {
+	return d.listPictureListenersByEpisode(ctx, episodeID, false)
+}
+
+func (d *DB) listPictureListenersByEpisode(ctx context.Context, episodeID int64, liveOnly bool) ([]PictureListener, error) {
+	q := `SELECT ` + pictureSelectCols + ` FROM picture_listeners WHERE episode_id = ?`
+	if liveOnly {
+		q += ` AND active_until IS NULL`
+	}
+	q += ` ORDER BY id ASC`
+	rows, err := d.sql.QueryContext(ctx, q, episodeID)
 	if err != nil {
 		return nil, fmt.Errorf("list picture listeners by episode: %w", err)
 	}

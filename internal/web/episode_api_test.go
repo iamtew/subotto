@@ -114,6 +114,34 @@ func TestEpisodeTemplatesAndPublicGet(t *testing.T) {
 		t.Fatalf("public get case: %d", rec.Code)
 	}
 
+	req = httptest.NewRequest(http.MethodGet, "/api/get/episodes/sesh-sofa", nil)
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("public list live: %d %s", rec.Code, rec.Body.String())
+	}
+	var liveList map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &liveList); err != nil {
+		t.Fatal(err)
+	}
+	if liveList["show_slug"] != "sesh-sofa" {
+		t.Fatalf("list show: %+v", liveList)
+	}
+	liveEps, _ := liveList["episodes"].([]any)
+	if len(liveEps) != 1 {
+		t.Fatalf("want 1 live history row, got %+v", liveList["episodes"])
+	}
+	liveRow, _ := liveEps[0].(map[string]any)
+	if liveRow["state"] != "live" {
+		t.Fatalf("list live row: %+v", liveRow)
+	}
+	if _, has := liveRow["until"]; has {
+		t.Fatalf("live list row should omit until: %+v", liveRow)
+	}
+	if _, has := liveRow["stream_background"]; has {
+		t.Fatalf("history must not include stream_background: %+v", liveRow)
+	}
+
 	idPath := "/api/episodes/" + strconv.FormatInt(ep.ID, 10)
 
 	// PATCH rejects unknown/immutable fields (DisallowUnknownFields).
@@ -155,6 +183,58 @@ func TestEpisodeTemplatesAndPublicGet(t *testing.T) {
 	s.httpServer.Handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("want 404 after cease, got %d", rec.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/get/episodes/unknown-show", nil)
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("want 404 for unknown show, got %d %s", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/get/episodes/sesh-sofa", nil)
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("public list after cease: %d %s", rec.Code, rec.Body.String())
+	}
+	var hist map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &hist); err != nil {
+		t.Fatal(err)
+	}
+	histEps, _ := hist["episodes"].([]any)
+	if len(histEps) != 1 {
+		t.Fatalf("want 1 ceased history row, got %+v", hist["episodes"])
+	}
+	ceased, _ := histEps[0].(map[string]any)
+	if ceased["state"] != "ceased" || ceased["episode_short"] != "EP20" {
+		t.Fatalf("ceased public row: %+v", ceased)
+	}
+	if until, _ := ceased["until"].(string); until == "" {
+		t.Fatalf("ceased row missing until: %+v", ceased)
+	}
+	if _, has := ceased["stream_background"]; has {
+		t.Fatalf("ceased history must not include stream_background: %+v", ceased)
+	}
+	histListeners, _ := ceased["listeners"].([]any)
+	if len(histListeners) != 2 {
+		t.Fatalf("ceased listeners: %+v", ceased["listeners"])
+	}
+	var sawPlaylist, sawSlideshow bool
+	for _, raw := range histListeners {
+		l, _ := raw.(map[string]any)
+		if _, has := l["discord_channel_id"]; has {
+			t.Fatalf("history listener leaked discord_channel_id: %+v", l)
+		}
+		if l["playlist_id"] != nil && l["playlist_id"] != "" {
+			sawPlaylist = true
+		}
+		if l["slideshow"] != nil && l["slideshow"] != "" {
+			sawSlideshow = true
+		}
+	}
+	if !sawPlaylist || !sawSlideshow {
+		t.Fatalf("ceased listeners missing playlist/slideshow: %+v", histListeners)
 	}
 
 	req = httptest.NewRequest(http.MethodGet, "/api/episodes", nil)

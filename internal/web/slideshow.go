@@ -21,6 +21,7 @@ func (s *Server) registerPublic(mux *http.ServeMux) {
 	mux.HandleFunc("GET /stream-background", s.handleStreamBackgroundPage)
 	mux.HandleFunc("GET /media/stream-background/latest", s.handleStreamBackgroundLatest)
 	mux.HandleFunc("GET /api/get/episode/{show}", s.handlePublicGetEpisode)
+	mux.HandleFunc("GET /api/get/episodes/{show}", s.handlePublicGetEpisodes)
 	mux.HandleFunc("GET /api/get/{kind}/{channel}", s.handlePublicGetListener)
 	mux.HandleFunc("GET /oauth/callback", s.handleYouTubeOAuthCallback)
 	mux.HandleFunc("GET /auth/twitch/callback", s.handleTwitchOAuthCallback)

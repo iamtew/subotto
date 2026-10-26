@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"subotto/internal/db"
 )
 
 // publicListenerDTO is the compact Streamer.bot payload for
@@ -135,25 +137,79 @@ func (s *Server) handlePublicGetEpisode(w http.ResponseWriter, r *http.Request) 
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	payload := publicEpisodePayload(*ep, listeners)
 	bg, bgURL := s.streamBackgroundFields(r)
+	payload["stream_background"] = bg
+	payload["stream_background_url"] = bgURL
+	writeJSON(w, http.StatusOK, payload)
+}
+
+// handlePublicGetEpisodes lists live + ceased episodes for a show slug.
+// Meat Bag: GET /api/get/episodes/{show} — new URL; singular live GET is unchanged.
+func (s *Server) handlePublicGetEpisodes(w http.ResponseWriter, r *http.Request) {
+	raw := strings.TrimSpace(r.PathValue("show"))
+	if raw == "" {
+		writeErr(w, http.StatusBadRequest, "show slug is required")
+		return
+	}
+	list, err := s.store.ListEpisodesByShowSlug(r.Context(), raw)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if len(list) == 0 {
+		writeErr(w, http.StatusNotFound, "no episodes for show: "+raw)
+		return
+	}
+	out := make([]map[string]any, 0, len(list))
+	for i := range list {
+		e := list[i]
+		listeners, err := s.episodeListenersListed(r.Context(), e.ID, e.ActiveUntil == nil)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		out = append(out, publicEpisodePayload(e, listeners))
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"show":                  ep.Show,
-		"show_slug":             ep.ShowSlug,
-		"episode":               ep.Episode,
-		"episode_short":         ep.Short(),
-		"episode_long":          ep.Long(),
-		"name":                  ep.Name,
-		"twitch_suffix":         ep.TwitchSuffix,
-		"episode_name_full":     ep.NameFull(),
-		"air_datetime":          ep.AirDateTime,
-		"spot_image":            ep.SpotURL(),
-		"spot_images":           ep.SpotURLs(),
-		"stream_background":     bg,
-		"stream_background_url": bgURL,
-		"since":                 ep.ActiveFrom.UTC().Format(time.RFC3339),
-		"state":                 "live",
-		"listeners":             publicEpisodeListeners(listeners),
+		"show":      list[0].Show,
+		"show_slug": list[0].ShowSlug,
+		"episodes":  out,
 	})
+}
+
+// publicEpisodePayload is the Streamer.bot episode object (no global stream background).
+func publicEpisodePayload(e db.Episode, listeners []episodeListenerDTO) map[string]any {
+	state := "live"
+	until := ""
+	if e.ActiveUntil != nil {
+		state = "ceased"
+		until = e.ActiveUntil.UTC().Format(time.RFC3339)
+	}
+	since := ""
+	if !e.ActiveFrom.IsZero() {
+		since = e.ActiveFrom.UTC().Format(time.RFC3339)
+	}
+	m := map[string]any{
+		"show":              e.Show,
+		"show_slug":         e.ShowSlug,
+		"episode":           e.Episode,
+		"episode_short":     e.Short(),
+		"episode_long":      e.Long(),
+		"name":              e.Name,
+		"twitch_suffix":     e.TwitchSuffix,
+		"episode_name_full": e.NameFull(),
+		"air_datetime":      e.AirDateTime,
+		"spot_image":        e.SpotURL(),
+		"spot_images":       e.SpotURLs(),
+		"since":             since,
+		"state":             state,
+		"listeners":         publicEpisodeListeners(listeners),
+	}
+	if until != "" {
+		m["until"] = until
+	}
+	return m
 }
 
 func normalizeChannelName(name string) string {
