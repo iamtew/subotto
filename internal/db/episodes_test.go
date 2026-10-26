@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -95,8 +96,20 @@ func TestEpisodeCRUDAndTemplateResolve(t *testing.T) {
 		t.Fatal(err)
 	}
 	ep3, _ := store.GetEpisodeByID(ctx, ep.ID)
-	if ep3.SpotPath == "" || ep3.SpotURL() == "" {
-		t.Fatalf("spot: %+v", ep3)
+	if ep3.SpotPath == "" || ep3.SpotURL() == "" || len(ep3.SpotURLs()) != 1 {
+		t.Fatalf("spot: %+v urls=%v", ep3, ep3.SpotURLs())
+	}
+
+	if _, err := store.SaveEpisodeSpots(ctx, ep.ID, []EpisodeSpotFile{
+		{Ext: ".png", Data: []byte("one")},
+		{Ext: ".jpg", Data: []byte("two")},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	ep3, _ = store.GetEpisodeByID(ctx, ep.ID)
+	urls := ep3.SpotURLs()
+	if len(urls) != 2 || ep3.SpotURL() != urls[0] || !strings.Contains(ep3.SpotPath, "[") {
+		t.Fatalf("two spots: path=%q urls=%v", ep3.SpotPath, urls)
 	}
 
 	if err := store.CeaseEpisode(ctx, ep.ID); err != nil {
@@ -153,6 +166,13 @@ func TestEpisodePlaceholderMap(t *testing.T) {
 	}
 	if m["spot_image"] != "/media/episodes/7/spot.jpg" {
 		t.Fatalf("spot_image: %q", m["spot_image"])
+	}
+	if got := ep.SpotURLs(); len(got) != 1 || got[0] != m["spot_image"] {
+		t.Fatalf("legacy SpotURLs: %v", got)
+	}
+	listed := Episode{ID: 7, SpotPath: `["7-1.png","7-2.jpg"]`}
+	if got := listed.SpotURLs(); len(got) != 2 || listed.SpotURL() != got[0] {
+		t.Fatalf("json SpotURLs: %v url=%q", got, listed.SpotURL())
 	}
 
 	empty := Episode{ID: 7}

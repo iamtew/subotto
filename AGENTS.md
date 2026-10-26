@@ -11,7 +11,7 @@ native binary. Maintainer owns keys, Discord app, YouTube OAuth, Twitch OAuth, d
 - Admin: public `/` landing; Discord OAuth if `SUPERADMIN_DISCORD_ID` + Discord client id/secret; extra Discord IDs in Admin Dashboard (superadmin); optional Basic `admin` / `ADMIN_PASSWORD`. UI at `/admin`. Superadmin **❌** on a bot-stamped listener post hides pictures or skips a playlist video.
 - Hesh Helper: OpenRouter on mention or reply-to-bot (Discord) or @login / reply-to-bot (Twitch); model, system prompt, and optional channel memory in Admin **AI**.
 - Twitch chat: optional user OAuth; Subotto chats as that account in Admin-joined channels (not necessarily that account’s).
-- Show episodes: templates + start/cease + absorb existing live listeners (link only, after deploy/restart) + public `/api/get/episode/{show}`. Parked: bi-weekly schedules, richer show-runner announce.
+- Show episodes: templates + start/cease + absorb existing live listeners (link only, after deploy/restart) + public `/api/get/episode/{show}` (`spot_image` first still, `spot_images` up to 5). Parked: bi-weekly schedules, richer show-runner announce.
 
 ## Agent
 - Simple working code; Admin is `webroot/` HTML/CSS/JS, landing at `/`, UI at `/admin`, public `/slideshow/...`. Log enough for operators. Ask if unsure. Do not invent a phase roadmap.

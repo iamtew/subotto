@@ -509,7 +509,7 @@
       <section class="panel" id="episodes-section">
         <div class="panel-head">
           <h2>STREAMS</h2>
-          <p>Air datetime (CET/CEST default) + spot + OBS background on start or <strong>Edit</strong> · one live episode per show · ceased rows stay here · public <code>/api/get/episode/{show_slug}</code> is live only</p>
+          <p>Air datetime (CET/CEST default) + up to 5 spot images + OBS background on start or <strong>Edit</strong> · one live episode per show · ceased rows stay here · public <code>/api/get/episode/{show_slug}</code> is live only</p>
           <p class="episode-bg-links">
             <button type="button" class="secondary" data-copy-path="/stream-background">Copy OBS URL</button>
             <button type="button" class="secondary" data-copy-path="/media/stream-background/latest">Copy image URL</button>
@@ -564,13 +564,13 @@
             </div>
             <div class="episode-drops">
             <div class="spot-drop" id="episode-start-spot" tabindex="0" data-drop="drop spot image">
-              <input id="episode-start-spot-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
-              <img class="spot-drop-preview" alt="" hidden>
+              <input id="episode-start-spot-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden>
+              <div class="spot-drop-previews"></div>
               <div class="spot-drop-copy">
-                <strong>Spot image</strong>
-                <span class="spot-drop-hint">drop, paste, or click</span>
+                <strong>Spot images</strong>
+                <span class="spot-drop-hint">up to 5 · 10 MB each · drop, paste, or click</span>
               </div>
-              <button type="button" class="secondary spot-drop-pick" id="episode-start-spot-pick" title="pick image">+</button>
+              <button type="button" class="secondary spot-drop-pick" id="episode-start-spot-pick" title="pick images">+</button>
             </div>
             <div class="spot-drop" id="episode-start-bg" tabindex="0" data-drop="drop OBS background">
               <input id="episode-start-bg-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
@@ -634,13 +634,13 @@
             </div>
             <div class="episode-drops">
             <div class="spot-drop" id="episode-edit-spot" tabindex="0" data-drop="drop spot image">
-              <input id="episode-edit-spot-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
-              <img class="spot-drop-preview" alt="" hidden>
+              <input id="episode-edit-spot-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden>
+              <div class="spot-drop-previews"></div>
               <div class="spot-drop-copy">
-                <strong>Spot image</strong>
-                <span class="spot-drop-hint">drop, paste, or click</span>
+                <strong>Spot images</strong>
+                <span class="spot-drop-hint">up to 5 · 10 MB each · drop, paste, or click</span>
               </div>
-              <button type="button" class="secondary spot-drop-pick" id="episode-edit-spot-pick" title="pick image">+</button>
+              <button type="button" class="secondary spot-drop-pick" id="episode-edit-spot-pick" title="pick images">+</button>
             </div>
             <div class="spot-drop" id="episode-edit-bg" tabindex="0" data-drop="drop OBS background">
               <input id="episode-edit-bg-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden>

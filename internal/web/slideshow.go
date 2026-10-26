@@ -186,9 +186,20 @@ func (s *Server) handleEpisodeSpotMedia(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	placeholder := file == db.SpotPlaceholderFile
-	stored := strings.TrimSpace(ep.SpotPath)
-	if stored != "" && (filepath.Base(stored) == file || placeholder) {
-		abs, err := s.store.AbsoluteEpisodeSpotPath(stored)
+	paths := ep.SpotPaths()
+	serveName := ""
+	if placeholder && len(paths) > 0 {
+		serveName = paths[0]
+	} else {
+		for _, stored := range paths {
+			if filepath.Base(stored) == file {
+				serveName = stored
+				break
+			}
+		}
+	}
+	if serveName != "" {
+		abs, err := s.store.AbsoluteEpisodeSpotPath(serveName)
 		if err != nil {
 			http.NotFound(w, r)
 			return

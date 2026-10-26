@@ -25,7 +25,7 @@ const API_CATALOG = [
     routes: [
       { method: "GET", path: "/api/get/content/{channel}", note: "Live content listener by Discord channel name (playlist id, since, listening|paused)." },
       { method: "GET", path: "/api/get/picture/{channel}", note: "Live picture listener by Discord channel name (slideshow URL, since, state)." },
-      { method: "GET", path: "/api/get/episode/{show}", note: "Live show episode by show slug (listeners, spot, stream background, placeholders)." },
+      { method: "GET", path: "/api/get/episode/{show}", note: "Live show episode by show slug (listeners, spot_image, spot_images max 5, stream background, placeholders)." },
       { method: "GET", path: "/stream-background", note: "OBS Browser Source page for the global stream background (polls; last upload)." },
       { method: "GET", path: "/media/stream-background/latest", note: "Raw stream background image (no auth; last upload)." },
       { method: "GET", path: "/api/slideshow/{slug}", note: "Picture slideshow feed JSON for one listener slug." },
@@ -83,7 +83,7 @@ const API_CATALOG = [
       { method: "POST", path: "/api/episodes", note: "Start a show episode from a template." },
       { method: "POST", path: "/api/episodes/absorb", note: "Link existing live listeners onto a new episode (no restart)." },
       { method: "PATCH", path: "/api/episodes/{id}", note: "Edit a live episode (spot, dates — not the immutable label)." },
-      { method: "POST", path: "/api/episodes/{id}/spot", note: "Upload the episode spot image (multipart)." },
+      { method: "POST", path: "/api/episodes/{id}/spot", note: "Upload episode spot images (multipart, up to 5 files named file)." },
       { method: "POST", path: "/api/episodes/{id}/stream-background", note: "Upload the global stream background (multipart, 15 MB, one photo)." },
       { method: "DELETE", path: "/api/episodes/{id}", note: "Cease an episode and its linked listeners." },
       { method: "GET", path: "/api/episode-templates", note: "Show templates." },
@@ -1869,8 +1869,9 @@ async function refreshAll() {
 /* ---------- Streams (episodes) ---------- */
 
 let cachedEpisodeTemplates = [];
-let startSpotFile = null;
-let editSpotFile = null;
+let startSpotFiles = [];
+let editSpotFiles = [];
+const MAX_SPOT_IMAGES = 5;
 let startBgFile = null;
 let editBgFile = null;
 
@@ -1899,9 +1900,11 @@ function bindFileDrop(box, onFiles) {
   });
 }
 
-async function uploadEpisodeSpot(id, file) {
+async function uploadEpisodeSpot(id, files) {
   const fd = new FormData();
-  fd.append("file", file);
+  for (const f of files) {
+    fd.append("file", f);
+  }
   return api("/api/episodes/" + id + "/spot", { method: "POST", body: fd });
 }
 
@@ -1926,7 +1929,7 @@ function paintSpot(box, file, url) {
   if (url) {
     img.src = url;
     img.hidden = false;
-    hint.textContent = "current spot";
+    hint.textContent = "current background";
     return;
   }
   img.removeAttribute("src");
@@ -1934,25 +1937,74 @@ function paintSpot(box, file, url) {
   hint.textContent = "drop, paste, or click";
 }
 
-function setSpotFile(kind, file, existingUrl) {
-  const box = document.getElementById(kind === "edit" ? "episode-edit-spot" : "episode-start-spot");
-  if (kind === "edit") editSpotFile = file || null;
-  else startSpotFile = file || null;
-  paintSpot(box, file || null, existingUrl || "");
+function paintSpotImages(box, files, urls) {
+  const row = box.querySelector(".spot-drop-previews");
+  const hint = box.querySelector(".spot-drop-hint");
+  for (const u of box._blobs || []) URL.revokeObjectURL(u);
+  box._blobs = [];
+  row.innerHTML = "";
+  if (files && files.length) {
+    for (const f of files) {
+      const src = URL.createObjectURL(f);
+      box._blobs.push(src);
+      const img = document.createElement("img");
+      img.src = src;
+      img.alt = "";
+      row.appendChild(img);
+    }
+    hint.textContent = files.length + " of " + MAX_SPOT_IMAGES + " selected";
+    return;
+  }
+  if (urls && urls.length) {
+    for (const u of urls) {
+      const img = document.createElement("img");
+      img.src = u;
+      img.alt = "";
+      row.appendChild(img);
+    }
+    hint.textContent = urls.length + " current";
+    return;
+  }
+  hint.textContent = "up to 5 · 10 MB each · drop, paste, or click";
 }
 
-function takeSpotFile(kind, fileList) {
-  const f = fileList && fileList[0];
-  if (!f) return;
-  if (f.size > CHAT_MAX_FILE_BYTES) {
-    toast(f.name + " is over 10 MB", true);
-    return;
+function existingSpotUrls(ep) {
+  const list = Array.isArray(ep.spot_images) ? ep.spot_images.filter(Boolean) : [];
+  if (list.length) return list;
+  const one = ep.spot_image || "";
+  if (!one || one.indexOf("spotplaceholder") >= 0) return [];
+  return [one];
+}
+
+function setSpotFiles(kind, files, existingUrls) {
+  const box = document.getElementById(kind === "edit" ? "episode-edit-spot" : "episode-start-spot");
+  const next = files || [];
+  if (kind === "edit") editSpotFiles = next;
+  else startSpotFiles = next;
+  paintSpotImages(box, next, existingUrls || []);
+}
+
+function takeSpotFiles(kind, fileList) {
+  const picked = [];
+  let overflow = false;
+  for (const f of fileList || []) {
+    if (picked.length >= MAX_SPOT_IMAGES) {
+      overflow = true;
+      break;
+    }
+    if (f.size > CHAT_MAX_FILE_BYTES) {
+      toast(f.name + " is over 10 MB", true);
+      continue;
+    }
+    if (!String(f.type || "").startsWith("image/")) {
+      toast("spot must be an image", true);
+      continue;
+    }
+    picked.push(f);
   }
-  if (!String(f.type || "").startsWith("image/")) {
-    toast("spot must be an image", true);
-    return;
-  }
-  setSpotFile(kind, f);
+  if (overflow) toast("spot images: max " + MAX_SPOT_IMAGES, true);
+  if (!picked.length) return;
+  setSpotFiles(kind, picked);
 }
 
 const STREAM_BG_MAX_BYTES = 15 * 1024 * 1024;
@@ -2211,7 +2263,7 @@ function closeEpisodeEditor() {
   document.getElementById("episode-edit-suffix").value = "";
   document.getElementById("episode-edit-namefull").value = "";
   fillAirDateTime("episode-edit", "");
-  setSpotFile("edit", null);
+  setSpotFiles("edit", []);
   setBgFile("edit", null);
   document.getElementById("episode-edit-details").open = false;
 }
@@ -2224,7 +2276,7 @@ function openEpisodeEditor(ep) {
   document.getElementById("episode-edit-suffix").value = ep.twitch_suffix || "";
   document.getElementById("episode-edit-namefull").value = ep.name_full_template || "";
   fillAirDateTime("episode-edit", ep.air_datetime || "");
-  setSpotFile("edit", null, ep.spot_image || "");
+  setSpotFiles("edit", [], existingSpotUrls(ep));
   setBgFile("edit", null, ep.stream_background || "");
   const details = document.getElementById("episode-edit-details");
   details.open = true;
@@ -2236,16 +2288,16 @@ function openEpisodeEditor(ep) {
 function bindSpotDrop(kind) {
   const box = document.getElementById(kind === "edit" ? "episode-edit-spot" : "episode-start-spot");
   const input = document.getElementById(kind === "edit" ? "episode-edit-spot-file" : "episode-start-spot-file");
-  bindFileDrop(box, (files) => takeSpotFile(kind, files));
+  bindFileDrop(box, (files) => takeSpotFiles(kind, files));
   box.addEventListener("paste", (ev) => {
     const files = ev.clipboardData && ev.clipboardData.files;
     if (!files || !files.length) return;
     ev.preventDefault();
-    takeSpotFile(kind, files);
+    takeSpotFiles(kind, files);
   });
   box.addEventListener("click", () => input.click());
   input.addEventListener("change", (ev) => {
-    takeSpotFile(kind, ev.target.files);
+    takeSpotFiles(kind, ev.target.files);
     ev.target.value = "";
   });
 }
@@ -2574,8 +2626,8 @@ document.getElementById("episode-start-form").addEventListener("submit", async (
   btn.disabled = true;
   try {
     const created = await api("/api/episodes", { method: "POST", body: JSON.stringify(body) });
-    if (startSpotFile && created && created.id) {
-      await uploadEpisodeSpot(created.id, startSpotFile);
+    if (startSpotFiles.length && created && created.id) {
+      await uploadEpisodeSpot(created.id, startSpotFiles);
     }
     if (startBgFile && created && created.id) {
       await uploadStreamBackground(created.id, startBgFile);
@@ -2584,7 +2636,7 @@ document.getElementById("episode-start-form").addEventListener("submit", async (
     ev.target.reset();
     document.getElementById("episode-start-airtz").value = DEFAULT_AIR_TZ;
     fillAirDateTime("episode-start", "");
-    setSpotFile("start", null);
+    setSpotFiles("start", []);
     setBgFile("start", null);
     await refreshAll();
   } catch (err) {
@@ -2696,8 +2748,8 @@ document.getElementById("episode-edit-form").addEventListener("submit", async (e
       method: "PATCH",
       body: JSON.stringify(body),
     });
-    if (editSpotFile) {
-      await uploadEpisodeSpot(id, editSpotFile);
+    if (editSpotFiles.length) {
+      await uploadEpisodeSpot(id, editSpotFiles);
     }
     if (editBgFile) {
       await uploadStreamBackground(id, editBgFile);

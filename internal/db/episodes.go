@@ -27,7 +27,7 @@ type Episode struct {
 	NameFullTemplate string
 	Listeners        []EpisodeListenerStub // stub snapshot for rename re-resolve
 	AirDateTime      string                // RFC3339 with offset, e.g. 2026-09-20T20:00:00+02:00
-	SpotPath         string                // basename under episode-spots/, e.g. 42.jpg
+	SpotPath         string                // JSON list of basenames, or a legacy single name (42.jpg)
 	CreatedAt        time.Time
 	ActiveFrom       time.Time
 	ActiveUntil      *time.Time // nil = live
@@ -166,16 +166,65 @@ func (e Episode) NameFull() string {
 // SpotPlaceholderFile is served until a real still is uploaded.
 const SpotPlaceholderFile = "spotplaceholder.jpg"
 
-// SpotURL is the public media path. No still yet → placeholder filename.
+// MaxEpisodeSpots is how many promo stills one episode may keep.
+const MaxEpisodeSpots = 5
+
+// SpotPaths is the stored basenames (legacy single name or JSON list).
+func (e Episode) SpotPaths() []string {
+	return parseSpotPaths(e.SpotPath)
+}
+
+// SpotURLs is the public media paths for uploaded stills (empty if none).
+func (e Episode) SpotURLs() []string {
+	names := e.SpotPaths()
+	if len(names) == 0 {
+		return []string{}
+	}
+	out := make([]string, 0, len(names))
+	for _, name := range names {
+		out = append(out, fmt.Sprintf("/media/episodes/%d/%s", e.ID, name))
+	}
+	return out
+}
+
+// SpotURL is the public media path for the first still. No still yet → placeholder.
 func (e Episode) SpotURL() string {
 	if e.ID < 1 {
 		return ""
 	}
-	name := filepath.Base(strings.TrimSpace(e.SpotPath))
-	if name == "" || name == "." {
-		name = SpotPlaceholderFile
+	urls := e.SpotURLs()
+	if len(urls) > 0 {
+		return urls[0]
 	}
-	return fmt.Sprintf("/media/episodes/%d/%s", e.ID, name)
+	return fmt.Sprintf("/media/episodes/%d/%s", e.ID, SpotPlaceholderFile)
+}
+
+// parseSpotPaths reads spot_path: a JSON array, or one legacy basename.
+func parseSpotPaths(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	if strings.HasPrefix(raw, "[") {
+		var names []string
+		if err := json.Unmarshal([]byte(raw), &names); err != nil {
+			return nil
+		}
+		out := make([]string, 0, len(names))
+		for _, n := range names {
+			n = filepath.Base(strings.TrimSpace(n))
+			if n == "" || n == "." || n == ".." {
+				continue
+			}
+			out = append(out, n)
+		}
+		return out
+	}
+	name := filepath.Base(raw)
+	if name == "" || name == "." || name == ".." {
+		return nil
+	}
+	return []string{name}
 }
 
 // NormalizeAirDateTime accepts RFC3339 with offset, a legacy YYYY-MM-DD (midnight +02:00), or empty.
@@ -441,8 +490,19 @@ func (d *DB) SaveStreamBackground(ctx context.Context, episodeID int64, data []b
 	return e, nil
 }
 
-// SaveEpisodeSpot writes {id}{ext} and records spot_path. Replaces a previous still.
+// EpisodeSpotFile is one still to write under episode-spots/.
+type EpisodeSpotFile struct {
+	Ext  string
+	Data []byte
+}
+
+// SaveEpisodeSpot writes one still (wrapper around SaveEpisodeSpots).
 func (d *DB) SaveEpisodeSpot(ctx context.Context, id int64, ext string, data []byte) (*Episode, error) {
+	return d.SaveEpisodeSpots(ctx, id, []EpisodeSpotFile{{Ext: ext, Data: data}})
+}
+
+// SaveEpisodeSpots writes {id}-{n}{ext} files (1–5) and replaces the stored list.
+func (d *DB) SaveEpisodeSpots(ctx context.Context, id int64, files []EpisodeSpotFile) (*Episode, error) {
 	e, err := d.GetEpisodeByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -453,28 +513,52 @@ func (d *DB) SaveEpisodeSpot(ctx context.Context, id int64, ext string, data []b
 	if e.ActiveUntil != nil {
 		return nil, fmt.Errorf("episode %d is ceased", id)
 	}
-	ext = strings.ToLower(strings.TrimSpace(ext))
-	if len(ext) < 2 || ext[0] != '.' {
-		return nil, fmt.Errorf("invalid spot image extension")
+	if len(files) < 1 || len(files) > MaxEpisodeSpots {
+		return nil, fmt.Errorf("spot images: need 1 to %d files", MaxEpisodeSpots)
 	}
-	name := fmt.Sprintf("%d%s", id, ext)
-	abs, err := d.AbsoluteEpisodeSpotPath(name)
+
+	old := e.SpotPaths()
+	names := make([]string, 0, len(files))
+	for i, f := range files {
+		ext := strings.ToLower(strings.TrimSpace(f.Ext))
+		if len(ext) < 2 || ext[0] != '.' {
+			return nil, fmt.Errorf("invalid spot image extension")
+		}
+		if len(f.Data) == 0 {
+			return nil, fmt.Errorf("empty file")
+		}
+		name := fmt.Sprintf("%d-%d%s", id, i+1, ext)
+		abs, err := d.AbsoluteEpisodeSpotPath(name)
+		if err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(abs, f.Data, 0o644); err != nil {
+			return nil, fmt.Errorf("write episode spot: %w", err)
+		}
+		names = append(names, name)
+	}
+	stored, err := json.Marshal(names)
 	if err != nil {
 		return nil, err
 	}
-	if e.SpotPath != "" && e.SpotPath != name {
-		if old, err := d.AbsoluteEpisodeSpotPath(e.SpotPath); err == nil {
-			_ = os.Remove(old)
-		}
-	}
-	if err := os.WriteFile(abs, data, 0o644); err != nil {
-		return nil, fmt.Errorf("write episode spot: %w", err)
-	}
 	_, err = d.sql.ExecContext(ctx, `
 		UPDATE episodes SET spot_path = ? WHERE id = ? AND active_until IS NULL
-	`, name, id)
+	`, string(stored), id)
 	if err != nil {
 		return nil, fmt.Errorf("update episode spot_path: %w", err)
+	}
+
+	keep := map[string]bool{}
+	for _, n := range names {
+		keep[n] = true
+	}
+	for _, n := range old {
+		if keep[n] {
+			continue
+		}
+		if abs, err := d.AbsoluteEpisodeSpotPath(n); err == nil {
+			_ = os.Remove(abs)
+		}
 	}
 	return d.GetEpisodeByID(ctx, id)
 }

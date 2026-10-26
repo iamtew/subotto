@@ -87,6 +87,9 @@ func TestEpisodeTemplatesAndPublicGet(t *testing.T) {
 	if _, ok := pub["spot_image"]; !ok {
 		t.Fatalf("public missing spot_image: %+v", pub)
 	}
+	if _, ok := pub["spot_images"]; !ok {
+		t.Fatalf("public missing spot_images: %+v", pub)
+	}
 	if _, ok := pub["stream_background"]; !ok {
 		t.Fatalf("public missing stream_background: %+v", pub)
 	}
@@ -451,6 +454,64 @@ func TestEpisodeAirDateAndSpot(t *testing.T) {
 	if strings.Contains(ep.SpotImage, db.SpotPlaceholderFile) {
 		t.Fatalf("uploaded spot still placeholder: %q", ep.SpotImage)
 	}
+	if len(ep.SpotImages) != 1 || ep.SpotImages[0] != ep.SpotImage {
+		t.Fatalf("spot_images after one file: %+v image=%q", ep.SpotImages, ep.SpotImage)
+	}
+
+	buf.Reset()
+	mw = multipart.NewWriter(&buf)
+	for i := 0; i < 2; i++ {
+		fw, err = mw.CreateFormFile("file", fmt.Sprintf("spot%d.png", i))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := fw.Write(png1x1); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := mw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req = httptest.NewRequest(http.MethodPost, idPath+"/spot", &buf)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.SetBasicAuth("admin", "test-pass")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("two spots: %d %s", rec.Code, rec.Body.String())
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &ep); err != nil {
+		t.Fatal(err)
+	}
+	if len(ep.SpotImages) != 2 {
+		t.Fatalf("spot_images after two files: %+v", ep.SpotImages)
+	}
+	if ep.SpotImage != ep.SpotImages[0] {
+		t.Fatalf("spot_image should be first: %q vs %+v", ep.SpotImage, ep.SpotImages)
+	}
+
+	buf.Reset()
+	mw = multipart.NewWriter(&buf)
+	for i := 0; i < 6; i++ {
+		fw, err = mw.CreateFormFile("file", fmt.Sprintf("too%d.png", i))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := fw.Write(png1x1); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := mw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req = httptest.NewRequest(http.MethodPost, idPath+"/spot", &buf)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.SetBasicAuth("admin", "test-pass")
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("six spots: %d %s", rec.Code, rec.Body.String())
+	}
 	req = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/media/episodes/%d/%s", ep.ID, db.SpotPlaceholderFile), nil)
 	rec = httptest.NewRecorder()
 	s.httpServer.Handler.ServeHTTP(rec, req)
@@ -513,6 +574,10 @@ func TestEpisodeAirDateAndSpot(t *testing.T) {
 	if !strings.HasPrefix(spot, "/media/episodes/") {
 		t.Fatalf("public spot_image: %+v", pub)
 	}
+	pubSpots, _ := pub["spot_images"].([]any)
+	if len(pubSpots) != 2 || pubSpots[0] != spot {
+		t.Fatalf("public spot_images: %+v", pub)
+	}
 	if pub["stream_background"] != "/media/stream-background/latest" {
 		t.Fatalf("public stream_background: %+v", pub)
 	}
@@ -552,5 +617,12 @@ func TestEpisodeAirDateAndSpot(t *testing.T) {
 	}
 	if rec.Body.Len() < 8 || rec.Body.Bytes()[0] != 0x89 {
 		t.Fatalf("media body is not png")
+	}
+	second, _ := pubSpots[1].(string)
+	req = httptest.NewRequest(http.MethodGet, second, nil)
+	rec = httptest.NewRecorder()
+	s.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("second media: %d", rec.Code)
 	}
 }

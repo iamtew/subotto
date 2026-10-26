@@ -1268,6 +1268,21 @@ label .optional {
   background: var(--bg0);
 }
 
+.spot-drop-previews {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  min-width: 4.4rem;
+}
+
+.spot-drop-previews img {
+  width: 4.4rem;
+  height: 4.4rem;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  background: var(--bg0);
+}
+
 .spot-drop-copy {
   display: flex;
   flex-direction: column;

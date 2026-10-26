@@ -40,7 +40,7 @@ func Open(path string) (*DB, error) {
 	if err := os.MkdirAll(picturesDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create pictures directory %q: %w", picturesDir, err)
 	}
-	// Episode spot images: data/episode-spots/{id}.ext
+	// Episode spot images: data/episode-spots/{id}-{n}.ext (up to 5)
 	spotsDir := filepath.Join(dir, "episode-spots")
 	if err := os.MkdirAll(spotsDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create episode-spots directory %q: %w", spotsDir, err)

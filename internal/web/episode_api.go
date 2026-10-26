@@ -65,6 +65,7 @@ type episodeDTO struct {
 	EpisodeNameFull     string               `json:"episode_name_full"`
 	AirDateTime         string               `json:"air_datetime"`
 	SpotImage           string               `json:"spot_image"`
+	SpotImages          []string             `json:"spot_images"`
 	StreamBackground    string               `json:"stream_background"`
 	StreamBackgroundURL string               `json:"stream_background_url"`
 	Since               string               `json:"since"`
@@ -95,6 +96,7 @@ func (s *Server) toEpisodeDTO(r *http.Request, e db.Episode, listeners []episode
 		EpisodeNameFull:     e.NameFull(),
 		AirDateTime:         e.AirDateTime,
 		SpotImage:           e.SpotURL(),
+		SpotImages:          e.SpotURLs(),
 		StreamBackground:    bg,
 		StreamBackgroundURL: bgURL,
 		Since:               e.ActiveFrom.UTC().Format(time.RFC3339),
@@ -599,40 +601,57 @@ func (s *Server) handleUploadEpisodeSpot(w http.ResponseWriter, r *http.Request)
 		writeErr(w, http.StatusBadRequest, "invalid episode id")
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, discord.MaxChatFileBytes+1<<20)
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
+	spotBodyMax := int64(db.MaxEpisodeSpots)*discord.MaxChatFileBytes + 1<<20
+	r.Body = http.MaxBytesReader(w, r.Body, spotBodyMax)
+	if err := r.ParseMultipartForm(spotBodyMax); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	fh, header, err := r.FormFile("file")
-	if err != nil {
+	if r.MultipartForm == nil {
 		writeErr(w, http.StatusBadRequest, "file is required")
 		return
 	}
-	defer fh.Close()
-	data, err := io.ReadAll(io.LimitReader(fh, discord.MaxChatFileBytes+1))
-	if err != nil {
-		writeErr(w, http.StatusBadRequest, "read file: "+err.Error())
+	headers := r.MultipartForm.File["file"]
+	if len(headers) == 0 {
+		writeErr(w, http.StatusBadRequest, "file is required")
 		return
 	}
-	if len(data) == 0 {
-		writeErr(w, http.StatusBadRequest, "empty file")
+	if len(headers) > db.MaxEpisodeSpots {
+		writeErr(w, http.StatusBadRequest, "spot images: max 5")
 		return
 	}
-	if len(data) > discord.MaxChatFileBytes {
-		writeErr(w, http.StatusRequestEntityTooLarge, "spot image is over 10 MB")
-		return
+	files := make([]db.EpisodeSpotFile, 0, len(headers))
+	for _, header := range headers {
+		fh, err := header.Open()
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, "read file: "+err.Error())
+			return
+		}
+		data, err := io.ReadAll(io.LimitReader(fh, discord.MaxChatFileBytes+1))
+		fh.Close()
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, "read file: "+err.Error())
+			return
+		}
+		if len(data) == 0 {
+			writeErr(w, http.StatusBadRequest, "empty file")
+			return
+		}
+		if len(data) > discord.MaxChatFileBytes {
+			writeErr(w, http.StatusRequestEntityTooLarge, "spot image is over 10 MB")
+			return
+		}
+		ct := header.Header.Get("Content-Type")
+		if !pictures.IsImageContentType(ct) {
+			ct = http.DetectContentType(data)
+		}
+		if !pictures.IsImageContentType(ct) {
+			writeErr(w, http.StatusBadRequest, "spot image must be jpeg, png, webp, or gif")
+			return
+		}
+		files = append(files, db.EpisodeSpotFile{Ext: pictures.ExtForContentType(ct), Data: data})
 	}
-	ct := header.Header.Get("Content-Type")
-	if !pictures.IsImageContentType(ct) {
-		ct = http.DetectContentType(data)
-	}
-	if !pictures.IsImageContentType(ct) {
-		writeErr(w, http.StatusBadRequest, "spot image must be jpeg, png, webp, or gif")
-		return
-	}
-	ext := pictures.ExtForContentType(ct)
-	ep, err := s.store.SaveEpisodeSpot(r.Context(), id, ext, data)
+	ep, err := s.store.SaveEpisodeSpots(r.Context(), id, files)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
